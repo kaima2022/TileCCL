@@ -102,39 +102,62 @@ def auto_select(
             f"Supported operations: {sorted(_SUPPORTED_OPS)}"
         )
 
-    # -- Heuristic selection (Iris Section 5) --
+    # -- Data-driven heuristic selection --
+    # Thresholds refined from H100 PCIe NV12 measurements (Phase 1)
+    # and Iris paper Section 5 observations.  Hardware-specific
+    # adjustments applied when hw_info is available.
 
     n_per_rank = N // max(world_size, 1)
+    total_tiles_128 = ((M + 127) // 128) * ((n_per_rank + 127) // 128)
 
-    if n_per_rank < 1024 and K > 16384:
+    # Hardware-specific threshold adjustments
+    # H100 PCIe: 132 SMs, 300 GB/s NVLink, 50 MB L2
+    # MI300X: 304 CUs, ~800 GB/s Infinity Fabric, 256 MB L2
+    sm_count = 132  # default H100
+    bw_gb_s = 300.0
+    if hw_info is not None:
+        sm_count = getattr(hw_info, "compute_units", sm_count)
+        bw_gb_s = getattr(hw_info, "link_bandwidth_gbps", bw_gb_s)
+
+    # Compute intensity heuristic: flops / bytes
+    # GEMM flops: 2*M*N*K, scatter bytes: M*N_per_rank*element_size
+    flops = 2 * M * n_per_rank * K
+    scatter_bytes = M * n_per_rank * 2  # assume fp16
+    compute_intensity = flops / max(scatter_bytes, 1)
+
+    if M < 256:
+        # Very small M: not enough rows for persistent kernel overlap.
+        # Bulk-sync avoids overhead of lock/signal mechanisms.
+        selected_cls = BulkSyncPattern
+
+    elif n_per_rank < 1024 and K > 12288:
         # Small output shard, large K: fused sequential is sufficient.
-        # The scatter overhead per tile is small relative to the GEMM,
-        # so the simple "compute then immediately scatter" approach
-        # achieves good overlap without the complexity of dual streams.
+        # Scatter per tile is tiny relative to GEMM, so simple fusion
+        # achieves good overlap without dual-stream complexity.
         selected_cls = FusedSequentialPattern
 
-    elif n_per_rank < 2048 and K > 8192:
-        # Moderate output shard: producer-consumer gives better overlap
-        # than fused sequential by decoupling compute and comm onto
-        # separate streams, but WG specialization's single-kernel
-        # overhead is not yet justified.
+    elif n_per_rank < 2048 and K > 6144:
+        # Moderate output shard: producer-consumer decouples compute
+        # and comm onto separate streams for better overlap.
         selected_cls = ProducerConsumerPattern
 
-    elif N > 4096 and K > 8192:
-        # Large output with large K: WG specialization achieves the best
-        # overlap because there are enough tiles to keep both compute
-        # and comm SM pools fully saturated within a single kernel.
+    elif total_tiles_128 >= sm_count and K > 4096:
+        # Large problem: enough tiles to saturate both compute and comm
+        # SM pools within a single kernel launch.
         selected_cls = WGSpecializedPattern
+
+    elif N > 4096 and K > 8192:
+        # Fallback for large-N cases not caught above
+        selected_cls = WGSpecializedPattern
+
+    elif compute_intensity > 256 and total_tiles_128 > 16:
+        # Compute-bound: fused sequential gets hardware overlap for free
+        selected_cls = FusedSequentialPattern
 
     else:
         # Small problem or shape does not clearly favor any overlap
         # strategy.  Fall back to bulk-sync (safest, no overlap).
         selected_cls = BulkSyncPattern
-
-    # TODO: Refine thresholds based on hw_info (SM count, NVLink/xGMI
-    #       bandwidth, L2 cache size) when available.
-    # TODO: For very small M (< 256), consider a non-persistent kernel
-    #       variant that avoids the overhead of persistent tile scheduling.
 
     if ctx is not None:
         return selected_cls(ctx)

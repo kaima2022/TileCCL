@@ -289,154 +289,74 @@ class TestSymmetricHeapUnit:
 class TestSymmetricHeapMultiGPU:
     """Multi-GPU tests requiring >= 2 GPUs.
 
-    These tests use torch.multiprocessing.spawn to simulate a multi-rank
-    environment on a single machine with multiple GPUs.
+    Uses SymmetricHeap.create_all() (single-process mode) to avoid
+    mp.spawn pickle issues (P1-003).
     """
 
-    def test_ipc_handle_exchange(self, skip_no_multigpu, device_info) -> None:
-        """Heap bases have correct world_size entries after IPC setup."""
-        import torch.multiprocessing as mp
+    def _get_heap_cls(self):
+        from xtile.memory.symmetric_heap import SymmetricHeap
+        return SymmetricHeap
 
+    def test_heap_bases_correct_world_size(self, skip_no_multigpu, device_info) -> None:
+        """Heap bases have correct world_size entries after create_all."""
+        SymmetricHeap = self._get_heap_cls()
         world_size = min(device_info.num_gpus, 4)
-
-        def _worker(rank: int, world_size: int, results_dict: dict) -> None:
-            import os
-            os.environ["MASTER_ADDR"] = "127.0.0.1"
-            os.environ["MASTER_PORT"] = "29500"
-            torch.cuda.set_device(rank)
-            torch.distributed.init_process_group(
-                backend="nccl", rank=rank, world_size=world_size
-            )
-            try:
-                from xtile.memory.symmetric_heap import SymmetricHeap
-                heap = SymmetricHeap(size=1024 * 1024, rank=rank, world_size=world_size)
-                bases = heap.get_heap_bases()
-                results_dict[rank] = {
-                    "bases_shape": tuple(bases.shape),
-                    "bases_len": int(bases.shape[0]),
-                }
-                heap.cleanup()
-            finally:
-                torch.distributed.destroy_process_group()
-
-        manager = mp.Manager()
-        results = manager.dict()
-
-        mp.spawn(
-            _worker,
-            args=(world_size, results),
-            nprocs=world_size,
-            join=True,
-        )
-
-        for rank in range(world_size):
-            assert results[rank]["bases_len"] == world_size
+        heaps = SymmetricHeap.create_all(size=1024 * 1024, world_size=world_size)
+        try:
+            for rank in range(world_size):
+                bases = heaps[rank].get_heap_bases()
+                assert bases.shape == (world_size,), (
+                    f"Rank {rank}: expected bases shape ({world_size},), got {bases.shape}"
+                )
+                assert bases.dtype == torch.int64
+                # Each base should be non-zero
+                for i in range(world_size):
+                    assert bases[i].item() != 0, f"Rank {rank}: base[{i}] is zero"
+        finally:
+            for h in heaps:
+                h.cleanup()
 
     def test_cross_gpu_pointer_translation(self, skip_no_multigpu, device_info) -> None:
-        """Translated pointer accesses correct remote memory."""
-        import torch.multiprocessing as mp
-
+        """Translated pointer computes correct remote address."""
+        SymmetricHeap = self._get_heap_cls()
         world_size = min(device_info.num_gpus, 2)
-
-        def _worker(rank: int, world_size: int, results_dict: dict) -> None:
-            import os
-            os.environ["MASTER_ADDR"] = "127.0.0.1"
-            os.environ["MASTER_PORT"] = "29501"
-            torch.cuda.set_device(rank)
-            torch.distributed.init_process_group(
-                backend="nccl", rank=rank, world_size=world_size
-            )
-            try:
-                from xtile.memory.symmetric_heap import SymmetricHeap
-                heap = SymmetricHeap(
-                    size=1024 * 1024, rank=rank, world_size=world_size,
-                )
-                t = heap.allocate_tensor(shape=(64,), dtype=torch.float32)
+        heaps = SymmetricHeap.create_all(size=1024 * 1024, world_size=world_size)
+        try:
+            for rank in range(world_size):
+                torch.cuda.set_device(rank)
+                t = heaps[rank].allocate_tensor(shape=(64,), dtype=torch.float32)
                 local_ptr = t.data_ptr()
-                local_base = heap.local_base
-                offset = local_ptr - local_base
+                offset = local_ptr - heaps[rank].local_base
 
-                # Translate to the other rank
                 other_rank = 1 - rank
-                translated = heap.translate(local_ptr, to_rank=other_rank)
+                translated = heaps[rank].translate(local_ptr, to_rank=other_rank)
 
-                # The translated pointer should differ from the local one
-                # (unless by coincidence the bases are the same)
-                bases = heap.get_heap_bases()
+                bases = heaps[rank].get_heap_bases()
                 expected = int(bases[other_rank].item()) + offset
-                results_dict[rank] = {
-                    "translated": translated,
-                    "expected": expected,
-                    "offset": offset,
-                    "match": translated == expected,
-                }
-                heap.barrier()
-                heap.cleanup()
-            finally:
-                torch.distributed.destroy_process_group()
-
-        manager = mp.Manager()
-        results = manager.dict()
-
-        mp.spawn(
-            _worker,
-            args=(world_size, results),
-            nprocs=world_size,
-            join=True,
-        )
-
-        for rank in range(world_size):
-            assert results[rank]["match"], (
-                f"Rank {rank}: translated={results[rank]['translated']}, "
-                f"expected={results[rank]['expected']}"
-            )
+                assert translated == expected, (
+                    f"Rank {rank}: translated=0x{translated:x}, expected=0x{expected:x}"
+                )
+        finally:
+            for h in heaps:
+                h.cleanup()
 
     def test_allocate_tensor_on_heap(self, skip_no_multigpu, device_info) -> None:
         """Tensor allocated on heap has correct data_ptr within heap bounds."""
-        import torch.multiprocessing as mp
-
+        SymmetricHeap = self._get_heap_cls()
         world_size = min(device_info.num_gpus, 2)
-
-        def _worker(rank: int, world_size: int, results_dict: dict) -> None:
-            import os
-            os.environ["MASTER_ADDR"] = "127.0.0.1"
-            os.environ["MASTER_PORT"] = "29502"
-            torch.cuda.set_device(rank)
-            torch.distributed.init_process_group(
-                backend="nccl", rank=rank, world_size=world_size
-            )
-            try:
-                from xtile.memory.symmetric_heap import SymmetricHeap
-                heap = SymmetricHeap(
-                    size=1024 * 1024, rank=rank, world_size=world_size,
-                )
-                t = heap.allocate_tensor(shape=(128, 64), dtype=torch.float16)
+        heaps = SymmetricHeap.create_all(size=1024 * 1024, world_size=world_size)
+        try:
+            for rank in range(world_size):
+                torch.cuda.set_device(rank)
+                t = heaps[rank].allocate_tensor(shape=(128, 64), dtype=torch.float16)
                 ptr = t.data_ptr()
-                base = heap.local_base
-                in_bounds = base <= ptr < base + heap.size
-                results_dict[rank] = {
-                    "in_bounds": in_bounds,
-                    "shape": tuple(t.shape),
-                    "dtype": str(t.dtype),
-                    "device_type": t.device.type,
-                }
-                heap.cleanup()
-            finally:
-                torch.distributed.destroy_process_group()
-
-        manager = mp.Manager()
-        results = manager.dict()
-
-        mp.spawn(
-            _worker,
-            args=(world_size, results),
-            nprocs=world_size,
-            join=True,
-        )
-
-        for rank in range(world_size):
-            r = results[rank]
-            assert r["in_bounds"], f"Rank {rank}: tensor ptr outside heap bounds"
-            assert r["shape"] == (128, 64)
-            assert r["dtype"] == "torch.float16"
-            assert r["device_type"] == "cuda"
+                base = heaps[rank].local_base
+                assert base <= ptr < base + heaps[rank].size, (
+                    f"Rank {rank}: tensor ptr 0x{ptr:x} outside heap bounds"
+                )
+                assert t.shape == (128, 64)
+                assert t.dtype == torch.float16
+                assert t.device.type == "cuda"
+        finally:
+            for h in heaps:
+                h.cleanup()

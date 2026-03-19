@@ -32,6 +32,8 @@ import triton
 import triton.language as tl
 
 from xtile.patterns import Pattern
+from xtile.patterns._helpers import scatter_tile_to_peer
+from xtile.sync.primitives import tile_signal, tile_wait
 
 if TYPE_CHECKING:
     import torch
@@ -45,7 +47,7 @@ class ProducerConsumerPattern(Pattern):
     it to peer GPUs.
 
     Args:
-        ctx: Distributed context (rank, world_size, remote_ptrs, backend).
+        ctx: Distributed context (rank, world_size, heap_bases, backend).
         BLOCK_M: Tile height.
         BLOCK_N: Tile width.
         BLOCK_K: Reduction tile depth.
@@ -117,7 +119,7 @@ class ProducerConsumerPattern(Pattern):
         total_tiles = num_tiles_m * num_tiles_n
 
         world_size = self.ctx.world_size
-        remote_ptrs = self.ctx.remote_ptrs
+        heap_bases = self.ctx.heap_bases
         N_per_rank = N // world_size
 
         # Lock tensor for tile-level synchronization: one int32 per tile.
@@ -153,7 +155,7 @@ class ProducerConsumerPattern(Pattern):
             self._consumer_kernel[consumer_grid](
                 C,
                 locks,
-                remote_ptrs,
+                heap_bases,
                 M, N, N_per_rank,
                 C.stride(0), C.stride(1),
                 self.ctx.rank,
@@ -196,11 +198,9 @@ class ProducerConsumerPattern(Pattern):
     ):
         """Producer: persistent GEMM with tile-level signalling.
 
-        After computing each output tile, atomically sets the
-        corresponding lock to 1 so the consumer knows the tile is ready.
-
-        TODO: Replace atomic with xtile.primitives.tile_signal when available.
-        TODO: Consider using tl.atomic_xchg for release semantics.
+        After computing each output tile, signals the corresponding lock
+        via :func:`~xtile.sync.primitives.tile_signal` (release semantics)
+        so the consumer knows the tile is ready.
         """
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
@@ -212,21 +212,35 @@ class ProducerConsumerPattern(Pattern):
             offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
             offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-            # ---- GEMM accumulation ----
+            # ---- GEMM accumulation (pipelined K-loop) ----
             acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-            for k_start in range(0, K, BLOCK_K):
-                offs_k = k_start + tl.arange(0, BLOCK_K)
+            offs_k_0 = tl.arange(0, BLOCK_K)
+            a = tl.load(
+                A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak,
+                mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0,
+            )
+            b = tl.load(
+                B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+            )
 
-                a_ptrs = A_ptr + offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak
-                a_mask = (offs_m[:, None] < M) & (offs_k[None, :] < K)
-                a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-
-                b_ptrs = B_ptr + offs_k[:, None] * stride_bk + offs_n[None, :] * stride_bn
-                b_mask = (offs_k[:, None] < K) & (offs_n[None, :] < N)
-                b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-
-                acc += tl.dot(a, b)
+            num_k_iters = tl.cdiv(K, BLOCK_K)
+            for k_iter in range(0, num_k_iters):
+                acc = tl.dot(a, b, acc, allow_tf32=True)
+                next_k = (k_iter + 1) * BLOCK_K
+                if next_k < K:
+                    offs_k_n = next_k + tl.arange(0, BLOCK_K)
+                    a = tl.load(
+                        A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
+                        mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
+                        eviction_policy="evict_last",
+                    )
+                    b = tl.load(
+                        B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                        mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+                        eviction_policy="evict_last",
+                    )
 
             # ---- Store result tile ----
             result = acc.to(C_ptr.dtype.element_ty)
@@ -234,11 +248,10 @@ class ProducerConsumerPattern(Pattern):
             c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
             tl.store(c_ptrs, result, mask=c_mask)
 
-            # ---- Signal tile completion (tile_signal) ----
-            # Atomic store ensures memory ordering: the consumer will
-            # see the tile data after it observes lock == 1.
-            # TODO: Replace with xtile.sync.tile_signal primitive.
-            tl.atomic_xchg(locks_ptr + tile_id, 1)
+            # ---- Signal tile completion ----
+            # Release semantics ensure the consumer sees the tile data
+            # after it acquires this lock.
+            tile_signal(locks_ptr, tile_id)
 
     @staticmethod
     @triton.jit
@@ -246,7 +259,7 @@ class ProducerConsumerPattern(Pattern):
         # Pointers
         C_ptr,
         locks_ptr,
-        remote_ptrs,
+        heap_bases,
         # Dimensions
         M, N, N_per_rank,
         # Strides
@@ -262,20 +275,18 @@ class ProducerConsumerPattern(Pattern):
     ):
         """Consumer: wait for tiles and scatter them to peers.
 
-        For each tile (round-robin), spin-waits on the corresponding
-        lock until the producer signals completion, then performs remote
-        stores to all peer GPUs.
-
-        TODO: Replace spin-wait with xtile.sync.tile_wait primitive.
-        TODO: Replace scatter with xtile.primitives.tile_remote_store.
-        TODO: Add backoff strategy to reduce spin-wait power consumption.
+        For each tile (round-robin), waits via
+        :func:`~xtile.sync.primitives.tile_wait` (acquire semantics) until
+        the producer signals completion, then scatters the tile to all
+        peer GPUs via :func:`~xtile.patterns._helpers.scatter_tile_to_peer`.
         """
         pid = tl.program_id(0)
 
         for tile_id in range(pid, total_tiles, NUM_SMS):
-            # ---- tile_wait: spin until producer signals ----
-            while tl.atomic_cas(locks_ptr + tile_id, 1, 1) != 1:
-                pass  # spin -- TODO: add exponential backoff
+            # ---- Wait for producer to signal tile completion ----
+            # Acquire semantics ensure we see the tile data written by
+            # the producer before its release-signal.
+            tile_wait(locks_ptr, tile_id)
 
             # ---- Read the completed tile ----
             tile_m = tile_id // num_tiles_n
@@ -288,18 +299,11 @@ class ProducerConsumerPattern(Pattern):
             c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
             tile_data = tl.load(c_ptrs, mask=c_mask, other=0.0)
 
-            # ---- Scatter to all peers (tile_remote_store) ----
+            # ---- Scatter to all peers via translate_ptr ----
             for peer in range(world_size):
-                if peer == rank:
-                    continue
-
-                remote_base = tl.load(remote_ptrs + peer)
-                dst_col_offset = rank * N_per_rank
-                dst_ptrs = (
-                    remote_base
-                    + (offs_m[:, None] * N
-                       + (dst_col_offset + offs_n[None, :])).to(tl.int64)
-                    * tile_data.dtype.primitive_bitwidth // 8
-                )
-                dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
-                tl.store(dst_ptrs, tile_data, mask=dst_mask)
+                if peer != rank:
+                    dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
+                    scatter_tile_to_peer(
+                        C_ptr, tile_data, offs_m, offs_n,
+                        rank, peer, N, N_per_rank, heap_bases, dst_mask,
+                    )

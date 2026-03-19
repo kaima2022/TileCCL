@@ -112,6 +112,7 @@ def remote_load(
     mask=None,
     other=0.0,
     HINT: tl.constexpr = 0,
+    CACHE_MODIFIER: tl.constexpr = "",
 ):
     """Load from a remote rank's heap.
 
@@ -135,13 +136,21 @@ def remote_load(
         Default value for masked-out lanes.
     HINT : tl.constexpr
         Vectorization hint for :func:`translate_ptr`.
+    CACHE_MODIFIER : tl.constexpr
+        Cache modifier for the load.  Use ``".cg"`` (cache-global, bypass
+        L1) for non-reused remote data, ``""`` for default.
 
     Returns
     -------
     Loaded value(s).
     """
     remote_ptr = translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT=HINT)
-    return tl.load(remote_ptr, mask=mask, other=other)
+    if CACHE_MODIFIER == ".cg":
+        return tl.load(remote_ptr, mask=mask, other=other, cache_modifier=".cg")
+    elif CACHE_MODIFIER == ".ca":
+        return tl.load(remote_ptr, mask=mask, other=other, cache_modifier=".ca")
+    else:
+        return tl.load(remote_ptr, mask=mask, other=other)
 
 
 @triton.jit
@@ -153,6 +162,7 @@ def remote_store(
     heap_bases,
     mask=None,
     HINT: tl.constexpr = 0,
+    CACHE_MODIFIER: tl.constexpr = "",
 ):
     """Store to a remote rank's heap.
 
@@ -175,9 +185,17 @@ def remote_store(
         Optional boolean mask (same semantics as ``tl.store``).
     HINT : tl.constexpr
         Vectorization hint for :func:`translate_ptr`.
+    CACHE_MODIFIER : tl.constexpr
+        Cache modifier for the store.  Use ``".wt"`` (write-through,
+        bypass L2 pollution) for remote writes, ``""`` for default.
     """
     remote_ptr = translate_ptr(ptr, src_rank, dst_rank, heap_bases, HINT=HINT)
-    tl.store(remote_ptr, value, mask=mask)
+    if CACHE_MODIFIER == ".wt":
+        tl.store(remote_ptr, value, mask=mask, cache_modifier=".wt")
+    elif CACHE_MODIFIER == ".cs":
+        tl.store(remote_ptr, value, mask=mask, cache_modifier=".cs")
+    else:
+        tl.store(remote_ptr, value, mask=mask)
 
 
 # -----------------------------------------------------------------------
@@ -193,6 +211,7 @@ def remote_load_block(
     BLOCK_SIZE: tl.constexpr,
     mask=None,
     other=0.0,
+    CACHE_MODIFIER: tl.constexpr = "",
 ):
     """Load a contiguous block from a remote rank's heap.
 
@@ -215,6 +234,8 @@ def remote_load_block(
         Optional boolean mask of shape ``(BLOCK_SIZE,)``.
     other :
         Default value for masked-out positions.
+    CACHE_MODIFIER : tl.constexpr
+        Cache modifier: ``".cg"`` for non-reused remote reads, ``""`` default.
 
     Returns
     -------
@@ -222,7 +243,10 @@ def remote_load_block(
     """
     remote_base = translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT=BLOCK_SIZE)
     offsets = tl.arange(0, BLOCK_SIZE)
-    return tl.load(remote_base + offsets, mask=mask, other=other)
+    if CACHE_MODIFIER == ".cg":
+        return tl.load(remote_base + offsets, mask=mask, other=other, cache_modifier=".cg")
+    else:
+        return tl.load(remote_base + offsets, mask=mask, other=other)
 
 
 @triton.jit
@@ -234,6 +258,7 @@ def remote_store_block(
     heap_bases,
     BLOCK_SIZE: tl.constexpr,
     mask=None,
+    CACHE_MODIFIER: tl.constexpr = "",
 ):
     """Store a contiguous block into a remote rank's heap.
 
@@ -253,10 +278,15 @@ def remote_store_block(
         Number of elements in the block.
     mask :
         Optional boolean mask of shape ``(BLOCK_SIZE,)``.
+    CACHE_MODIFIER : tl.constexpr
+        Cache modifier: ``".wt"`` for write-through, ``""`` default.
     """
     remote_base = translate_ptr(ptr, src_rank, dst_rank, heap_bases, HINT=BLOCK_SIZE)
     offsets = tl.arange(0, BLOCK_SIZE)
-    tl.store(remote_base + offsets, value, mask=mask)
+    if CACHE_MODIFIER == ".wt":
+        tl.store(remote_base + offsets, value, mask=mask, cache_modifier=".wt")
+    else:
+        tl.store(remote_base + offsets, value, mask=mask)
 
 
 # ======================================================================

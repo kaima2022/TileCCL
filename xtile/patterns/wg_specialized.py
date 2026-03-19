@@ -34,6 +34,8 @@ import triton
 import triton.language as tl
 
 from xtile.patterns import Pattern
+from xtile.patterns._helpers import scatter_tile_to_peer
+from xtile.sync.primitives import tile_signal, tile_wait
 
 if TYPE_CHECKING:
     import torch
@@ -46,7 +48,7 @@ class WGSpecializedPattern(Pattern):
     compute workers (GEMM + signal) and comm workers (wait + scatter).
 
     Args:
-        ctx: Distributed context (rank, world_size, remote_ptrs, backend).
+        ctx: Distributed context (rank, world_size, heap_bases, backend).
         BLOCK_M: Tile height.
         BLOCK_N: Tile width.
         BLOCK_K: Reduction tile depth.
@@ -124,7 +126,7 @@ class WGSpecializedPattern(Pattern):
         total_tiles = num_tiles_m * num_tiles_n
 
         world_size = self.ctx.world_size
-        remote_ptrs = self.ctx.remote_ptrs
+        heap_bases = self.ctx.heap_bases
         N_per_rank = N // world_size
 
         # Lock tensor for tile-level synchronization between compute and
@@ -136,7 +138,7 @@ class WGSpecializedPattern(Pattern):
         self._wg_specialized_kernel[grid](
             A, B, C,
             locks,
-            remote_ptrs,
+            heap_bases,
             M, N, K, N_per_rank,
             A.stride(0), A.stride(1),
             B.stride(0), B.stride(1),
@@ -164,7 +166,7 @@ class WGSpecializedPattern(Pattern):
         # Pointers
         A_ptr, B_ptr, C_ptr,
         locks_ptr,
-        remote_ptrs,
+        heap_bases,
         # Dimensions
         M, N, K, N_per_rank,
         # Strides
@@ -186,20 +188,17 @@ class WGSpecializedPattern(Pattern):
         """Workgroup-specialized kernel (Iris Listing 5 style).
 
         Program instances 0..COMPUTE_SMS-1 are **compute workers** that
-        execute the persistent GEMM and signal tile completion.
+        execute the persistent GEMM and signal tile completion via
+        :func:`~xtile.sync.primitives.tile_signal` (release semantics).
 
         Program instances COMPUTE_SMS..COMPUTE_SMS+COMM_SMS-1 are
-        **comm workers** that wait for tile signals and perform remote
-        scatter.
+        **comm workers** that wait via
+        :func:`~xtile.sync.primitives.tile_wait` (acquire semantics)
+        and scatter tiles to peers via
+        :func:`~xtile.patterns._helpers.scatter_tile_to_peer`.
 
         The two worker pools operate concurrently on different SMs,
         achieving true SM-level overlap of compute and communication.
-
-        TODO: Integrate with xtile.sync.tile_signal / tile_wait primitives.
-        TODO: Integrate with xtile.primitives.tile_remote_store.
-        TODO: Experiment with tile scheduling order (Hilbert curve, etc.)
-              to improve L2 cache locality for compute workers.
-        TODO: Add support for asymmetric tile sizes at matrix edges.
         """
         pid = tl.program_id(0)
 
@@ -214,23 +213,35 @@ class WGSpecializedPattern(Pattern):
                 offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
                 offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-                # ---- GEMM accumulation ----
+                # ---- GEMM accumulation (pipelined K-loop) ----
                 acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-                for k_start in range(0, K, BLOCK_K):
-                    offs_k = k_start + tl.arange(0, BLOCK_K)
+                offs_k_0 = tl.arange(0, BLOCK_K)
+                a = tl.load(
+                    A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak,
+                    mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0,
+                )
+                b = tl.load(
+                    B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                    mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+                )
 
-                    # Load A tile
-                    a_ptrs = A_ptr + offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak
-                    a_mask = (offs_m[:, None] < M) & (offs_k[None, :] < K)
-                    a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-
-                    # Load B tile
-                    b_ptrs = B_ptr + offs_k[:, None] * stride_bk + offs_n[None, :] * stride_bn
-                    b_mask = (offs_k[:, None] < K) & (offs_n[None, :] < N)
-                    b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-
+                num_k_iters = tl.cdiv(K, BLOCK_K)
+                for k_iter in range(0, num_k_iters):
                     acc = tl.dot(a, b, acc, allow_tf32=True)
+                    next_k = (k_iter + 1) * BLOCK_K
+                    if next_k < K:
+                        offs_k_n = next_k + tl.arange(0, BLOCK_K)
+                        a = tl.load(
+                            A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
+                            mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
+                            eviction_policy="evict_last",
+                        )
+                        b = tl.load(
+                            B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                            mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+                            eviction_policy="evict_last",
+                        )
 
                 # ---- Store result tile locally ----
                 result = acc.to(C_ptr.dtype.element_ty)
@@ -238,11 +249,10 @@ class WGSpecializedPattern(Pattern):
                 c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
                 tl.store(c_ptrs, result, mask=c_mask)
 
-                # ---- Signal tile completion (tile_signal) ----
-                # The atomic exchange ensures the store to C is visible
-                # to the comm worker before it reads the tile.
-                # TODO: Replace with xtile.sync.tile_signal primitive.
-                tl.atomic_xchg(locks_ptr + tile_id, 1)
+                # ---- Signal tile completion ----
+                # Release semantics ensure the store to C is visible
+                # to the comm worker after it acquires this lock.
+                tile_signal(locks_ptr, tile_id)
 
         # ================================================================
         # Comm worker: wait + scatter
@@ -252,11 +262,10 @@ class WGSpecializedPattern(Pattern):
             comm_pid = pid - COMPUTE_SMS
 
             for tile_id in range(comm_pid, total_tiles, COMM_SMS):
-                # ---- tile_wait: spin until compute worker signals ----
-                # TODO: Replace with xtile.sync.tile_wait primitive.
-                # TODO: Add exponential backoff to reduce power/contention.
-                while tl.atomic_cas(locks_ptr + tile_id, 1, 1) != 1:
-                    pass  # spin
+                # ---- Wait for compute worker to signal tile completion ----
+                # Acquire semantics ensure we see the tile data written
+                # by the compute worker before its release-signal.
+                tile_wait(locks_ptr, tile_id)
 
                 # ---- Read the completed tile ----
                 tile_m = tile_id // num_tiles_n
@@ -269,21 +278,11 @@ class WGSpecializedPattern(Pattern):
                 c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
                 tile_data = tl.load(c_ptrs, mask=c_mask, other=0.0)
 
-                # ---- Scatter to all peers (tile_remote_store) ----
-                # TODO: Replace with xtile.primitives.tile_remote_store.
-                # TODO: Consider coalescing stores or using async copy
-                #       engines where available (e.g., TMA on H100).
+                # ---- Scatter to all peers via translate_ptr ----
                 for peer in range(world_size):
-                    if peer == rank:
-                        continue
-
-                    remote_base = tl.load(remote_ptrs + peer)
-                    dst_col_offset = rank * N_per_rank
-                    dst_ptrs = (
-                        remote_base
-                        + (offs_m[:, None] * N
-                           + (dst_col_offset + offs_n[None, :])).to(tl.int64)
-                        * tile_data.dtype.primitive_bitwidth // 8
-                    )
-                    dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
-                    tl.store(dst_ptrs, tile_data, mask=dst_mask)
+                    if peer != rank:
+                        dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
+                        scatter_tile_to_peer(
+                            C_ptr, tile_data, offs_m, offs_n,
+                            rank, peer, N, N_per_rank, heap_bases, dst_mask,
+                        )

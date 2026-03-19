@@ -490,7 +490,7 @@ class CUDABackend(BackendInterface):
                 name=props.name,
                 compute_units=props.multi_processor_count,
                 warp_size=NVIDIA_WARP_SIZE,
-                global_memory_bytes=props.total_mem,
+                global_memory_bytes=props.total_memory,
                 l2_cache_bytes=getattr(props, "l2_cache_size", 0),
                 compute_capability=(props.major, props.minor),
                 backend_type="cuda",

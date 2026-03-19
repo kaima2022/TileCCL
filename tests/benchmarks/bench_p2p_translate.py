@@ -2,18 +2,26 @@
 """P2P bandwidth microbenchmark using translate_ptr.
 
 Measures actual NVLink bandwidth achieved by translate_ptr-based remote
-reads/writes at various block sizes, and compares against the theoretical
-peak.
+reads/writes at various block sizes and cache modifiers, and compares
+against the theoretical peak.
+
+Optimizations tested:
+- Cache modifiers: .cg (cache-global, bypass L1 for reads),
+  .wt (write-through, bypass L2 for writes)
+- Eviction policies: evict_first for streaming data
+- BLOCK_SIZE sweep: 1024, 2048, 4096, 8192
+- Grid size sweep: num_sms, num_sms * 2
 
 Usage:
     python3 tests/benchmarks/bench_p2p_translate.py
+    python3 tests/benchmarks/bench_p2p_translate.py --quick   # fast mode
 
 Requires >= 2 GPUs with peer access.
 """
 
 from __future__ import annotations
 
-import time
+import sys
 from dataclasses import dataclass
 
 import torch
@@ -25,7 +33,7 @@ from xtile.memory.translation import translate_ptr
 
 
 # ---------------------------------------------------------------------------
-# Triton kernels
+# Triton kernels -- baseline (no cache modifier)
 # ---------------------------------------------------------------------------
 
 @triton.jit
@@ -37,7 +45,7 @@ def _p2p_read_bw_kernel(
     N_ELEMENTS,
     BLOCK_SIZE: tl.constexpr,
 ):
-    """Persistent kernel: reads from remote heap via translate_ptr."""
+    """Persistent kernel: reads from remote heap via translate_ptr (baseline)."""
     pid = tl.program_id(0)
     num_blocks = (N_ELEMENTS + BLOCK_SIZE - 1) // BLOCK_SIZE
     for block_id in range(pid, num_blocks, tl.num_programs(0)):
@@ -62,7 +70,7 @@ def _p2p_write_bw_kernel(
     N_ELEMENTS,
     BLOCK_SIZE: tl.constexpr,
 ):
-    """Persistent kernel: writes to remote heap via translate_ptr."""
+    """Persistent kernel: writes to remote heap via translate_ptr (baseline)."""
     pid = tl.program_id(0)
     num_blocks = (N_ELEMENTS + BLOCK_SIZE - 1) // BLOCK_SIZE
     for block_id in range(pid, num_blocks, tl.num_programs(0)):
@@ -80,6 +88,135 @@ def _p2p_write_bw_kernel(
 
 
 # ---------------------------------------------------------------------------
+# Triton kernels -- optimized with cache modifiers
+# ---------------------------------------------------------------------------
+
+@triton.jit
+def _p2p_read_bw_cg_kernel(
+    local_ptr,
+    heap_bases,
+    caller_rank,
+    remote_rank,
+    N_ELEMENTS,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Persistent read kernel with .cg cache modifier (bypass L1).
+
+    Remote data is streaming (not reused locally), so bypassing L1
+    avoids polluting the L1 cache and reduces cache thrashing.
+    """
+    pid = tl.program_id(0)
+    num_blocks = (N_ELEMENTS + BLOCK_SIZE - 1) // BLOCK_SIZE
+    for block_id in range(pid, num_blocks, tl.num_programs(0)):
+        start = block_id * BLOCK_SIZE
+        offsets = start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < N_ELEMENTS
+        remote_ptr = translate_ptr(
+            local_ptr + offsets, caller_rank, remote_rank, heap_bases,
+            HINT=BLOCK_SIZE,
+        )
+        data = tl.load(remote_ptr, mask=mask, cache_modifier=".cg")
+        tl.store(local_ptr + offsets, data, mask=mask)
+
+
+@triton.jit
+def _p2p_write_bw_wt_kernel(
+    local_ptr,
+    heap_bases,
+    caller_rank,
+    remote_rank,
+    N_ELEMENTS,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Persistent write kernel with .wt cache modifier (write-through).
+
+    Remote writes bypass L2 cache on the way out, avoiding L2 pollution
+    and allowing the NVLink to be fed directly.
+    """
+    pid = tl.program_id(0)
+    num_blocks = (N_ELEMENTS + BLOCK_SIZE - 1) // BLOCK_SIZE
+    for block_id in range(pid, num_blocks, tl.num_programs(0)):
+        start = block_id * BLOCK_SIZE
+        offsets = start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < N_ELEMENTS
+        data = tl.load(local_ptr + offsets, mask=mask)
+        remote_ptr = translate_ptr(
+            local_ptr + offsets, caller_rank, remote_rank, heap_bases,
+            HINT=BLOCK_SIZE,
+        )
+        tl.store(remote_ptr, data, mask=mask, cache_modifier=".wt")
+
+
+# ---------------------------------------------------------------------------
+# Triton kernels -- optimized with eviction policy
+# ---------------------------------------------------------------------------
+
+@triton.jit
+def _p2p_read_bw_evict_kernel(
+    local_ptr,
+    heap_bases,
+    caller_rank,
+    remote_rank,
+    N_ELEMENTS,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Read kernel with evict_first policy for streaming remote loads."""
+    pid = tl.program_id(0)
+    num_blocks = (N_ELEMENTS + BLOCK_SIZE - 1) // BLOCK_SIZE
+    for block_id in range(pid, num_blocks, tl.num_programs(0)):
+        start = block_id * BLOCK_SIZE
+        offsets = start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < N_ELEMENTS
+        remote_ptr = translate_ptr(
+            local_ptr + offsets, caller_rank, remote_rank, heap_bases,
+            HINT=BLOCK_SIZE,
+        )
+        data = tl.load(remote_ptr, mask=mask, eviction_policy="evict_first")
+        tl.store(local_ptr + offsets, data, mask=mask)
+
+
+@triton.jit
+def _p2p_write_bw_evict_kernel(
+    local_ptr,
+    heap_bases,
+    caller_rank,
+    remote_rank,
+    N_ELEMENTS,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Write kernel with evict_first for streaming local loads."""
+    pid = tl.program_id(0)
+    num_blocks = (N_ELEMENTS + BLOCK_SIZE - 1) // BLOCK_SIZE
+    for block_id in range(pid, num_blocks, tl.num_programs(0)):
+        start = block_id * BLOCK_SIZE
+        offsets = start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < N_ELEMENTS
+        data = tl.load(local_ptr + offsets, mask=mask, eviction_policy="evict_first")
+        remote_ptr = translate_ptr(
+            local_ptr + offsets, caller_rank, remote_rank, heap_bases,
+            HINT=BLOCK_SIZE,
+        )
+        tl.store(remote_ptr, data, mask=mask, cache_modifier=".wt")
+
+
+# ---------------------------------------------------------------------------
+# Kernel registry
+# ---------------------------------------------------------------------------
+
+_READ_KERNELS = {
+    "baseline": _p2p_read_bw_kernel,
+    "cg": _p2p_read_bw_cg_kernel,
+    "evict_first": _p2p_read_bw_evict_kernel,
+}
+
+_WRITE_KERNELS = {
+    "baseline": _p2p_write_bw_kernel,
+    "wt": _p2p_write_bw_wt_kernel,
+    "wt+evict": _p2p_write_bw_evict_kernel,
+}
+
+
+# ---------------------------------------------------------------------------
 # Benchmark harness
 # ---------------------------------------------------------------------------
 
@@ -92,6 +229,7 @@ class BenchResult:
     bandwidth_gbps: float
     time_us: float
     num_sms: int
+    variant: str
 
 
 def benchmark_p2p(
@@ -100,6 +238,7 @@ def benchmark_p2p(
     block_size: int,
     dtype: torch.dtype,
     direction: str = "read",
+    variant: str = "baseline",
     warmup: int = 10,
     iters: int = 100,
     num_sms: int = 0,
@@ -126,7 +265,11 @@ def benchmark_p2p(
     torch.cuda.set_device(0)
     bases = heaps[0].get_heap_bases()
 
-    kernel = _p2p_read_bw_kernel if direction == "read" else _p2p_write_bw_kernel
+    # Select kernel
+    if direction == "read":
+        kernel = _READ_KERNELS.get(variant, _p2p_read_bw_kernel)
+    else:
+        kernel = _WRITE_KERNELS.get(variant, _p2p_write_bw_kernel)
 
     # Warmup
     for _ in range(warmup):
@@ -166,11 +309,14 @@ def benchmark_p2p(
         bandwidth_gbps=bandwidth_gbps,
         time_us=mean_us,
         num_sms=num_sms,
+        variant=variant,
     )
 
 
 def main():
     assert torch.cuda.device_count() >= 2, "Need >= 2 GPUs"
+
+    quick = "--quick" in sys.argv
 
     # Get topology info
     link = "unknown"
@@ -192,7 +338,7 @@ def main():
 
     # H100 PCIe NV12: 12 × 25 GB/s = 300 GB/s per direction
     theoretical_peak = 300.0  # GB/s
-    print(f"=== XTile P2P Bandwidth Benchmark ===")
+    print(f"=== XTile P2P Bandwidth Benchmark (Optimized) ===")
     print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
     print(f"Link: {link}")
     print(f"Theoretical peak: {theoretical_peak:.1f} GB/s (per direction)")
@@ -202,53 +348,117 @@ def main():
     heap_size = 256 * 1024 * 1024  # 256 MB
     heaps = SymmetricHeap.create_all(size=heap_size, world_size=2)
 
+    num_sms = torch.cuda.get_device_properties(0).multi_processor_count
     results: list[BenchResult] = []
 
-    # Test matrix
-    sizes_mb = [1, 4, 16, 64, 128]
-    block_sizes = [1024, 4096]
-    dtypes = [torch.float32, torch.float16]
+    # ---- Systematic sweep ----
+
+    if quick:
+        # Quick: just large transfers with best settings
+        sizes_mb = [128]
+        block_sizes = [4096]
+        grid_scales = [1]
+        dtypes = [torch.float32]
+        read_variants = ["baseline", "cg", "evict_first"]
+        write_variants = ["baseline", "wt", "wt+evict"]
+    else:
+        sizes_mb = [1, 4, 16, 64, 128]
+        block_sizes = [1024, 2048, 4096, 8192]
+        grid_scales = [1, 2]  # num_sms * scale
+        dtypes = [torch.float32, torch.float16]
+        read_variants = ["baseline", "cg", "evict_first"]
+        write_variants = ["baseline", "wt", "wt+evict"]
+
+    best_read = None
+    best_write = None
 
     for dtype in dtypes:
         el_size = torch.tensor([], dtype=dtype).element_size()
+        print(f"--- dtype={dtype} ---")
+
         for size_mb in sizes_mb:
             n_elements = size_mb * 1024 * 1024 // el_size
-            for bs in block_sizes:
-                for direction in ["read", "write"]:
-                    # Reset heaps for each test (bump allocator)
-                    for h in heaps:
-                        h._bump_offset = 0
-                        h._alloc_records.clear()
 
-                    r = benchmark_p2p(
-                        heaps, n_elements, bs, dtype,
-                        direction=direction, warmup=5, iters=50,
-                    )
-                    results.append(r)
-                    pct = r.bandwidth_gbps / theoretical_peak * 100
-                    print(
-                        f"  {direction:5s} | {r.dtype:7s} | "
-                        f"{r.size_bytes/1e6:7.1f} MB | "
-                        f"BS={r.block_size:5d} | "
-                        f"{r.bandwidth_gbps:7.2f} GB/s | "
-                        f"{pct:5.1f}% peak | "
-                        f"{r.time_us:8.1f} us"
-                    )
+            for bs in block_sizes:
+                for grid_scale in grid_scales:
+                    gs = num_sms * grid_scale
+
+                    # Read sweep
+                    for variant in read_variants:
+                        for h in heaps:
+                            h._bump_offset = 0
+                            h._alloc_records.clear()
+
+                        r = benchmark_p2p(
+                            heaps, n_elements, bs, dtype,
+                            direction="read", variant=variant,
+                            warmup=5, iters=50,
+                            num_sms=gs,
+                        )
+                        results.append(r)
+                        pct = r.bandwidth_gbps / theoretical_peak * 100
+                        if best_read is None or r.bandwidth_gbps > best_read.bandwidth_gbps:
+                            if r.size_bytes >= 16e6:
+                                best_read = r
+                        print(
+                            f"  read  | {variant:14s} | {r.dtype:7s} | "
+                            f"{r.size_bytes/1e6:7.1f} MB | "
+                            f"BS={r.block_size:5d} | grid={gs:4d} | "
+                            f"{r.bandwidth_gbps:7.2f} GB/s | "
+                            f"{pct:5.1f}% peak | "
+                            f"{r.time_us:8.1f} us"
+                        )
+
+                    # Write sweep
+                    for variant in write_variants:
+                        for h in heaps:
+                            h._bump_offset = 0
+                            h._alloc_records.clear()
+
+                        r = benchmark_p2p(
+                            heaps, n_elements, bs, dtype,
+                            direction="write", variant=variant,
+                            warmup=5, iters=50,
+                            num_sms=gs,
+                        )
+                        results.append(r)
+                        pct = r.bandwidth_gbps / theoretical_peak * 100
+                        if best_write is None or r.bandwidth_gbps > best_write.bandwidth_gbps:
+                            if r.size_bytes >= 16e6:
+                                best_write = r
+                        print(
+                            f"  write | {variant:14s} | {r.dtype:7s} | "
+                            f"{r.size_bytes/1e6:7.1f} MB | "
+                            f"BS={r.block_size:5d} | grid={gs:4d} | "
+                            f"{r.bandwidth_gbps:7.2f} GB/s | "
+                            f"{pct:5.1f}% peak | "
+                            f"{r.time_us:8.1f} us"
+                        )
 
     # Summary
     print()
+    print("=" * 80)
     print("=== Summary ===")
-    read_results = [r for r in results if r.direction == "read" and r.size_bytes >= 16e6]
-    write_results = [r for r in results if r.direction == "write" and r.size_bytes >= 16e6]
+    if best_read:
+        pct = best_read.bandwidth_gbps / theoretical_peak * 100
+        print(
+            f"Best read:  {best_read.bandwidth_gbps:.2f} GB/s ({pct:.1f}% peak) "
+            f"[{best_read.variant}, BS={best_read.block_size}, "
+            f"grid={best_read.num_sms}, {best_read.dtype}]"
+        )
+    if best_write:
+        pct = best_write.bandwidth_gbps / theoretical_peak * 100
+        print(
+            f"Best write: {best_write.bandwidth_gbps:.2f} GB/s ({pct:.1f}% peak) "
+            f"[{best_write.variant}, BS={best_write.block_size}, "
+            f"grid={best_write.num_sms}, {best_write.dtype}]"
+        )
 
-    if read_results:
-        best_read = max(read_results, key=lambda r: r.bandwidth_gbps)
-        print(f"Best read:  {best_read.bandwidth_gbps:.2f} GB/s "
-              f"({best_read.bandwidth_gbps/theoretical_peak*100:.1f}% peak)")
-    if write_results:
-        best_write = max(write_results, key=lambda r: r.bandwidth_gbps)
-        print(f"Best write: {best_write.bandwidth_gbps:.2f} GB/s "
-              f"({best_write.bandwidth_gbps/theoretical_peak*100:.1f}% peak)")
+    target_met = False
+    if best_read and best_write:
+        target_met = (best_read.bandwidth_gbps >= 285.0 and
+                      best_write.bandwidth_gbps >= 285.0)
+    print(f"\nTarget (≥95% = 285 GB/s): {'MET' if target_met else 'NOT MET'}")
 
     for h in heaps:
         h.cleanup()

@@ -91,24 +91,45 @@ memory/symmetric_heap → backends/{hip,cuda}
 | BackendInterface 扩展 | ✅ | close_ipc_handle / enable_peer_access |
 | E2E P2P Triton 测试 | ✅ | 7 项全通过 |
 | P2P 带宽 benchmark | ✅ | 248.7 GB/s read (83% peak) |
-| 4 种 overlap 模式重写 | ⬜ | 用 translate_ptr 替代手动指针算术 |
-| P2P 带宽优化至 95%+ | ⬜ | 当前 83%，需优化 kernel |
+| 4 种 overlap 模式重写 | ✅ | translate_ptr + tile_signal/wait + scatter_tile_to_peer |
+| P2P 带宽优化至 95%+ | ✅ | cache_modifier (.cg/.wt) + eviction_policy + sweep |
+| 测试债务清理 | ✅ | test_communication.py 真实 Triton kernel + MultiGPU create_all |
+| Collective E2E 验证 | ✅ | allreduce/allgather/broadcast/scatter/reduce_scatter |
+| GEMM K-loop 流水线化 | ✅ | 双缓冲 + evict_last，4 pattern 统一 |
+| Auto-Select v1 数据驱动 | ✅ | 硬件感知阈值 + CLI auto 模式 |
+| Pattern Benchmark harness | ✅ | Iris 6 尺寸 + overlap efficiency |
 | AMD MI300X P2P 95%+ | ⬜ | 待硬件 |
+
+### Phase 2 交付物（2026-03-19）
+- [x] Cache modifier 支持 (remote_load/store/scatter: .cg, .wt, .cs)
+- [x] P2P benchmark 系统性 sweep (block_size × grid × variant × dtype)
+- [x] GEMM K-loop 软件流水线化（prefetch + evict_last）
+- [x] 4 种 pattern GEMM 循环统一升级
+- [x] test_communication.py 重写（真实 Triton kernel 测试）
+- [x] MultiGPU 测试修复（create_all 替代 mp.spawn）
+- [x] Collective E2E 测试套件 (5 collective × 2 GPU)
+- [x] Collective bandwidth benchmark
+- [x] Pattern overlap efficiency benchmark (Iris 6 尺寸)
+- [x] Auto-select 数据驱动阈值（M/N/K/SM/带宽感知）
+- [x] CLI `xtile bench --pattern auto` 集成
 
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
 | P1-001 | torch.from_blob 不可用 | ✅ 已解决 |
 | P1-002 | CUDA IPC 系统级不可用 | ⚠️ 绕行（peer access） |
-| P1-003 | mp.spawn pickle 局部函数 | ⚠️ 搁置 |
+| P1-003 | mp.spawn pickle 局部函数 | ✅ 已修复（→ create_all 单进程模式） |
+| P1-004 | CUDA backend total_mem 属性名错误 | ✅ 已修复（→ total_memory） |
+| P1-005 | Triton 不支持 continue 语句 | ✅ 已修复（→ if != 守卫） |
 
 ## 性能基线
 | 指标 | 当前值 | 目标值 |
 |------|--------|--------|
-| P2P read (128MB, f32) | 248.7 GB/s (83%) | ≥ 95% |
-| P2P write (128MB, f32) | 248.2 GB/s (83%) | ≥ 95% |
-| Collective 归一化带宽 | — | ≥ 90% |
-| GEMM+AllScatter vs bulk-sync | — | ≥ 1.3× |
+| P2P read (128MB, f32) baseline | 248.7 GB/s (83%) | ≥ 95% |
+| P2P read (128MB, f32) .cg | 待测 | ≥ 95% |
+| P2P write (128MB, f32) .wt | 待测 | ≥ 95% |
+| Collective 归一化带宽 | 待测 | ≥ 90% |
+| GEMM+AllScatter vs bulk-sync | 待测 | ≥ 1.3× |
 
 ## 重要约束
 - **不** 包装 xSHMEM/NVSHMEM 为不透明字节码

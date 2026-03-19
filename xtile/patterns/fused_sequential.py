@@ -28,6 +28,7 @@ import triton
 import triton.language as tl
 
 from xtile.patterns import Pattern
+from xtile.patterns._helpers import scatter_tile_to_peer
 
 if TYPE_CHECKING:
     import torch
@@ -42,7 +43,7 @@ class FusedSequentialPattern(Pattern):
         3. Moves to the next tile (persistent loop).
 
     Args:
-        ctx: Distributed context (rank, world_size, remote_ptrs, backend).
+        ctx: Distributed context (rank, world_size, heap_bases, backend).
         BLOCK_M: Tile height.
         BLOCK_N: Tile width.
         BLOCK_K: Reduction tile depth.
@@ -96,13 +97,13 @@ class FusedSequentialPattern(Pattern):
         total_tiles = num_tiles_m * num_tiles_n
 
         world_size = self.ctx.world_size
-        remote_ptrs = self.ctx.remote_ptrs
+        heap_bases = self.ctx.heap_bases
         N_per_rank = N // world_size
 
         grid = (min(num_sms, total_tiles),)
         self._fused_kernel[grid](
             A, B, C,
-            remote_ptrs,
+            heap_bases,
             M, N, K, N_per_rank,
             A.stride(0), A.stride(1),
             B.stride(0), B.stride(1),
@@ -126,7 +127,7 @@ class FusedSequentialPattern(Pattern):
     def _fused_kernel(
         # Pointers
         A_ptr, B_ptr, C_ptr,
-        remote_ptrs,
+        heap_bases,
         # Dimensions
         M, N, K, N_per_rank,
         # Strides
@@ -149,15 +150,11 @@ class FusedSequentialPattern(Pattern):
         For each tile:
             1. Accumulate C[tile] = A[rows, :] @ B[:, cols]
             2. Store to local C
-            3. Remote-store the tile to every peer GPU
+            3. Scatter the tile to every peer via translate_ptr
 
         Hardware overlap occurs because the remote stores from tile[i] can
         overlap with the GEMM arithmetic of tile[i+1] at the memory
         subsystem level.
-
-        TODO: Integrate with xtile.primitives.tile_remote_store.
-        TODO: Tune BLOCK sizes per architecture (H100 vs MI300X).
-        TODO: Consider software pipelining the K-loop loads.
         """
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
@@ -170,23 +167,36 @@ class FusedSequentialPattern(Pattern):
             offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
             offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-            # ---- Phase 1: GEMM accumulation ----
+            # ---- Phase 1: GEMM accumulation (pipelined K-loop) ----
             acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-            for k_start in range(0, K, BLOCK_K):
-                offs_k = k_start + tl.arange(0, BLOCK_K)
+            # Prefetch first K-tile
+            offs_k_0 = tl.arange(0, BLOCK_K)
+            a = tl.load(
+                A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak,
+                mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0,
+            )
+            b = tl.load(
+                B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+            )
 
-                # Load A tile
-                a_ptrs = A_ptr + offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak
-                a_mask = (offs_m[:, None] < M) & (offs_k[None, :] < K)
-                a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-
-                # Load B tile
-                b_ptrs = B_ptr + offs_k[:, None] * stride_bk + offs_n[None, :] * stride_bn
-                b_mask = (offs_k[:, None] < K) & (offs_n[None, :] < N)
-                b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-
+            num_k_iters = tl.cdiv(K, BLOCK_K)
+            for k_iter in range(0, num_k_iters):
                 acc = tl.dot(a, b, acc, allow_tf32=True)
+                next_k = (k_iter + 1) * BLOCK_K
+                if next_k < K:
+                    offs_k_n = next_k + tl.arange(0, BLOCK_K)
+                    a = tl.load(
+                        A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
+                        mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
+                        eviction_policy="evict_last",
+                    )
+                    b = tl.load(
+                        B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                        mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+                        eviction_policy="evict_last",
+                    )
 
             # Cast accumulator to output dtype
             result = acc.to(C_ptr.dtype.element_ty)
@@ -196,25 +206,14 @@ class FusedSequentialPattern(Pattern):
             c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
             tl.store(c_ptrs, result, mask=c_mask)
 
-            # ---- Phase 3: Remote scatter to all peers ----
+            # ---- Phase 3: Scatter to all peers via translate_ptr ----
             # Immediately after computing the tile, push it to every peer.
             # The hardware memory subsystem can overlap these remote writes
             # with the next tile's GEMM computation.
-            # TODO: Replace the manual scatter loop with tile_remote_store
-            #       primitive once the primitives layer is implemented.
             for peer in range(world_size):
-                if peer == rank:
-                    continue
-
-                remote_base = tl.load(remote_ptrs + peer)
-                # Destination in peer's buffer: row stays the same,
-                # column is offset by rank's shard position
-                dst_col_offset = rank * N_per_rank
-                dst_ptrs = (
-                    remote_base
-                    + (offs_m[:, None] * N
-                       + (dst_col_offset + offs_n[None, :])).to(tl.int64)
-                    * result.dtype.primitive_bitwidth // 8
-                )
-                dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
-                tl.store(dst_ptrs, result, mask=dst_mask)
+                if peer != rank:
+                    dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
+                    scatter_tile_to_peer(
+                        C_ptr, result, offs_m, offs_n,
+                        rank, peer, N, N_per_rank, heap_bases, dst_mask,
+                    )

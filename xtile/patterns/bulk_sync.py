@@ -26,6 +26,7 @@ import triton
 import triton.language as tl
 
 from xtile.patterns import Pattern
+from xtile.patterns._helpers import scatter_tile_to_peer
 
 if TYPE_CHECKING:
     import torch
@@ -35,7 +36,7 @@ class BulkSyncPattern(Pattern):
     """Bulk-synchronous GEMM followed by all-scatter.
 
     Args:
-        ctx: Distributed context (rank, world_size, remote_ptrs, backend).
+        ctx: Distributed context (rank, world_size, heap_bases, backend).
         BLOCK_M: Tile height for the GEMM.
         BLOCK_N: Tile width for the GEMM.
         BLOCK_K: Reduction tile depth for the GEMM.
@@ -110,7 +111,7 @@ class BulkSyncPattern(Pattern):
 
         # Phase 3: Scatter kernel -- push local C tiles to all peers
         world_size = self.ctx.world_size
-        remote_ptrs = self.ctx.remote_ptrs  # tensor of int64 base pointers
+        heap_bases = self.ctx.heap_bases  # (world_size,) int64 heap base pointers
         N_per_rank = N // world_size
         num_scatter_tiles_m = triton.cdiv(M, self.BLOCK_M)
         num_scatter_tiles_n = triton.cdiv(N_per_rank, self.BLOCK_N)
@@ -119,7 +120,7 @@ class BulkSyncPattern(Pattern):
         scatter_grid = (min(num_sms, total_scatter_tiles),)
         self._scatter_kernel[scatter_grid](
             C,
-            remote_ptrs,
+            heap_bases,
             M, N, N_per_rank,
             C.stride(0), C.stride(1),
             self.ctx.rank,
@@ -176,22 +177,29 @@ class BulkSyncPattern(Pattern):
             # Accumulator
             acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-            # Inner loop over K dimension
-            for k_start in range(0, K, BLOCK_K):
-                offs_k = k_start + tl.arange(0, BLOCK_K)
+            # K-loop with software pipelining: prefetch next tile
+            offs_k_0 = tl.arange(0, BLOCK_K)
+            a_ptrs_0 = A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak
+            b_ptrs_0 = B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn
+            a = tl.load(a_ptrs_0, mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0)
+            b = tl.load(b_ptrs_0, mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0)
 
-                # Load A tile: (BLOCK_M, BLOCK_K)
-                a_ptrs = A_ptr + offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak
-                a_mask = (offs_m[:, None] < M) & (offs_k[None, :] < K)
-                a = tl.load(a_ptrs, mask=a_mask, other=0.0)
-
-                # Load B tile: (BLOCK_K, BLOCK_N)
-                b_ptrs = B_ptr + offs_k[:, None] * stride_bk + offs_n[None, :] * stride_bn
-                b_mask = (offs_k[:, None] < K) & (offs_n[None, :] < N)
-                b = tl.load(b_ptrs, mask=b_mask, other=0.0)
-
-                # Accumulate
+            num_k_iters = tl.cdiv(K, BLOCK_K)
+            for k_iter in range(0, num_k_iters):
                 acc = tl.dot(a, b, acc, allow_tf32=True)
+                next_k = (k_iter + 1) * BLOCK_K
+                if next_k < K:
+                    offs_k_n = next_k + tl.arange(0, BLOCK_K)
+                    a = tl.load(
+                        A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
+                        mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
+                        eviction_policy="evict_last",
+                    )
+                    b = tl.load(
+                        B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
+                        mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
+                        eviction_policy="evict_last",
+                    )
 
             # Store result tile
             c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
@@ -203,7 +211,7 @@ class BulkSyncPattern(Pattern):
     def _scatter_kernel(
         # Pointers
         C_ptr,
-        remote_ptrs,  # int64 tensor of base pointers, shape (world_size,)
+        heap_bases,  # int64 tensor of heap base pointers, shape (world_size,)
         # Dimensions
         M, N, N_per_rank,
         # Strides
@@ -217,15 +225,13 @@ class BulkSyncPattern(Pattern):
         BLOCK_N: tl.constexpr,
         NUM_SMS: tl.constexpr,
     ):
-        """Scatter kernel: push local C tiles to every peer via remote store.
+        """Scatter kernel: push local C tiles to every peer via translate_ptr.
 
         Each program instance loops over (peer, tile_m, tile_n) triples in
         round-robin order.  For each triple it reads a BLOCK_M x BLOCK_N
         tile from the local C buffer and writes it to the corresponding
-        location in the peer's remote buffer.
-
-        TODO: Integrate with xtile.primitives.tile_remote_store when available.
-        TODO: Add support for non-uniform tile sizes at matrix boundaries.
+        location in the peer's remote buffer using symmetric-heap pointer
+        translation.
         """
         pid = tl.program_id(0)
         tiles_per_peer = num_scatter_tiles_m * num_scatter_tiles_n
@@ -238,28 +244,21 @@ class BulkSyncPattern(Pattern):
             tile_m = local_tile // num_scatter_tiles_n
             tile_n = local_tile % num_scatter_tiles_n
 
-            # Skip self -- local rank already has this data
-            # TODO: Consider whether self-scatter is needed for API consistency
-            if peer_idx == rank:
-                continue
+            # Only scatter to peers (skip self -- local rank already has data)
+            if peer_idx != rank:
+                # Source offsets in local C
+                offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+                offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-            # Source offsets in local C
-            offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
-            offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+                # Load local tile
+                src_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+                mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
+                tile_data = tl.load(src_ptrs, mask=mask, other=0.0)
 
-            # Load local tile
-            src_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
-            mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
-            tile_data = tl.load(src_ptrs, mask=mask, other=0.0)
-
-            # Compute destination offset in remote buffer
-            # Remote layout: each peer expects data from rank `rank` at a
-            # specific shard offset.  The offset depends on the scatter scheme.
-            # TODO: Replace with tile_remote_store primitive once available.
-            remote_base = tl.load(remote_ptrs + peer_idx)
-            # Destination column offset accounts for which rank is sending
-            dst_col_offset = rank * N_per_rank
-            dst_ptrs = (remote_base
-                        + (offs_m[:, None] * N + (dst_col_offset + offs_n[None, :])).to(tl.int64)
-                        * tile_data.dtype.primitive_bitwidth // 8)
-            tl.store(dst_ptrs, tile_data, mask=mask)
+                # Scatter via symmetric-heap pointer translation.
+                # translate_ptr produces a typed pointer, so element offsets
+                # are used directly (no manual byte-size scaling).
+                scatter_tile_to_peer(
+                    C_ptr, tile_data, offs_m, offs_n,
+                    rank, peer_idx, N, N_per_rank, heap_bases, mask,
+                )

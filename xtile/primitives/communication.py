@@ -37,6 +37,7 @@ def tile_remote_load(
     offsets,
     mask=None,
     other=0.0,
+    CACHE_MODIFIER: tl.constexpr = "",
 ):
     """Load a tile from a remote GPU's memory into local registers.
 
@@ -57,15 +58,23 @@ def tile_remote_load(
         offsets: Offset tensor for tile addressing.
         mask: Optional boolean mask for out-of-bounds protection.
         other: Fill value for masked-out lanes (default ``0.0``).
+        CACHE_MODIFIER: Cache modifier: ``".cg"`` bypasses L1 for
+            non-reused remote data, ``""`` for default.
 
     Returns:
         Tile loaded from the remote rank's memory.
     """
     remote_ptr = translate_ptr(ptr, from_rank, to_rank, heap_bases)
-    if mask is not None:
-        return tl.load(remote_ptr + offsets, mask=mask, other=other)
+    if CACHE_MODIFIER == ".cg":
+        if mask is not None:
+            return tl.load(remote_ptr + offsets, mask=mask, other=other, cache_modifier=".cg")
+        else:
+            return tl.load(remote_ptr + offsets, cache_modifier=".cg")
     else:
-        return tl.load(remote_ptr + offsets)
+        if mask is not None:
+            return tl.load(remote_ptr + offsets, mask=mask, other=other)
+        else:
+            return tl.load(remote_ptr + offsets)
 
 
 @triton.jit
@@ -77,6 +86,7 @@ def tile_remote_store(
     heap_bases,
     offsets,
     mask=None,
+    CACHE_MODIFIER: tl.constexpr = "",
 ):
     """Store a tile from local registers into a remote GPU's memory.
 
@@ -95,15 +105,23 @@ def tile_remote_store(
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for tile addressing.
         mask: Optional boolean mask; only ``True`` lanes are written.
+        CACHE_MODIFIER: Cache modifier: ``".wt"`` for write-through to
+            avoid L2 pollution on remote writes, ``""`` for default.
 
     Returns:
         None.
     """
     remote_ptr = translate_ptr(ptr, dst_rank, src_rank, heap_bases)
-    if mask is not None:
-        tl.store(remote_ptr + offsets, value, mask=mask)
+    if CACHE_MODIFIER == ".wt":
+        if mask is not None:
+            tl.store(remote_ptr + offsets, value, mask=mask, cache_modifier=".wt")
+        else:
+            tl.store(remote_ptr + offsets, value, cache_modifier=".wt")
     else:
-        tl.store(remote_ptr + offsets, value)
+        if mask is not None:
+            tl.store(remote_ptr + offsets, value, mask=mask)
+        else:
+            tl.store(remote_ptr + offsets, value)
 
 
 # -----------------------------------------------------------------------

@@ -70,10 +70,6 @@ def _handle_bench(args: argparse.Namespace) -> None:
 
     results = [profiler.summary()]
 
-    # If a specific pattern is requested, note it for future expansion
-    if pattern != "all":
-        print(f"(Pattern '{pattern}' -- full pattern benchmarks coming soon)")
-
     print()
     print(format_benchmark_table(results))
     print()
@@ -84,6 +80,77 @@ def _handle_bench(args: argparse.Namespace) -> None:
     if mean_s > 0:
         tflops = flops / mean_s / 1e12
         print(f"Throughput: {tflops:.1f} TFLOPS")
+
+    # Pattern benchmark (requires >= 2 GPUs)
+    num_gpus = torch.cuda.device_count()
+    if num_gpus >= 2 and pattern in ("all", "auto"):
+        print()
+        print("=== Pattern Benchmark (2 GPUs) ===")
+        _run_pattern_bench(M, N, K, pattern)
+    elif num_gpus < 2 and pattern in ("all", "auto"):
+        print("\n(Skipping pattern benchmark: requires >= 2 GPUs)")
+
+
+def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
+    """Run pattern benchmark with auto-select."""
+    import torch
+    from xtile.memory.symmetric_heap import SymmetricHeap
+    from xtile.backends import get_backend, detect_hardware
+    from xtile.patterns.auto_select import auto_select, benchmark_all_patterns
+
+    world_size = 2
+    heap_size = max(512 * 1024 * 1024, M * K * 2 + K * (N // world_size) * 2 + M * N * 2)
+    heaps = SymmetricHeap.create_all(size=heap_size, world_size=world_size)
+
+    try:
+        rank = 0
+        torch.cuda.set_device(rank)
+        hw = detect_hardware()
+        backend = get_backend(hw)
+        bases = heaps[rank].get_heap_bases()
+
+        class _Ctx:
+            pass
+        ctx = _Ctx()
+        ctx.rank = rank
+        ctx.world_size = world_size
+        ctx.heap_bases = bases
+        ctx.backend = backend
+
+        N_per_rank = N // world_size
+        A = heaps[rank].allocate_tensor((M, K), torch.float16)
+        B = heaps[rank].allocate_tensor((K, N_per_rank), torch.float16)
+        C = heaps[rank].allocate_tensor((M, N_per_rank), torch.float16)
+        A.normal_()
+        B.normal_()
+        C.zero_()
+        torch.cuda.synchronize()
+
+        if pattern == "auto":
+            # Show auto-select decision
+            selected = auto_select(
+                "gemm_allscatter", M=M, N=N, K=K,
+                world_size=world_size,
+            )
+            print(f"Auto-selected pattern: {selected.name if hasattr(selected, 'name') else selected.__name__}")
+
+        # Benchmark all patterns
+        results = benchmark_all_patterns(A, B, C, ctx, warmup=5, iters=20)
+        print(f"\n{'Pattern':25s} | {'Mean (ms)':>10s} | {'Min (ms)':>10s} | {'Speedup':>8s}")
+        print("-" * 65)
+        bulk_min = None
+        for r in results["results"]:
+            if r["pattern"] == "bulk_sync":
+                bulk_min = r["min_ms"]
+        for r in results["results"]:
+            speedup = ""
+            if bulk_min and bulk_min > 0 and r["min_ms"] < float("inf"):
+                speedup = f"{bulk_min / r['min_ms']:.3f}x"
+            print(f"{r['pattern']:25s} | {r['mean_ms']:10.3f} | {r['min_ms']:10.3f} | {speedup:>8s}")
+        print(f"\nBest: {results['best']}")
+    finally:
+        for h in heaps:
+            h.cleanup()
 
 
 def main() -> None:
@@ -106,9 +173,9 @@ def main() -> None:
     bench_parser = subparsers.add_parser("bench", help="Run benchmarks")
     bench_parser.add_argument(
         "--pattern",
-        choices=["all", "bulk_sync", "fused_seq", "pc", "wg_spec"],
+        choices=["all", "auto", "bulk_sync", "fused_seq", "pc", "wg_spec"],
         default=None,
-        help="Pattern to benchmark (default: all)",
+        help="Pattern to benchmark (default: all, 'auto' uses auto-select)",
     )
     bench_parser.add_argument("--M", type=int, default=8192, help="Matrix M dimension")
     bench_parser.add_argument("--N", type=int, default=8192, help="Matrix N dimension")

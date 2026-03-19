@@ -62,8 +62,10 @@ class Pattern(abc.ABC):
 
         Args:
             ctx: Distributed context object carrying at minimum
-                ``rank``, ``world_size``, ``remote_ptrs``, and a
-                ``backend`` implementing :class:`~xtile.backends.base.BackendInterface`.
+                ``rank``, ``world_size``, ``heap_bases`` (from
+                :meth:`~xtile.memory.symmetric_heap.SymmetricHeap.get_heap_bases`),
+                and a ``backend`` implementing
+                :class:`~xtile.backends.base.BackendInterface`.
         """
         self.ctx = ctx
 
