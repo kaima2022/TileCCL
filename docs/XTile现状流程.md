@@ -205,7 +205,7 @@ def translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT: tl.constexpr = 0):
 
 ## 第 4 层：内存建立
 
-### 实际 SymmetricHeap.create_all 实现
+### 模式 A：单进程 — SymmetricHeap.create_all（推荐）
 
 ```python
 # xtile/memory/symmetric_heap.py
@@ -213,10 +213,8 @@ def translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT: tl.constexpr = 0):
 @classmethod
 def create_all(cls, size, world_size, backend):
     """单进程模式：一个进程管理所有 GPU。"""
-    heaps = []
-    buffers = []
-
     # 步骤 1：在每个 GPU 上分配连续内存
+    buffers = []
     for rank in range(world_size):
         torch.cuda.set_device(rank)
         buf = torch.empty(size, dtype=torch.uint8, device=f"cuda:{rank}")
@@ -231,6 +229,7 @@ def create_all(cls, size, world_size, backend):
 
     # 步骤 3：构建 heap_bases（所有 GPU 的堆基址）
     base_ptrs = [buf.data_ptr() for buf in buffers]
+    heaps = []
     for rank in range(world_size):
         torch.cuda.set_device(rank)
         heap_bases = torch.tensor(base_ptrs, dtype=torch.int64, device=f"cuda:{rank}")
@@ -245,17 +244,77 @@ def create_all(cls, size, world_size, backend):
     return heaps
 ```
 
-### 与设想的差距
+### 模式 B：多进程 — _setup_multiprocess（三级 fallback）
 
-| 设想 | 现状 | 差距 |
+```python
+# xtile/memory/symmetric_heap.py
+
+def _setup_multiprocess(self):
+    """多进程模式，三级 fallback："""
+    self._backend.init_ipc()
+
+    # --- 策略 1: ctypes IPC handle 交换 ---
+    # cudaIpcGetMemHandle + cudaIpcOpenMemHandle
+    # 需要 ptrace_scope=0，否则 error 201
+    try:
+        local_handle = self._backend.get_ipc_handle(self._local_ptr)
+        # ... dist.all_gather 交换 handle，open_ipc_handle 打开 ...
+        return
+    except RuntimeError:
+        pass  # 继续尝试策略 2
+
+    # --- 策略 2: PyTorch IPC（文件描述符共享）---
+    # storage._share_cuda_() + _new_shared_cuda()
+    # 使用 Unix domain socket 传递 fd，绕过 ptrace_scope ✅
+    try:
+        storage = self._buffer.untyped_storage()
+        share_info = storage._share_cuda_()
+
+        all_infos = [None] * self._world_size
+        dist.all_gather_object(all_infos, share_info)
+
+        remote_ptrs = []
+        for r in range(self._world_size):
+            if r == self._rank:
+                remote_ptrs.append(self._local_ptr)
+            else:
+                remote_storage = torch.UntypedStorage._new_shared_cuda(*all_infos[r])
+                remote_ptrs.append(remote_storage.data_ptr())
+
+        self._heap_bases = torch.tensor(remote_ptrs, dtype=torch.int64, device=self._device)
+        return
+    except Exception:
+        pass  # 继续尝试策略 3
+
+    # --- 策略 3: peer access 指针交换（同节点 fallback）---
+    # dist.all_gather 交换 raw data_ptr()
+    local_base = torch.tensor([self._local_ptr], dtype=torch.int64, device=self._device)
+    all_bases = [torch.zeros(1, dtype=torch.int64, device=self._device)
+                 for _ in range(self._world_size)]
+    dist.all_gather(all_bases, local_base)
+    self._heap_bases = torch.cat(all_bases)
+```
+
+### IPC 诊断实测结果
+
+跨进程测试（`torch.multiprocessing.spawn`，2× H100，ptrace_scope=1）：
+
+| 方法 | 结果 | 原理 |
 |------|------|------|
-| CUDA IPC handle 交换 | peer access 直接寻址（无 IPC） | IPC 不可用（ptrace_scope=1），使用 peer access 绕行 |
-| 多进程模式（MPI/torchrun） | 单进程管理所有 GPU | 多进程模式受限于 CUDA IPC 系统问题 |
-| 跨节点 IPC | 不支持 | 需要 GDR/DMA-BUF 或 UCX |
+| peer access (非 IPC) | ✅ PASS | cudaDeviceEnablePeerAccess，单进程直接寻址 |
+| ctypes IPC (Structure) | ❌ FAIL | cudaIpcOpenMemHandle 被 ptrace_scope=1 阻止 |
+| **PyTorch IPC** (_share_cuda_) | ✅ **PASS** | Unix domain socket fd 共享，不受 ptrace_scope 限制 |
 
-**关键区别**：设想通过 `cudaIpcGetMemHandle` + `cudaIpcOpenMemHandle` 在进程间交换 handle。
-现状使用 `create_all()` 单进程模式，通过 `cudaDeviceEnablePeerAccess` 直接跨 GPU 寻址。
-功能等价（都能 translate_ptr），但限制在单节点单进程。
+### 与设想的对比
+
+| 设想 | 现状 | 状态 |
+|------|------|------|
+| cudaIpcGetMemHandle + Open | ctypes Structure by-value 修复 | ✅ 调用约定已修正 |
+| IPC 在 ptrace_scope=1 下工作 | PyTorch IPC fallback 绕行 | ✅ 已解决 |
+| 多进程模式（torchrun） | 三级 fallback 完整实现 | ✅ 可用 |
+| 跨节点 IPC | 不支持 | ⚠️ 需 UCX/GDR |
+
+**与 Iris 的区别**：Iris 仅使用 HIP IPC（单一路径），XTile 实现三级 fallback 保证鲁棒性。
 
 ---
 
@@ -323,7 +382,7 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 | 组件 | 设想 | 现状 | 状态 |
 |------|------|------|------|
 | translate_ptr (5 指令) | 匹配 Iris | ✅ 100% 匹配 | 完成 |
-| SymmetricHeap | IPC/peer access | ✅ peer access 模式 | 完成 |
+| SymmetricHeap | IPC/peer access | ✅ 三级 fallback (ctypes IPC → PyTorch IPC → peer access) | 完成 |
 | 4 种 overlap pattern | kernel 实现 | ✅ 全部实现 | 完成 |
 | GEMM kernel | ≥ 90% cuBLAS | ✅ 4096³: 100.7% | 完成 |
 | Auto-select | 硬件感知 | ✅ SM count + 带宽 | 完成 |
@@ -334,9 +393,9 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 | 组件 | 设想 | 现状 | 原因 |
 |------|------|------|------|
-| 多进程 IPC | cudaIpcOpenMemHandle | ❌ ptrace_scope=1 | 系统限制 |
 | P2P ≥ 95% | 285 GB/s | ❌ 82.9% (248.7) | Triton PTX 限制 |
 | 一键 API | `xtile.fused_gemm_scatter(...)` | ❌ 需手动组合 | 便利封装未做 |
 | 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 79% | PTX-level 瓶颈 |
 | Pattern ≥ 1.3× overlap | 多 GPU overlap | ❌ 1.067× | 2 GPU 限制 |
+| 跨节点 IPC | UCX/GDR | ❌ 待实现 | 需跨机通信基础设施 |
 | AMD 实测 | MI300X 验证 | ❌ 待硬件 | 无 AMD GPU |
