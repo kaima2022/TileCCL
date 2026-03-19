@@ -207,6 +207,11 @@ class ProducerConsumerPattern(Pattern):
         tile, signals the corresponding lock via tile_signal (release
         semantics) so the consumer knows the tile is ready.
         """
+        tl.assume(stride_am > 0)
+        tl.assume(stride_ak > 0)
+        tl.assume(stride_bk > 0)
+        tl.assume(stride_bn > 0)
+
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
 

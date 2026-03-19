@@ -27,7 +27,7 @@ def scatter_tile_to_peer(
     N_per_rank,
     heap_bases,
     mask,
-    CACHE_MODIFIER: tl.constexpr = "",
+    CACHE_MODIFIER: tl.constexpr = ".wt",
 ):
     """Scatter a computed tile to a peer GPU via symmetric-heap translation.
 

@@ -160,6 +160,11 @@ class FusedSequentialPattern(Pattern):
         Uses Iris-style mask-free K-loop with modular index wrapping
         and compiler vectorization hints.
         """
+        tl.assume(stride_am > 0)
+        tl.assume(stride_ak > 0)
+        tl.assume(stride_bk > 0)
+        tl.assume(stride_bn > 0)
+
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
 
@@ -212,7 +217,7 @@ class FusedSequentialPattern(Pattern):
             c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
             tl.store(c_ptrs, result, mask=c_mask)
 
-            # ---- Phase 3: Scatter to all peers via translate_ptr ----
+            # ---- Phase 3: Scatter to all peers (.wt write-through) ----
             for peer in range(world_size):
                 if peer != rank:
                     dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)

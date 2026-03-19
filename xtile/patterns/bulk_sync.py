@@ -167,6 +167,11 @@ class BulkSyncPattern(Pattern):
         tile per iteration.  Uses Iris-style mask-free K-loop with
         modular index wrapping and compiler vectorization hints.
         """
+        tl.assume(stride_am > 0)
+        tl.assume(stride_ak > 0)
+        tl.assume(stride_bk > 0)
+        tl.assume(stride_bn > 0)
+
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
 

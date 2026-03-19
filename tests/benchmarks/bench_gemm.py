@@ -70,6 +70,9 @@ def _benchmark_kernel(
 ) -> dict[str, float]:
     """Time a callable with warmup and return min/mean/max in ms.
 
+    Uses CUDA events for precise GPU timing, avoiding Python overhead
+    between event recording and kernel launch.
+
     Args:
         fn: Zero-argument callable that runs the kernel.
         warmup: Number of warm-up calls.
@@ -83,14 +86,17 @@ def _benchmark_kernel(
         fn()
     torch.cuda.synchronize()
 
-    times_ms: list[float] = []
-    for _ in range(iters):
-        torch.cuda.synchronize()
-        t0 = time.perf_counter()
+    # Use CUDA events for precise GPU-side timing
+    start_events = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
+    end_events = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
+
+    for i in range(iters):
+        start_events[i].record()
         fn()
-        torch.cuda.synchronize()
-        elapsed = (time.perf_counter() - t0) * 1e3
-        times_ms.append(elapsed)
+        end_events[i].record()
+
+    torch.cuda.synchronize()
+    times_ms = [s.elapsed_time(e) for s, e in zip(start_events, end_events)]
 
     return {
         "mean_ms": sum(times_ms) / len(times_ms),
@@ -112,12 +118,16 @@ def _run_gemm_comparison(
     A = torch.randn(M, K, device=device, dtype=dtype)
     B = torch.randn(K, N, device=device, dtype=dtype)
 
+    # Pre-allocate output tensors to eliminate allocation overhead during timing
+    C_torch = torch.empty((M, N), device=device, dtype=dtype)
+    C_xtile = torch.empty((M, N), device=device, dtype=dtype)
+
     # --- torch.matmul (cuBLAS / hipBLAS) ---
-    torch_stats = _benchmark_kernel(lambda: torch.matmul(A, B))
+    torch_stats = _benchmark_kernel(lambda: torch.matmul(A, B, out=C_torch))
     torch_tflops = _compute_tflops(M, N, K, torch_stats["mean_ms"] / 1e3)
 
-    # --- xtile gemm ---
-    xtile_stats = _benchmark_kernel(lambda: xtile_gemm(A, B))
+    # --- xtile gemm (with pre-allocated output) ---
+    xtile_stats = _benchmark_kernel(lambda: xtile_gemm(A, B, C=C_xtile))
     xtile_tflops = _compute_tflops(M, N, K, xtile_stats["mean_ms"] / 1e3)
 
     # --- correctness check (relative tolerance) ---

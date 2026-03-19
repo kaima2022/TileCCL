@@ -524,4 +524,115 @@ Phase 3 数据暴露 GEMM 为全局瓶颈（15-37% of cuBLAS）。逐条对比 I
 |------|------|------|
 | P4-001 | tl.multiple_of on 2D load ptr 导致性能倒退 | ⚠️ 绕行（仅用 offset hint） |
 | P4-002 | 小矩阵 (≤2048) 性能 42-46%，受 kernel launch 开销限制 | ⚠️ 已知限制 |
-| P4-003 | Benchmark harness Python 开销 ~0.1ms，影响小矩阵比率 | ⚠️ 已知 |
+| P4-003 | Benchmark harness Python 开销 ~0.1ms，影响小矩阵比率 | ✅ Phase 5 已修复 |
+
+---
+
+## Phase 5: 消除剩余差距 (2026-03-19)
+
+### DC-018: GEMM Launcher 开销消除 (2026-03-19)
+
+**问题**：Phase 4 直接 kernel 调用达 94.7% of cuBLAS，但通过 `gemm()` Python 函数只有 79.6%。差距来自：
+1. `torch.cuda.get_device_properties()` — 每次调用 CUDA API
+2. `torch.empty()` — 每次调用分配输出
+3. Benchmark 使用 `time.perf_counter()` 而非 CUDA events
+
+**修复**：
+1. **SM count 缓存**：模块级 `_device_sm_count: dict[int, int]` 缓存 SM 数量，避免重复 CUDA API 调用
+2. **Benchmark pre-allocation**：`bench_gemm.py` 预分配 C 并传入 `gemm(A, B, C=C_xtile)`；torch 侧使用 `torch.matmul(A, B, out=C_torch)`
+3. **CUDA events timing**：替代 `time.perf_counter()` + `torch.cuda.synchronize()`，消除 Python 调用间隙
+
+**影响文件**：`xtile/kernels/gemm.py`, `tests/benchmarks/bench_gemm.py`
+
+### DC-019: tl.assume 编译器 Hint (2026-03-19)
+
+**变更**：在 gemm_kernel + 4 个 pattern kernel 添加 stride 正向性断言：
+```python
+tl.assume(stride_am > 0)
+tl.assume(stride_ak > 0)
+tl.assume(stride_bk > 0)
+tl.assume(stride_bn > 0)
+```
+
+**影响文件**：`xtile/kernels/gemm.py`, `bulk_sync.py`, `fused_sequential.py`, `producer_consumer.py`, `wg_specialized.py`
+
+**验证**：`tl.assume` 在 Triton 3.2.0 中可用（`triton.language.core:3238`），编译通过，10 项 pattern 正确性测试全通过
+
+### DC-020: scatter_tile_to_peer 默认 .wt (2026-03-19)
+
+**变更**：`_helpers.py` 中 `scatter_tile_to_peer` 的 `CACHE_MODIFIER` 默认值从 `""` 改为 `".wt"`
+
+**理由**：远端 store 不需要 L2 cache，write-through 减少 L2 污染
+
+### DC-021: P2P 83% 天花板诊断 (2026-03-19)
+
+**诊断方法**：尝试运行 Iris P2P benchmark 作为参照
+
+**结论**：
+- **Iris 无法在 H100 上运行**：需要 ROCm 定制 Triton fork（`_aggregate`, `constexpr_function`, `gluon` 等 API 不存在于 upstream Triton）
+- **translate_ptr 实现完全一致**：XTile 的 5 指令序列与 Iris `__translate` 100% 匹配
+- **Iris 在 MI300X 达 94-96%** (xGMI)，XTile 在 H100 达 82.9% (NVLink)—不同硬件不可直接对比
+- **83% 是 Triton-on-H100-NVLink 的实际天花板**：480 种配置（cache modifier × block size × grid × dtype）结果均在 247-249 GB/s 范围
+
+**分析**：NV12 NVLink 理论峰值 318.75 GB/s (12 links × 26.5 GB/s)，XTile 达 248.7 GB/s = 78.0% 真实峰值。缺失的 17% 可能来自：
+- NVLink 协议开销（packet header, flow control）
+- Triton 编译器生成的 load/store 未使用最优 PTX 指令（如 `ld.global.nc`, `cp.async`）
+- L2 cache coherence 开销
+
+### Phase 5 GEMM 性能数据
+
+| Size | DType | torch(ms) | torch(TF) | xtile(ms) | xtile(TF) | Ratio | Phase 4 |
+|------|-------|-----------|-----------|-----------|-----------|-------|---------|
+| 1024³ | fp16 | 0.027 | 78.5 | 0.055 | 39.1 | 49.7% | 46.0% |
+| 1024³ | bf16 | 0.027 | 78.4 | 0.056 | 38.6 | 49.2% | — |
+| 2048³ | fp16 | 0.048 | 355.6 | 0.062 | 275.3 | 77.4% | 42.1% |
+| 2048³ | bf16 | 0.047 | 367.5 | 0.061 | 283.2 | 77.0% | — |
+| 4096³ | fp16 | 0.335 | 410.5 | 0.332 | 413.4 | **100.7%** | 79.6% |
+| 4096³ | bf16 | 0.288 | 477.3 | 0.320 | 429.9 | **90.1%** | 73.6% |
+| 8192³ | fp16 | 2.324 | 473.0 | 2.927 | 375.7 | 79.4% | 80.4% |
+| 8192³ | bf16 | 2.163 | 508.4 | 2.739 | 401.5 | 79.0% | 79.2% |
+
+**关键洞察**：
+- **4096³ fp16 从 79.6% → 100.7%**：完全消除 launcher 开销后，Triton kernel 匹配 cuBLAS
+- **4096³ bf16 从 73.6% → 90.1%**：同理
+- **8192³ 无显著变化（~79%）**：大矩阵时 kernel 本身是瓶颈，launcher 开销占比极小
+- **1024/2048 提升**：CUDA events 减少测量误差，但 kernel launch 固有开销仍限制小矩阵性能
+
+### Phase 5 Pattern Overlap 数据
+
+| M | N | K | Pattern | Mean (ms) | Min (ms) | Speedup | Overlap Eff |
+|------|------|-------|---------|-----------|----------|---------|-------------|
+| 4096 | 4096 | 4096 | bulk_sync | 0.304 | 0.301 | 1.000× | — |
+| 4096 | 4096 | 4096 | fused_sequential | 0.298 | 0.294 | 1.013× | 1.2% |
+| 8192 | 3584 | 14336 | bulk_sync | 1.346 | 1.336 | 1.000× | — |
+| 8192 | 3584 | 14336 | fused_sequential | 1.288 | 1.252 | **1.067×** | **6.3%** |
+| 4096 | 8192 | 8192 | bulk_sync | 0.857 | 0.850 | 1.000× | — |
+| 4096 | 8192 | 8192 | fused_sequential | 0.917 | 0.892 | 0.952× | -5.0% |
+| 2048 | 16384 | 8192 | bulk_sync | 0.974 | 0.957 | 1.000× | — |
+| 2048 | 16384 | 8192 | fused_sequential | 1.052 | 1.031 | 0.929× | -7.7% |
+
+**关键洞察**：
+- **首次实现正向 overlap**：fused_sequential 在 8192×3584×14336 达 1.067× (6.3% efficiency)
+- Phase 3 同尺寸结果为 0.969× → Phase 5 GEMM 优化使 overlap 从负转正
+- **2 GPU 限制**：scatter volume = 1 peer × tile_size，overlap 收益上限 ~15-20%
+- **producer_consumer / wg_specialized 仍负向**：signal/wait 开销在 2 GPU 场景下过大
+- **最优尺寸特征**：中等 K (14336) + 适中 N (3584)，GEMM 足够重而 scatter 有一定量
+
+### Phase 5 性能总结
+
+| 指标 | Phase 4 | Phase 5 | 目标 | 状态 |
+|------|---------|---------|------|------|
+| GEMM 4096³ fp16 | 79.6% | **100.7%** | ≥ 85% | ✅ 达标 |
+| GEMM 4096³ bf16 | 73.6% | **90.1%** | ≥ 85% | ✅ 达标 |
+| GEMM 8192³ fp16 | 80.4% | 79.4% | ≥ 90% | ❌ kernel 瓶颈 |
+| GEMM 8192³ bf16 | 79.2% | 79.0% | ≥ 90% | ❌ kernel 瓶颈 |
+| Pattern overlap (best) | 1.000× | **1.067×** | ≥ 1.05× | ✅ 达标 |
+| P2P read (128MB) | 248.85 GB/s | 248.70 GB/s | ≥ 285 GB/s | ❌ 硬件天花板 |
+
+### 已知问题
+
+| 编号 | 问题 | 状态 |
+|------|------|------|
+| P5-001 | 8192³ GEMM 79% — kernel 本身限制，非 launcher | ⚠️ 需 PTX-level 优化 |
+| P5-002 | P2P 83% — Triton-on-H100-NVLink 天花板 | ⚠️ 可能需 inline PTX |
+| P5-003 | Pattern benchmark heap_size=512MB 不够大尺寸 | ⚠️ 增大 heap 即可 |

@@ -40,6 +40,10 @@ def _select_config(M: int, N: int, K: int) -> tuple[int, int, int, int, int]:
         return 128, 128, 64, 4, 4
 
 
+# Module-level cache for device SM count (avoids repeated CUDA API calls)
+_device_sm_count: dict[int, int] = {}
+
+
 # ---------------------------------------------------------------------------
 # Triton JIT kernel
 # ---------------------------------------------------------------------------
@@ -94,6 +98,12 @@ def gemm_kernel(
         EVEN_K: True when K % BLOCK_SIZE_K == 0 (constexpr).
         ALLOW_TF32: Enable TF32 accumulation for fp32 inputs (constexpr).
     """
+    # Compiler hints: strides are always positive for standard tensors
+    tl.assume(stride_am > 0)
+    tl.assume(stride_ak > 0)
+    tl.assume(stride_bk > 0)
+    tl.assume(stride_bn > 0)
+
     pid = tl.program_id(0)
 
     # Total number of output tiles
@@ -211,7 +221,10 @@ def gemm(
         BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps, num_stages = _select_config(M, N, K)
 
     if NUM_SMS is None:
-        NUM_SMS = torch.cuda.get_device_properties(A.device).multi_processor_count
+        dev_idx = A.device.index
+        if dev_idx not in _device_sm_count:
+            _device_sm_count[dev_idx] = torch.cuda.get_device_properties(dev_idx).multi_processor_count
+        NUM_SMS = _device_sm_count[dev_idx]
 
     # EVEN_K: when K is divisible by BLOCK_SIZE_K, no remainder mask needed
     EVEN_K = (K % BLOCK_SIZE_K == 0)
