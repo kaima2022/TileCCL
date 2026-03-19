@@ -230,7 +230,7 @@ class WGSpecializedPattern(Pattern):
                     b_mask = (offs_k[:, None] < K) & (offs_n[None, :] < N)
                     b = tl.load(b_ptrs, mask=b_mask, other=0.0)
 
-                    acc += tl.dot(a, b)
+                    acc = tl.dot(a, b, acc, allow_tf32=True)
 
                 # ---- Store result tile locally ----
                 result = acc.to(C_ptr.dtype.element_ty)

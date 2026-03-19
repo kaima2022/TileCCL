@@ -191,7 +191,7 @@ class BulkSyncPattern(Pattern):
                 b = tl.load(b_ptrs, mask=b_mask, other=0.0)
 
                 # Accumulate
-                acc += tl.dot(a, b)
+                acc = tl.dot(a, b, acc, allow_tf32=True)
 
             # Store result tile
             c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn

@@ -121,7 +121,7 @@ def symmetric_heap(device_info: DeviceInfo) -> Generator:
         size=1024 * 1024,  # 1 MB
         rank=0,
         world_size=1,
-        device=device_info.device,
+        backend=device_info.backend,
     )
     try:
         yield heap

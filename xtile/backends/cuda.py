@@ -101,7 +101,8 @@ class _CUDARuntime:
     def _setup_signatures(self) -> None:
         """Declare ctypes argtypes / restypes for every CUDA symbol we use."""
         lib = self._lib
-        assert lib is not None
+        if lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
 
         # cudaMalloc(void** devPtr, size_t size) -> cudaError_t
         lib.cudaMalloc.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t]
@@ -183,7 +184,8 @@ class _CUDARuntime:
 
     def malloc(self, size: int) -> int:
         """``cudaMalloc`` -- allocate *size* bytes, return device pointer."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         ptr = ctypes.c_void_p()
         err = self._lib.cudaMalloc(ctypes.byref(ptr), ctypes.c_size_t(size))
         self._check(err, "cudaMalloc")
@@ -191,13 +193,15 @@ class _CUDARuntime:
 
     def free(self, ptr: int) -> None:
         """``cudaFree``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         err = self._lib.cudaFree(ctypes.c_void_p(ptr))
         self._check(err, "cudaFree")
 
     def memcpy_d2d(self, dst: int, src: int, size: int) -> None:
         """``cudaMemcpy`` with ``cudaMemcpyDeviceToDevice``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         err = self._lib.cudaMemcpy(
             ctypes.c_void_p(dst),
             ctypes.c_void_p(src),
@@ -208,7 +212,8 @@ class _CUDARuntime:
 
     def ipc_get_handle(self, ptr: int) -> bytes:
         """``cudaIpcGetMemHandle`` -- return 64-byte IPC handle."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         handle = (ctypes.c_char * CUDA_IPC_HANDLE_SIZE)()
         err = self._lib.cudaIpcGetMemHandle(handle, ctypes.c_void_p(ptr))
         self._check(err, "cudaIpcGetMemHandle")
@@ -216,7 +221,8 @@ class _CUDARuntime:
 
     def ipc_open_handle(self, handle: bytes) -> int:
         """``cudaIpcOpenMemHandle`` -- open peer handle, return local pointer."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         buf = (ctypes.c_char * CUDA_IPC_HANDLE_SIZE).from_buffer_copy(handle)
         ptr = ctypes.c_void_p()
         # flags = 1 : cudaIpcMemLazyEnablePeerAccess
@@ -226,19 +232,22 @@ class _CUDARuntime:
 
     def ipc_close_handle(self, ptr: int) -> None:
         """``cudaIpcCloseMemHandle``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         err = self._lib.cudaIpcCloseMemHandle(ctypes.c_void_p(ptr))
         self._check(err, "cudaIpcCloseMemHandle")
 
     def device_synchronize(self) -> None:
         """``cudaDeviceSynchronize``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         err = self._lib.cudaDeviceSynchronize()
         self._check(err, "cudaDeviceSynchronize")
 
     def get_device_count(self) -> int:
         """``cudaGetDeviceCount``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         count = ctypes.c_int(0)
         err = self._lib.cudaGetDeviceCount(ctypes.byref(count))
         self._check(err, "cudaGetDeviceCount")
@@ -246,7 +255,8 @@ class _CUDARuntime:
 
     def get_device(self) -> int:
         """``cudaGetDevice`` -- return currently active device ordinal."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         dev = ctypes.c_int(0)
         err = self._lib.cudaGetDevice(ctypes.byref(dev))
         self._check(err, "cudaGetDevice")
@@ -254,13 +264,15 @@ class _CUDARuntime:
 
     def set_device(self, device_id: int) -> None:
         """``cudaSetDevice``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         err = self._lib.cudaSetDevice(ctypes.c_int(device_id))
         self._check(err, "cudaSetDevice")
 
     def device_can_access_peer(self, device: int, peer: int) -> bool:
         """``cudaDeviceCanAccessPeer``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         can_access = ctypes.c_int(0)
         err = self._lib.cudaDeviceCanAccessPeer(
             ctypes.byref(can_access), ctypes.c_int(device), ctypes.c_int(peer),
@@ -270,7 +282,8 @@ class _CUDARuntime:
 
     def enable_peer_access(self, peer_device: int) -> None:
         """``cudaDeviceEnablePeerAccess``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("CUDA runtime library not loaded")
         err = self._lib.cudaDeviceEnablePeerAccess(ctypes.c_int(peer_device), ctypes.c_uint(0))
         # Error 50704 / 704 = cudaErrorPeerAccessAlreadyEnabled -- safe to ignore
         if err != CUDA_SUCCESS and err != 704:

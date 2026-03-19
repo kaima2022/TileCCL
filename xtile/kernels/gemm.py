@@ -74,13 +74,13 @@ def gemm_kernel(
     num_tiles_n = tl.cdiv(N, BLOCK_SIZE_N)
     num_tiles = num_tiles_m * num_tiles_n
 
-    # Persistent loop: each SM processes multiple tiles
-    tiles_per_sm = tl.cdiv(num_tiles, NUM_SMS)
-    tile_start = pid * tiles_per_sm
-    tile_end = tl.minimum(tile_start + tiles_per_sm, num_tiles)
-
-    for tile_id in range(tile_start, tile_end):
-        # Swizzled tile -> (tile_m, tile_n) mapping
+    # Persistent loop: round-robin tile assignment across SMs.
+    # This provides better load balancing than block-partition because
+    # boundary tiles (with masking overhead) are distributed evenly.
+    for tile_id in range(pid, num_tiles, NUM_SMS):
+        # Swizzled tile -> (tile_m, tile_n) mapping for L2 locality.
+        # GROUP_SIZE_M adjacent row-tiles are grouped together so that
+        # they share B columns in the L2 cache.
         num_tiles_in_group = GROUP_SIZE_M * num_tiles_n
         group_id = tile_id // num_tiles_in_group
         first_tile_m_in_group = group_id * GROUP_SIZE_M
@@ -109,8 +109,8 @@ def gemm_kernel(
             mask_b = (offs_k[:, None] < K) & (offs_n[None, :] < N)
             b = tl.load(b_ptrs, mask=mask_b, other=0.0)
 
-            # Accumulate
-            acc = tl.dot(a, b, acc)
+            # Accumulate: use 3-operand form for fused multiply-add
+            acc = tl.dot(a, b, acc, allow_tf32=True)
 
         # Store C tile
         c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn

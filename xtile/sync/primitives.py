@@ -3,16 +3,36 @@ xtile.sync.primitives - Synchronization primitives.
 
 Provides device-side atomic operations, signal/wait primitives, and barriers
 for coordinating tile-level communication across GPUs.  All functions are
-decorated with @triton.jit for full compiler visibility.
+decorated with ``@triton.jit`` for full compiler visibility.
 
-Memory ordering follows the C++ memory model:
+Two categories of primitives
+-----------------------------
+
+**Remote atomics** (``tile_atomic_*``)
+    Operate on memory that may belong to a different GPU.  These require
+    ``target_rank``, ``caller_rank``, and ``heap_bases`` parameters so the
+    pointer can be translated via :func:`~xtile.memory.translation.translate_ptr`.
+    When ``target_rank == caller_rank``, translation is an identity -- the
+    pointer is used as-is -- so these functions are safe for local use too.
+
+**Local signal primitives** (``tile_signal``, ``tile_wait``, etc.)
+    Operate on memory local to the current GPU (e.g. a lock tensor shared
+    between compute and comm workers within the same kernel launch).  No
+    pointer translation is performed.  These are the building blocks for
+    TileLink-style producer-consumer synchronization.
+
+Memory ordering
+---------------
+Follows the C++ memory model (NOT OpenSHMEM quiet/wait_until):
 
 * ``"relaxed"`` -- no ordering guarantees beyond atomicity.
 * ``"acquire"`` -- subsequent reads/writes cannot be reordered before this op.
 * ``"release"`` -- preceding reads/writes cannot be reordered after this op.
 * ``"acq_rel"`` -- combined acquire + release semantics.
 
-Memory scope controls the visibility domain:
+Memory scope
+------------
+Controls the visibility domain of the atomic:
 
 * ``"block"`` -- visible within the same CTA / thread-block.
 * ``"gpu"``   -- visible across all CTAs on the same GPU.
@@ -26,15 +46,25 @@ from xtile.memory.translation import translate_ptr
 
 
 # =====================================================================
-# Atomic operations with memory ordering semantics
+# Remote atomic operations
 # =====================================================================
+#
+# All remote atomics follow the same pattern:
+#   1. Translate ptr from target_rank's address space to caller_rank's.
+#   2. Apply offset.
+#   3. Issue the hardware atomic with the specified sem/scope.
+#
+# When target_rank == caller_rank, translate_ptr returns the original
+# pointer unchanged, so these functions degrade to efficient local
+# atomics with zero overhead (the two tl.load + sub + add cancel out).
 
 
 @triton.jit
 def tile_atomic_add(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "relaxed",
@@ -42,13 +72,7 @@ def tile_atomic_add(
 ):
     """Atomic add to (possibly remote) memory.
 
-    Atomically performs ``*addr += value`` for each lane.  The operation is
-    performed with the specified memory ordering (*sem*) and visibility
-    scope (*scope*).
-
-    When *rank* differs from the calling rank, pointer translation is used
-    to obtain a remote-accessible address.  For local atomics, pass the
-    caller's own rank so that translation is an identity.
+    Atomically performs ``*addr += value`` for each lane.
 
     Memory ordering:
         - ``"relaxed"``: No ordering; use when the atomic is only for
@@ -58,9 +82,10 @@ def tile_atomic_add(
         - ``"acq_rel"``: Use when the add both publishes and consumes.
 
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: Value(s) to add atomically.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -69,7 +94,7 @@ def tile_atomic_add(
     Returns:
         The old value at each address before the addition.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_add(addr, value, sem=sem, scope=scope)
 
 
@@ -78,7 +103,8 @@ def tile_atomic_cas(
     ptr,
     expected,
     desired,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "acq_rel",
@@ -98,10 +124,11 @@ def tile_atomic_cas(
         - ``"relaxed"``: Rarely appropriate for CAS.
 
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         expected: Expected current value.
         desired: Value to write if *expected* matches.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -110,7 +137,7 @@ def tile_atomic_cas(
     Returns:
         The old value at each address (== *expected* if the swap succeeded).
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_cas(addr, expected, desired, sem=sem, scope=scope)
 
 
@@ -118,7 +145,8 @@ def tile_atomic_cas(
 def tile_atomic_xchg(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "release",
@@ -136,9 +164,10 @@ def tile_atomic_xchg(
           make control-flow decisions that guard subsequent reads.
 
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: New value to write.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -147,7 +176,7 @@ def tile_atomic_xchg(
     Returns:
         The old value at each address before the exchange.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_xchg(addr, value, sem=sem, scope=scope)
 
 
@@ -155,7 +184,8 @@ def tile_atomic_xchg(
 def tile_atomic_min(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "relaxed",
@@ -165,14 +195,11 @@ def tile_atomic_min(
 
     Atomically performs ``*addr = min(*addr, value)`` for each lane.
 
-    Memory ordering:
-        - ``"relaxed"`` (default): Sufficient for reductions where only
-          the final converged value matters.
-
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: Value(s) to compare.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -181,7 +208,7 @@ def tile_atomic_min(
     Returns:
         The old value at each address before the min operation.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_min(addr, value, sem=sem, scope=scope)
 
 
@@ -189,7 +216,8 @@ def tile_atomic_min(
 def tile_atomic_max(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "relaxed",
@@ -199,14 +227,11 @@ def tile_atomic_max(
 
     Atomically performs ``*addr = max(*addr, value)`` for each lane.
 
-    Memory ordering:
-        - ``"relaxed"`` (default): Sufficient for reductions where only
-          the final converged value matters.
-
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: Value(s) to compare.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -215,7 +240,7 @@ def tile_atomic_max(
     Returns:
         The old value at each address before the max operation.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_max(addr, value, sem=sem, scope=scope)
 
 
@@ -223,7 +248,8 @@ def tile_atomic_max(
 def tile_atomic_and(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "relaxed",
@@ -233,14 +259,11 @@ def tile_atomic_and(
 
     Atomically performs ``*addr &= value`` for each lane.
 
-    Memory ordering:
-        - ``"relaxed"`` (default): Suitable for flag-clearing patterns
-          where no ordering with other memory operations is needed.
-
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: Bitmask value(s) to AND.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -249,7 +272,7 @@ def tile_atomic_and(
     Returns:
         The old value at each address before the AND operation.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_and(addr, value, sem=sem, scope=scope)
 
 
@@ -257,7 +280,8 @@ def tile_atomic_and(
 def tile_atomic_or(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "relaxed",
@@ -267,16 +291,11 @@ def tile_atomic_or(
 
     Atomically performs ``*addr |= value`` for each lane.
 
-    Memory ordering:
-        - ``"relaxed"`` (default): Suitable for flag-setting patterns
-          where no ordering with other memory operations is needed.
-        - ``"release"``: Use when setting a flag that another thread will
-          acquire-load.
-
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: Bitmask value(s) to OR.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -285,7 +304,7 @@ def tile_atomic_or(
     Returns:
         The old value at each address before the OR operation.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_or(addr, value, sem=sem, scope=scope)
 
 
@@ -293,7 +312,8 @@ def tile_atomic_or(
 def tile_atomic_xor(
     ptr,
     value,
-    rank,
+    target_rank,
+    caller_rank,
     heap_bases,
     offsets,
     sem: tl.constexpr = "relaxed",
@@ -303,14 +323,11 @@ def tile_atomic_xor(
 
     Atomically performs ``*addr ^= value`` for each lane.
 
-    Memory ordering:
-        - ``"relaxed"`` (default): Suitable for toggle patterns where no
-          ordering with other memory operations is needed.
-
     Args:
-        ptr: Base pointer (in *rank*'s address space).
+        ptr: Base pointer (in *target_rank*'s address space).
         value: Bitmask value(s) to XOR.
-        rank: Rank that owns the target memory.
+        target_rank: Rank that owns the target memory.
+        caller_rank: Rank executing this operation (the calling GPU).
         heap_bases: Int64 tensor of per-rank symmetric-heap base pointers.
         offsets: Offset tensor for addressing.
         sem: Memory ordering semantic.
@@ -319,13 +336,21 @@ def tile_atomic_xor(
     Returns:
         The old value at each address before the XOR operation.
     """
-    addr = translate_ptr(ptr, rank, tl.program_id(0) % 1, heap_bases) + offsets
+    addr = translate_ptr(ptr, target_rank, caller_rank, heap_bases) + offsets
     return tl.atomic_xor(addr, value, sem=sem, scope=scope)
 
 
 # =====================================================================
-# Signal primitives (TileLink-style producer-consumer)
+# Local signal primitives (TileLink-style producer-consumer)
 # =====================================================================
+#
+# These primitives operate on LOCAL memory only (e.g. a lock tensor
+# allocated on the current GPU).  They do NOT perform pointer translation.
+# Use them for intra-kernel synchronization between compute and comm
+# workers (WG specialization, producer-consumer patterns).
+#
+# For cross-GPU signalling, translate the locks pointer first via
+# translate_ptr, then use tile_signal/tile_wait on the translated pointer.
 
 
 @triton.jit
@@ -342,21 +367,21 @@ def tile_signal(
     subsequently acquires this lock via :func:`tile_wait`.
 
     This implements the **producer** side of TileLink-style signalling.
+    This is a LOCAL operation -- the *locks* pointer must already be in
+    the caller's address space.  For cross-GPU signals, translate the
+    pointer first.
 
     Memory ordering:
         - ``"release"`` (default): Ensures the tile data written before
           this call is visible to the consumer that does an acquire-load
-          on the same lock.  This is the correct default -- do not weaken
-          to ``"relaxed"`` unless you have an external fence.
+          on the same lock.  Do not weaken to ``"relaxed"`` unless you
+          have an external fence.
 
     Args:
-        locks: Pointer to the lock array in symmetric memory.
+        locks: Pointer to the lock array (must be in caller's address space).
         tile_id: Index of the tile to signal (used as offset into *locks*).
         sem: Memory ordering semantic.
         scope: Memory visibility scope.
-
-    Returns:
-        None (the old lock value is discarded).
     """
     tl.atomic_xchg(locks + tile_id, 1, sem=sem, scope=scope)
 
@@ -376,6 +401,8 @@ def tile_wait(
     after this function returns.
 
     This implements the **consumer** side of TileLink-style signalling.
+    This is a LOCAL operation -- the *locks* pointer must already be in
+    the caller's address space.
 
     Memory ordering:
         - ``"acquire"`` (default): Ensures that reads of the tile data
@@ -383,13 +410,10 @@ def tile_wait(
           its release-signal.  Do not weaken to ``"relaxed"``.
 
     Args:
-        locks: Pointer to the lock array in symmetric memory.
+        locks: Pointer to the lock array (must be in caller's address space).
         tile_id: Index of the tile to wait on.
         sem: Memory ordering semantic.
         scope: Memory visibility scope.
-
-    Returns:
-        None.
     """
     while tl.atomic_cas(locks + tile_id, 1, 0, sem=sem, scope=scope) != 1:
         pass
@@ -409,16 +433,14 @@ def tile_signal_add(
     Multiple producers can each increment the counter; a consumer uses
     :func:`tile_wait_ge` to wait until the counter reaches a threshold.
 
-    This is the counting generalization of :func:`tile_signal` -- use it
+    This is the counting generalisation of :func:`tile_signal` -- use it
     when a tile depends on contributions from multiple producers (e.g.
     reduce-scatter where each rank contributes one partial sum).
 
-    Memory ordering:
-        - ``"release"`` (default): Ensures all data written by this
-          producer before the increment is visible to the consumer.
+    This is a LOCAL operation.
 
     Args:
-        signals: Pointer to the signal-counter array in symmetric memory.
+        signals: Pointer to the signal-counter array (caller's address space).
         tile_id: Index of the signal counter to increment.
         value: Amount to add (default ``1``).
         sem: Memory ordering semantic.
@@ -440,27 +462,19 @@ def tile_wait_ge(
 ):
     """Wait until a signal counter reaches or exceeds a threshold.
 
-    Spins on ``signals[tile_id]`` using atomic CAS in a polling loop.
-    Once the counter ``>= threshold``, the function returns.  The counter
-    is **not** reset -- it is the caller's responsibility to manage counter
-    lifecycle (e.g. subtracting the threshold after consumption).
+    Spins on ``signals[tile_id]`` using a zero-add polling loop.  Once the
+    counter ``>= threshold``, the function returns.  The counter is **not**
+    reset -- the caller is responsible for lifecycle management.
 
     Use this with :func:`tile_signal_add` for multi-producer patterns.
-
-    Memory ordering:
-        - ``"acquire"`` (default): Ensures that reads of the tile data
-          after this call see all writes released by the producers whose
-          increments contributed to reaching the threshold.
+    This is a LOCAL operation.
 
     Args:
-        signals: Pointer to the signal-counter array in symmetric memory.
+        signals: Pointer to the signal-counter array (caller's address space).
         tile_id: Index of the signal counter to poll.
         threshold: Minimum counter value required to proceed.
         sem: Memory ordering semantic.
         scope: Memory visibility scope.
-
-    Returns:
-        None.
     """
     while tl.atomic_add(signals + tile_id, 0, sem=sem, scope=scope) < threshold:
         pass
@@ -482,35 +496,21 @@ def tile_barrier(
     """Device-side barrier across *world_size* participants.
 
     Each participant atomically increments ``barriers[0]`` and then spins
-    until the counter reaches *world_size*.  Once all participants have
-    arrived, the barrier is complete.
+    until the counter reaches *world_size*.  This is a **single-use**
+    barrier -- for repeated barriers, use separate slots or reset between
+    rounds.
 
-    This is a **single-use** barrier.  For repeated barriers, use separate
-    slots in the *barriers* array or reset the counter between rounds.
-
-    Memory ordering:
-        - ``"acq_rel"`` (default): The increment is a release (publishes
-          all prior writes) and the polling loop is an acquire (makes all
-          writes from other participants visible).  This is the strongest
-          sensible ordering for a barrier.
-
-    Implementation note:
-        The arrival uses ``atomic_add`` with release semantics and the
-        polling uses ``atomic_add(..., 0)`` with acquire semantics to
-        read the current value without modifying it.  This avoids the
-        ABA problem inherent in CAS-based barriers.
+    Implementation:
+        Arrival uses ``atomic_add(..., 1)`` with release semantics.
+        Polling uses ``atomic_add(..., 0)`` with acquire semantics
+        (a read that does not modify the counter).
 
     Args:
-        barriers: Pointer to the barrier counter in symmetric memory.
-            Must be initialized to ``0`` before the first arrival.
-        rank: Caller's rank (unused in the current implementation but
-            reserved for future asymmetric-barrier extensions).
+        barriers: Pointer to the barrier counter (must be initialised to 0).
+        rank: Caller's rank (reserved for future asymmetric-barrier extensions).
         world_size: Total number of participants.
         sem: Memory ordering semantic for both arrival and polling.
         scope: Memory visibility scope.
-
-    Returns:
-        None.
     """
     # Arrive: increment barrier counter (release prior writes)
     tl.atomic_add(barriers, 1, sem="release", scope=scope)

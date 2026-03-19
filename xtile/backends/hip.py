@@ -100,7 +100,8 @@ class _HIPRuntime:
     def _setup_signatures(self) -> None:
         """Declare ctypes argtypes / restypes for every HIP symbol we use."""
         lib = self._lib
-        assert lib is not None
+        if lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
 
         # hipMalloc(void** ptr, size_t size) -> hipError_t
         lib.hipMalloc.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_size_t]
@@ -182,7 +183,8 @@ class _HIPRuntime:
 
     def malloc(self, size: int) -> int:
         """``hipMalloc`` -- allocate *size* bytes, return device pointer."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         ptr = ctypes.c_void_p()
         err = self._lib.hipMalloc(ctypes.byref(ptr), ctypes.c_size_t(size))
         self._check(err, "hipMalloc")
@@ -190,13 +192,15 @@ class _HIPRuntime:
 
     def free(self, ptr: int) -> None:
         """``hipFree``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         err = self._lib.hipFree(ctypes.c_void_p(ptr))
         self._check(err, "hipFree")
 
     def memcpy_d2d(self, dst: int, src: int, size: int) -> None:
         """``hipMemcpy`` with ``hipMemcpyDeviceToDevice``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         err = self._lib.hipMemcpy(
             ctypes.c_void_p(dst),
             ctypes.c_void_p(src),
@@ -207,7 +211,8 @@ class _HIPRuntime:
 
     def ipc_get_handle(self, ptr: int) -> bytes:
         """``hipIpcGetMemHandle`` -- return 64-byte IPC handle."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         handle = (ctypes.c_char * HIP_IPC_HANDLE_SIZE)()
         err = self._lib.hipIpcGetMemHandle(handle, ctypes.c_void_p(ptr))
         self._check(err, "hipIpcGetMemHandle")
@@ -215,7 +220,8 @@ class _HIPRuntime:
 
     def ipc_open_handle(self, handle: bytes) -> int:
         """``hipIpcOpenMemHandle`` -- open peer handle, return local pointer."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         buf = (ctypes.c_char * HIP_IPC_HANDLE_SIZE).from_buffer_copy(handle)
         ptr = ctypes.c_void_p()
         # flags = 0 : default (hipIpcMemLazyEnablePeerAccess)
@@ -225,19 +231,22 @@ class _HIPRuntime:
 
     def ipc_close_handle(self, ptr: int) -> None:
         """``hipIpcCloseMemHandle``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         err = self._lib.hipIpcCloseMemHandle(ctypes.c_void_p(ptr))
         self._check(err, "hipIpcCloseMemHandle")
 
     def device_synchronize(self) -> None:
         """``hipDeviceSynchronize``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         err = self._lib.hipDeviceSynchronize()
         self._check(err, "hipDeviceSynchronize")
 
     def get_device_count(self) -> int:
         """``hipGetDeviceCount``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         count = ctypes.c_int(0)
         err = self._lib.hipGetDeviceCount(ctypes.byref(count))
         self._check(err, "hipGetDeviceCount")
@@ -245,7 +254,8 @@ class _HIPRuntime:
 
     def get_device(self) -> int:
         """``hipGetDevice`` -- return currently active device ordinal."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         dev = ctypes.c_int(0)
         err = self._lib.hipGetDevice(ctypes.byref(dev))
         self._check(err, "hipGetDevice")
@@ -253,13 +263,15 @@ class _HIPRuntime:
 
     def set_device(self, device_id: int) -> None:
         """``hipSetDevice``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         err = self._lib.hipSetDevice(ctypes.c_int(device_id))
         self._check(err, "hipSetDevice")
 
     def device_can_access_peer(self, device: int, peer: int) -> bool:
         """``hipDeviceCanAccessPeer``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         can_access = ctypes.c_int(0)
         err = self._lib.hipDeviceCanAccessPeer(
             ctypes.byref(can_access), ctypes.c_int(device), ctypes.c_int(peer),
@@ -269,7 +281,8 @@ class _HIPRuntime:
 
     def enable_peer_access(self, peer_device: int) -> None:
         """``hipDeviceEnablePeerAccess``."""
-        assert self._lib is not None
+        if self._lib is None:
+            raise RuntimeError("HIP runtime library not loaded")
         err = self._lib.hipDeviceEnablePeerAccess(ctypes.c_int(peer_device), ctypes.c_uint(0))
         # Error 704 = hipErrorPeerAccessAlreadyEnabled -- safe to ignore
         if err != HIP_SUCCESS and err != 704:

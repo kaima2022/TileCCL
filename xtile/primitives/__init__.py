@@ -1,11 +1,13 @@
 """
 xtile.primitives - Core primitive layer.
 
-Exports all public primitives from the three sub-modules:
+Exports all public primitives from the four sub-modules:
 
 - **compute**: Tile-level arithmetic (dot, reduce, elementwise, cast, fill).
 - **memory**: Tile-level memory access (load, store, copy, offset generation).
 - **communication**: Cross-GPU tile transfer (remote load/store, put/get).
+- **collectives**: Multi-GPU collective operations (allreduce, allgather,
+  broadcast, scatter, reduce_scatter).
 """
 
 from xtile.primitives.compute import (
@@ -30,6 +32,16 @@ from xtile.primitives.communication import (
     tile_remote_load,
     tile_remote_store,
 )
+from xtile.primitives.collectives import (
+    tile_allreduce,
+    tile_allgather,
+    tile_scatter,
+    tile_reduce_scatter,
+    tile_broadcast,
+    allreduce,
+    allgather,
+    broadcast,
+)
 
 __all__ = [
     # compute
@@ -51,4 +63,14 @@ __all__ = [
     "tile_remote_store",
     "tile_put",
     "tile_get",
+    # collectives (device-side)
+    "tile_allreduce",
+    "tile_allgather",
+    "tile_scatter",
+    "tile_reduce_scatter",
+    "tile_broadcast",
+    # collectives (host-side launchers)
+    "allreduce",
+    "allgather",
+    "broadcast",
 ]

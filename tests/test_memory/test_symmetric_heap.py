@@ -1,116 +1,442 @@
 """Tests for xtile.memory.symmetric_heap.SymmetricHeap.
 
-These tests exercise heap creation, tensor allocation, pointer translation,
-context-manager cleanup, and multi-allocation overlap checks.  Multi-GPU
-tests are marked with ``@pytest.mark.multigpu`` and are automatically
-skipped on single-GPU systems.
+Comprehensive tests covering:
+- Constructor argument validation (no GPU needed for some)
+- Bump allocator alignment, exhaustion, and overlap guarantees
+- Byte tracking (bytes_allocated / bytes_free)
+- Context manager cleanup
+- Multi-GPU IPC handle exchange and cross-GPU pointer translation
+
+Single-GPU tests require one GPU (world_size=1, no IPC).
+Multi-GPU tests are marked ``@pytest.mark.multigpu`` and need >= 2 GPUs.
 """
 
 from __future__ import annotations
+
+import math
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
 
 
 # ---------------------------------------------------------------------------
-# Single-GPU tests (require at least 1 GPU)
+# Constants used by the SymmetricHeap implementation
 # ---------------------------------------------------------------------------
 
-class TestSymmetricHeap:
-    """Unit tests for SymmetricHeap on a single GPU."""
+_ALIGN = 256  # must match xtile.memory.symmetric_heap._ALIGN
 
-    def test_heap_creation(self, symmetric_heap) -> None:
-        """Create a heap and verify basic attributes."""
+
+def _round_up(value: int, alignment: int) -> int:
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
+# ---------------------------------------------------------------------------
+# Unit tests (single GPU or mock -- no IPC needed)
+# ---------------------------------------------------------------------------
+
+
+class TestSymmetricHeapUnit:
+    """Unit tests that work with a single GPU or mock."""
+
+    # ---- argument validation (no GPU required) ---------------------------
+
+    def test_creation_rejects_zero_size(self) -> None:
+        """size=0 raises ValueError."""
+        with pytest.raises(ValueError, match="positive"):
+            from xtile.memory.symmetric_heap import SymmetricHeap
+            SymmetricHeap(size=0, rank=0, world_size=1)
+
+    def test_creation_rejects_negative_size(self) -> None:
+        """Negative size raises ValueError."""
+        with pytest.raises(ValueError, match="positive"):
+            from xtile.memory.symmetric_heap import SymmetricHeap
+            SymmetricHeap(size=-1024, rank=0, world_size=1)
+
+    def test_creation_rejects_rank_out_of_range(self) -> None:
+        """rank >= world_size raises ValueError."""
+        with pytest.raises(ValueError, match="rank="):
+            from xtile.memory.symmetric_heap import SymmetricHeap
+            SymmetricHeap(size=1024, rank=2, world_size=2)
+
+    def test_creation_rejects_negative_rank(self) -> None:
+        """Negative rank raises ValueError."""
+        with pytest.raises(ValueError, match="rank="):
+            from xtile.memory.symmetric_heap import SymmetricHeap
+            SymmetricHeap(size=1024, rank=-1, world_size=1)
+
+    def test_creation_rejects_zero_world_size(self) -> None:
+        """world_size=0 raises ValueError."""
+        with pytest.raises(ValueError, match="world_size"):
+            from xtile.memory.symmetric_heap import SymmetricHeap
+            SymmetricHeap(size=1024, rank=0, world_size=0)
+
+    def test_creation_validates_args(self) -> None:
+        """Various bad size/rank/world_size combinations raise ValueError."""
+        from xtile.memory.symmetric_heap import SymmetricHeap
+        bad_combos = [
+            dict(size=0, rank=0, world_size=1),
+            dict(size=-100, rank=0, world_size=1),
+            dict(size=1024, rank=1, world_size=1),
+            dict(size=1024, rank=-1, world_size=1),
+            dict(size=1024, rank=0, world_size=0),
+            dict(size=1024, rank=0, world_size=-1),
+        ]
+        for kwargs in bad_combos:
+            with pytest.raises(ValueError):
+                SymmetricHeap(**kwargs)
+
+    # ---- bump allocator (requires 1 GPU via symmetric_heap fixture) ------
+
+    def test_bump_allocator_alignment(self, symmetric_heap) -> None:
+        """Allocations are 256-byte aligned."""
         heap = symmetric_heap
-        assert heap.size == 1024 * 1024, "Heap size should be 1 MB"
-        assert heap.rank == 0
-        assert heap.world_size == 1
+        # First allocation: 100 bytes (not a multiple of 256)
+        t1 = heap.allocate_tensor(shape=(25,), dtype=torch.float32)  # 100 bytes
+        ptr1 = t1.data_ptr()
+        offset1 = ptr1 - heap.local_base
+        assert offset1 % _ALIGN == 0, f"First allocation offset {offset1} not {_ALIGN}-aligned"
 
-    def test_heap_allocate_tensor(self, symmetric_heap) -> None:
-        """Allocate a tensor from the heap and verify shape/dtype."""
-        heap = symmetric_heap
-        t = heap.allocate_tensor(shape=(64, 64), dtype=torch.float32)
-        assert t.shape == (64, 64)
-        assert t.dtype == torch.float32
-        assert t.device.type == "cuda"
+        # Second allocation should also be aligned
+        t2 = heap.allocate_tensor(shape=(10,), dtype=torch.float32)  # 40 bytes
+        ptr2 = t2.data_ptr()
+        offset2 = ptr2 - heap.local_base
+        assert offset2 % _ALIGN == 0, f"Second allocation offset {offset2} not {_ALIGN}-aligned"
 
-    def test_heap_bases_shape(self, symmetric_heap) -> None:
-        """Verify that heap_bases has the correct shape (world_size,)."""
-        heap = symmetric_heap
-        bases = heap.heap_bases
-        assert bases.shape == (heap.world_size,)
-        assert bases.dtype == torch.int64
-
-    def test_pointer_translation_roundtrip(self, symmetric_heap) -> None:
-        """Translate a pointer and verify the offset math round-trips."""
-        heap = symmetric_heap
-        t = heap.allocate_tensor(shape=(32,), dtype=torch.float32)
-        ptr = t.data_ptr()
-        base = heap.heap_bases[0].item()
-        offset = ptr - base
-        assert offset >= 0, "Tensor pointer should be >= heap base"
-        assert offset < heap.size, "Tensor pointer should be within heap"
-        reconstructed = base + offset
-        assert reconstructed == ptr
-
-    def test_heap_context_manager(self, device_info) -> None:
-        """Test that the with-statement cleans up the heap."""
+    def test_bump_allocator_exhaustion(self, device_info) -> None:
+        """Allocating more than heap size raises RuntimeError."""
         if not device_info.has_gpu:
             pytest.skip("No GPU available")
 
         from xtile.memory.symmetric_heap import SymmetricHeap
 
-        with SymmetricHeap(
-            size=512 * 1024,
-            rank=0,
-            world_size=1,
-            device=device_info.device,
-        ) as heap:
-            assert heap.size == 512 * 1024
-            t = heap.allocate_tensor(shape=(16,), dtype=torch.float32)
-            assert t is not None
-        # After exiting the context, the heap should be cleaned up
+        # Create a tiny heap (4096 bytes)
+        heap = SymmetricHeap(size=4096, rank=0, world_size=1)
+        try:
+            # This should succeed: 1024 floats = 4096 bytes, but alignment
+            # may push total above 4096 for a second allocation.
+            heap.allocate_tensor(shape=(512,), dtype=torch.float32)  # 2048 bytes
+
+            # This should fail: another 2048 bytes + alignment overhead
+            # exceeds the 4096-byte heap.
+            with pytest.raises(RuntimeError, match="exhausted"):
+                heap.allocate_tensor(shape=(1024,), dtype=torch.float32)  # 4096 bytes
+        finally:
+            heap.cleanup()
+
+    def test_multiple_allocations_no_overlap(self, symmetric_heap) -> None:
+        """Multiple tensors don't overlap in memory."""
+        heap = symmetric_heap
+        tensors = []
+        for _ in range(5):
+            t = heap.allocate_tensor(shape=(64,), dtype=torch.float32)
+            tensors.append(t)
+
+        # Check pairwise non-overlap
+        regions = []
+        for t in tensors:
+            start = t.data_ptr()
+            end = start + t.nelement() * t.element_size()
+            regions.append((start, end))
+
+        for i in range(len(regions)):
+            for j in range(i + 1, len(regions)):
+                s_i, e_i = regions[i]
+                s_j, e_j = regions[j]
+                overlaps = not (e_i <= s_j or e_j <= s_i)
+                assert not overlaps, (
+                    f"Tensors {i} [{s_i:#x}, {e_i:#x}) and "
+                    f"{j} [{s_j:#x}, {e_j:#x}) overlap"
+                )
+
+    # ---- byte tracking ---------------------------------------------------
+
+    def test_bytes_allocated_tracking(self, symmetric_heap) -> None:
+        """bytes_allocated and bytes_free are correct after allocations."""
+        heap = symmetric_heap
+        initial_free = heap.bytes_free
+        initial_allocated = heap.bytes_allocated
+        assert initial_allocated == 0
+        assert initial_free == heap.size
+
+        # Allocate 256 floats = 1024 bytes
+        heap.allocate_tensor(shape=(256,), dtype=torch.float32)
+
+        assert heap.bytes_allocated > 0
+        assert heap.bytes_free < initial_free
+        assert heap.bytes_allocated + heap.bytes_free == heap.size
+
+    def test_bytes_allocated_after_multiple(self, symmetric_heap) -> None:
+        """Bytes tracking remains consistent after multiple allocations."""
+        heap = symmetric_heap
+        heap.allocate_tensor(shape=(128,), dtype=torch.float32)  # 512 bytes
+        heap.allocate_tensor(shape=(64,), dtype=torch.float16)   # 128 bytes
+
+        # The total should reflect both allocations plus alignment padding
+        assert heap.bytes_allocated > 0
+        assert heap.bytes_allocated + heap.bytes_free == heap.size
+
+    # ---- repr ------------------------------------------------------------
+
+    def test_repr(self, symmetric_heap) -> None:
+        """__repr__ is informative."""
+        r = repr(symmetric_heap)
+        assert "SymmetricHeap" in r
+        assert "rank=" in r
+        assert "backend=" in r
+
+    def test_repr_includes_size(self, symmetric_heap) -> None:
+        """__repr__ mentions the heap size."""
+        r = repr(symmetric_heap)
+        # The repr uses _human_bytes, which produces e.g. "1.00 MiB"
+        assert "MiB" in r or "KiB" in r or "B" in r
+
+    # ---- context manager -------------------------------------------------
+
+    def test_context_manager_cleanup(self, device_info) -> None:
+        """Exiting context manager calls cleanup."""
+        if not device_info.has_gpu:
+            pytest.skip("No GPU available")
+
+        from xtile.memory.symmetric_heap import SymmetricHeap
+
+        with SymmetricHeap(size=4096, rank=0, world_size=1) as heap:
+            assert not heap._cleaned_up
+            heap.allocate_tensor(shape=(4,), dtype=torch.float32)
+
         assert heap._cleaned_up
 
-    def test_heap_multiple_allocations(self, symmetric_heap) -> None:
-        """Allocate multiple tensors and verify they do not overlap."""
+    def test_context_manager_cleanup_on_exception(self, device_info) -> None:
+        """Cleanup runs even if an exception occurs inside the with block."""
+        if not device_info.has_gpu:
+            pytest.skip("No GPU available")
+
+        from xtile.memory.symmetric_heap import SymmetricHeap
+
+        heap = None
+        with pytest.raises(RuntimeError, match="deliberate"):
+            with SymmetricHeap(size=4096, rank=0, world_size=1) as h:
+                heap = h
+                raise RuntimeError("deliberate error")
+
+        assert heap is not None
+        assert heap._cleaned_up
+
+    def test_double_cleanup_is_safe(self, device_info) -> None:
+        """Calling cleanup() multiple times does not raise."""
+        if not device_info.has_gpu:
+            pytest.skip("No GPU available")
+
+        from xtile.memory.symmetric_heap import SymmetricHeap
+
+        heap = SymmetricHeap(size=4096, rank=0, world_size=1)
+        heap.cleanup()
+        heap.cleanup()  # should not raise
+        assert heap._cleaned_up
+
+    # ---- basic properties ------------------------------------------------
+
+    def test_basic_properties(self, symmetric_heap) -> None:
+        """size, rank, world_size properties are correct."""
         heap = symmetric_heap
-        t1 = heap.allocate_tensor(shape=(128,), dtype=torch.float32)
-        t2 = heap.allocate_tensor(shape=(128,), dtype=torch.float32)
+        assert heap.size == 1024 * 1024
+        assert heap.rank == 0
+        assert heap.world_size == 1
 
-        ptr1 = t1.data_ptr()
-        size1 = t1.nelement() * t1.element_size()
-        ptr2 = t2.data_ptr()
-        size2 = t2.nelement() * t2.element_size()
+    def test_local_base_nonzero(self, symmetric_heap) -> None:
+        """local_base is a non-zero device pointer."""
+        assert symmetric_heap.local_base != 0
 
-        # Regions [ptr1, ptr1+size1) and [ptr2, ptr2+size2) must not overlap
-        no_overlap = (ptr1 + size1 <= ptr2) or (ptr2 + size2 <= ptr1)
-        assert no_overlap, "Allocated tensors must not overlap in memory"
+    def test_heap_bases_shape(self, symmetric_heap) -> None:
+        """get_heap_bases() returns a tensor of shape (world_size,)."""
+        bases = symmetric_heap.get_heap_bases()
+        assert bases.shape == (1,)
+        assert bases.dtype == torch.int64
+
+    def test_heap_bases_contains_local_base(self, symmetric_heap) -> None:
+        """For world_size=1, heap_bases[0] equals local_base."""
+        bases = symmetric_heap.get_heap_bases()
+        assert bases[0].item() == symmetric_heap.local_base
+
+    # ---- allocate_tensor details -----------------------------------------
+
+    def test_allocate_tensor_shape_dtype(self, symmetric_heap) -> None:
+        """Allocated tensor has the requested shape and dtype."""
+        t = symmetric_heap.allocate_tensor(shape=(32, 16), dtype=torch.float16)
+        assert t.shape == (32, 16)
+        assert t.dtype == torch.float16
+
+    def test_allocate_tensor_on_cuda(self, symmetric_heap) -> None:
+        """Allocated tensor resides on a CUDA device."""
+        t = symmetric_heap.allocate_tensor(shape=(8,), dtype=torch.float32)
+        assert t.device.type == "cuda"
+
+    def test_allocate_tensor_ptr_within_heap(self, symmetric_heap) -> None:
+        """Tensor data_ptr lies within the heap bounds."""
+        heap = symmetric_heap
+        t = heap.allocate_tensor(shape=(64,), dtype=torch.float32)
+        ptr = t.data_ptr()
+        base = heap.local_base
+        assert base <= ptr < base + heap.size
 
 
 # ---------------------------------------------------------------------------
-# Multi-GPU tests
+# Multi-GPU tests (require >= 2 GPUs)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.multigpu
 class TestSymmetricHeapMultiGPU:
-    """Tests that require >= 2 GPUs."""
+    """Multi-GPU tests requiring >= 2 GPUs.
 
-    def test_heap_bases_multi_device(self, skip_no_multigpu, device_info) -> None:
-        """With world_size > 1, heap_bases should have one entry per rank."""
-        from xtile.memory.symmetric_heap import SymmetricHeap
+    These tests use torch.multiprocessing.spawn to simulate a multi-rank
+    environment on a single machine with multiple GPUs.
+    """
 
-        world_size = device_info.num_gpus
-        heap = SymmetricHeap(
-            size=1024 * 1024,
-            rank=0,
-            world_size=world_size,
-            device=device_info.device,
-        )
-        try:
-            bases = heap.heap_bases
-            assert bases.shape == (world_size,), (
-                f"Expected heap_bases of shape ({world_size},), got {bases.shape}"
+    def test_ipc_handle_exchange(self, skip_no_multigpu, device_info) -> None:
+        """Heap bases have correct world_size entries after IPC setup."""
+        import torch.multiprocessing as mp
+
+        world_size = min(device_info.num_gpus, 4)
+
+        def _worker(rank: int, world_size: int, results_dict: dict) -> None:
+            import os
+            os.environ["MASTER_ADDR"] = "127.0.0.1"
+            os.environ["MASTER_PORT"] = "29500"
+            torch.cuda.set_device(rank)
+            torch.distributed.init_process_group(
+                backend="nccl", rank=rank, world_size=world_size
             )
-        finally:
-            heap.cleanup()
+            try:
+                from xtile.memory.symmetric_heap import SymmetricHeap
+                heap = SymmetricHeap(size=1024 * 1024, rank=rank, world_size=world_size)
+                bases = heap.get_heap_bases()
+                results_dict[rank] = {
+                    "bases_shape": tuple(bases.shape),
+                    "bases_len": int(bases.shape[0]),
+                }
+                heap.cleanup()
+            finally:
+                torch.distributed.destroy_process_group()
+
+        manager = mp.Manager()
+        results = manager.dict()
+
+        mp.spawn(
+            _worker,
+            args=(world_size, results),
+            nprocs=world_size,
+            join=True,
+        )
+
+        for rank in range(world_size):
+            assert results[rank]["bases_len"] == world_size
+
+    def test_cross_gpu_pointer_translation(self, skip_no_multigpu, device_info) -> None:
+        """Translated pointer accesses correct remote memory."""
+        import torch.multiprocessing as mp
+
+        world_size = min(device_info.num_gpus, 2)
+
+        def _worker(rank: int, world_size: int, results_dict: dict) -> None:
+            import os
+            os.environ["MASTER_ADDR"] = "127.0.0.1"
+            os.environ["MASTER_PORT"] = "29501"
+            torch.cuda.set_device(rank)
+            torch.distributed.init_process_group(
+                backend="nccl", rank=rank, world_size=world_size
+            )
+            try:
+                from xtile.memory.symmetric_heap import SymmetricHeap
+                heap = SymmetricHeap(
+                    size=1024 * 1024, rank=rank, world_size=world_size,
+                )
+                t = heap.allocate_tensor(shape=(64,), dtype=torch.float32)
+                local_ptr = t.data_ptr()
+                local_base = heap.local_base
+                offset = local_ptr - local_base
+
+                # Translate to the other rank
+                other_rank = 1 - rank
+                translated = heap.translate(local_ptr, to_rank=other_rank)
+
+                # The translated pointer should differ from the local one
+                # (unless by coincidence the bases are the same)
+                bases = heap.get_heap_bases()
+                expected = int(bases[other_rank].item()) + offset
+                results_dict[rank] = {
+                    "translated": translated,
+                    "expected": expected,
+                    "offset": offset,
+                    "match": translated == expected,
+                }
+                heap.barrier()
+                heap.cleanup()
+            finally:
+                torch.distributed.destroy_process_group()
+
+        manager = mp.Manager()
+        results = manager.dict()
+
+        mp.spawn(
+            _worker,
+            args=(world_size, results),
+            nprocs=world_size,
+            join=True,
+        )
+
+        for rank in range(world_size):
+            assert results[rank]["match"], (
+                f"Rank {rank}: translated={results[rank]['translated']}, "
+                f"expected={results[rank]['expected']}"
+            )
+
+    def test_allocate_tensor_on_heap(self, skip_no_multigpu, device_info) -> None:
+        """Tensor allocated on heap has correct data_ptr within heap bounds."""
+        import torch.multiprocessing as mp
+
+        world_size = min(device_info.num_gpus, 2)
+
+        def _worker(rank: int, world_size: int, results_dict: dict) -> None:
+            import os
+            os.environ["MASTER_ADDR"] = "127.0.0.1"
+            os.environ["MASTER_PORT"] = "29502"
+            torch.cuda.set_device(rank)
+            torch.distributed.init_process_group(
+                backend="nccl", rank=rank, world_size=world_size
+            )
+            try:
+                from xtile.memory.symmetric_heap import SymmetricHeap
+                heap = SymmetricHeap(
+                    size=1024 * 1024, rank=rank, world_size=world_size,
+                )
+                t = heap.allocate_tensor(shape=(128, 64), dtype=torch.float16)
+                ptr = t.data_ptr()
+                base = heap.local_base
+                in_bounds = base <= ptr < base + heap.size
+                results_dict[rank] = {
+                    "in_bounds": in_bounds,
+                    "shape": tuple(t.shape),
+                    "dtype": str(t.dtype),
+                    "device_type": t.device.type,
+                }
+                heap.cleanup()
+            finally:
+                torch.distributed.destroy_process_group()
+
+        manager = mp.Manager()
+        results = manager.dict()
+
+        mp.spawn(
+            _worker,
+            args=(world_size, results),
+            nprocs=world_size,
+            join=True,
+        )
+
+        for rank in range(world_size):
+            r = results[rank]
+            assert r["in_bounds"], f"Rank {rank}: tensor ptr outside heap bounds"
+            assert r["shape"] == (128, 64)
+            assert r["dtype"] == "torch.float16"
+            assert r["device_type"] == "cuda"
