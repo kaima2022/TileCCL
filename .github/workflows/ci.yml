@@ -1,0 +1,31 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff mypy
+      - run: ruff check xtile/ tests/
+      - run: mypy xtile/ --ignore-missing-imports
+
+  test-amd:
+    runs-on: [self-hosted, amd-gpu]
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -e ".[dev,amd]"
+      - run: pytest tests/ -v -m "not nvidia"
+
+  test-nvidia:
+    runs-on: [self-hosted, nvidia-gpu]
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -e ".[dev,nvidia]"
+      - run: pytest tests/ -v -m "not amd"

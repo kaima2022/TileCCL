@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xtile"
+version = "0.1.0"
+description = "XTile: Cross-platform tile communication library with full compiler visibility"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+authors = [
+    {name = "XTile Contributors"},
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Distributed Computing",
+]
+dependencies = [
+    "torch>=2.4",
+    "triton>=3.0",
+]
+
+[project.optional-dependencies]
+nvidia = [
+    "nvidia-ml-py>=12.0",
+]
+amd = [
+    # AMD-specific dependencies (ROCm runtime detected at install time)
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-xdist>=3.5",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+benchmark = [
+    "matplotlib>=3.8",
+    "pandas>=2.2",
+    "tabulate>=0.9",
+]
+
+[project.scripts]
+xtile = "xtile.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["xtile*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "nvidia: tests requiring NVIDIA GPU",
+    "amd: tests requiring AMD GPU",
+    "multigpu: tests requiring multiple GPUs",
+    "benchmark: benchmark tests (deselect with -m 'not benchmark')",
+]
+addopts = "-v --tb=short"
