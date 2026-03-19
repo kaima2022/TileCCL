@@ -1,11 +1,30 @@
 """
 xtile.memory.symmetric_heap - Symmetric memory heap for multi-GPU communication.
 
-Each GPU allocates the same size heap, exchanges IPC handles via
-torch.distributed.all_gather, and builds a heap_bases tensor so that every
-GPU can translate local pointers to remote pointers.
+Supports two modes of operation:
 
-Inspired by Iris's symmetric memory model and OpenSHMEM concepts.
+**Single-process mode** (recommended for single-node):
+    All GPUs are managed from one process.  Peer access is enabled between
+    GPUs so that kernels on any GPU can directly dereference pointers from
+    any other GPU's heap over NVLink.  No IPC handles needed.
+
+    Usage::
+
+        heaps = SymmetricHeap.create_all(size=1 << 30, world_size=2)
+        A = heaps[0].allocate_tensor((M, K), dtype=torch.float16)
+        bases = heaps[0].get_heap_bases()
+        # Launch Triton kernels on GPU 0 with bases containing GPU 1's ptr
+
+**Multi-process mode** (for multi-node or when required):
+    Each process owns one GPU.  IPC handles are exchanged via
+    ``torch.distributed`` so each process can map remote heaps into
+    its address space.  Requires ``torch.distributed`` init first.
+
+    Usage::
+
+        with SymmetricHeap(size=1 << 30, rank=rank, world_size=ws) as heap:
+            A = heap.allocate_tensor((M, K), dtype=torch.float16)
+            bases = heap.get_heap_bases()
 """
 
 from __future__ import annotations
@@ -35,11 +54,7 @@ def _round_up(value: int, alignment: int) -> int:
 
 
 def _resolve_backend(backend: str) -> tuple[str, BackendInterface]:
-    """Resolve the backend name and return ``(name, instance)``.
-
-    Uses the central :func:`xtile.backends.get_backend` factory so that
-    backend construction logic is not duplicated.
-    """
+    """Resolve the backend name and return ``(name, instance)``."""
     if backend == "auto":
         hw = detect_hardware()
         if hw == "none":
@@ -79,29 +94,20 @@ class _AllocRecord:
 class SymmetricHeap:
     """Symmetric memory heap for multi-GPU communication.
 
-    Each GPU allocates the same size heap.  IPC handles are exchanged so
-    every GPU can access every other GPU's heap via pointer translation.
-
-    Inspired by Iris's symmetric memory model and OpenSHMEM concepts.
-
-    Usage::
-
-        with SymmetricHeap(size=1 << 30, rank=rank, world_size=ws) as heap:
-            A = heap.allocate_tensor((M, K), dtype=torch.float16)
-            bases = heap.get_heap_bases()
-            # ... launch Triton kernels with *bases* as a parameter ...
-            heap.barrier()
+    Each GPU allocates the same size heap.  Depending on the mode, either
+    peer access (single-process) or IPC handles (multi-process) enable
+    cross-GPU memory access via pointer translation.
 
     Parameters
     ----------
     size : int
-        Heap size in bytes **per GPU**.  Every rank allocates the same amount.
+        Heap size in bytes **per GPU**.
     rank : int
-        This process's rank inside the ``torch.distributed`` process group.
+        This GPU's rank (0-indexed).
     world_size : int
-        Total number of ranks (GPUs) in the group.
+        Total number of GPUs.
     backend : str
-        ``"hip"``, ``"cuda"``, or ``"auto"`` (auto-detect from PyTorch).
+        ``"hip"``, ``"cuda"``, or ``"auto"``.
     """
 
     # ------------------------------------------------------------------ init
@@ -112,6 +118,8 @@ class SymmetricHeap:
         rank: int,
         world_size: int,
         backend: str = "auto",
+        *,
+        _peer_bases: Optional[list[int]] = None,
     ) -> None:
         if size <= 0:
             raise ValueError(f"Heap size must be positive, got {size}")
@@ -131,115 +139,236 @@ class SymmetricHeap:
         self._backend_name: str = backend_name
         self._backend: BackendInterface = backend_impl
 
-        # Allocate the local heap on this GPU --------------------------------
+        # Allocate the local heap as one contiguous torch buffer -------------
         logger.info(
             "Rank %d: allocating symmetric heap of %s",
-            rank,
-            _human_bytes(size),
+            rank, _human_bytes(size),
         )
-        self._local_ptr: int = self._backend.allocate(size)
+        self._device = torch.device("cuda", rank)
+        self._buffer: Optional[torch.Tensor] = torch.empty(
+            size, dtype=torch.uint8, device=self._device,
+        )
+        self._local_ptr: int = self._buffer.data_ptr()
         logger.debug("Rank %d: local heap base = 0x%x", rank, self._local_ptr)
 
-        # Exchange IPC handles and build heap_bases --------------------------
-        self._remote_ptrs: list[int] = []  # remote mappings (index = rank)
+        # Build heap_bases ---------------------------------------------------
+        self._remote_ptrs: list[int] = []
         self._heap_bases: Optional[torch.Tensor] = None
-        self._ipc_setup_done: bool = False
-        self._setup_ipc()
+        self._ipc_opened: list[Optional[int]] = []
+
+        if _peer_bases is not None:
+            # Single-process mode: bases provided by create_all()
+            self._remote_ptrs = list(_peer_bases)
+            self._heap_bases = torch.tensor(
+                _peer_bases, dtype=torch.int64, device=self._device,
+            )
+        elif world_size == 1:
+            # Trivial single-GPU case
+            self._remote_ptrs = [self._local_ptr]
+            self._heap_bases = torch.tensor(
+                [self._local_ptr], dtype=torch.int64, device=self._device,
+            )
+        else:
+            # Multi-process mode: try IPC, fall back to all_gather of pointers
+            self._setup_multiprocess()
 
         # Bump allocator state -----------------------------------------------
-        self._bump_offset: int = 0  # next free byte (relative to heap start)
+        self._bump_offset: int = 0
         self._alloc_records: list[_AllocRecord] = []
 
         # Cleanup flag -------------------------------------------------------
         self._cleaned_up: bool = False
 
-    # ---------------------------------------------------------- IPC helpers
+    # ---------------------------------------------------------- class methods
 
-    def _setup_ipc(self) -> None:
-        """Exchange IPC handles across all ranks and populate *_heap_bases*."""
-        if self._world_size == 1:
-            # Single-GPU fast path -- no IPC needed.
-            self._remote_ptrs = [self._local_ptr]
-            self._heap_bases = torch.tensor(
-                [self._local_ptr], dtype=torch.int64, device=f"cuda:{self._rank}"
+    @classmethod
+    def create_all(
+        cls,
+        size: int,
+        world_size: int,
+        backend: str = "auto",
+    ) -> list["SymmetricHeap"]:
+        """Create symmetric heaps for ALL GPUs from a single process.
+
+        This is the recommended entry point for single-node multi-GPU.
+        Peer access is enabled between all GPU pairs, and each heap's
+        ``heap_bases`` contains direct device pointers (no IPC).
+
+        Parameters
+        ----------
+        size : int
+            Heap size in bytes per GPU.
+        world_size : int
+            Number of GPUs to use (must be <= ``torch.cuda.device_count()``).
+        backend : str
+            ``"cuda"``, ``"hip"``, or ``"auto"``.
+
+        Returns
+        -------
+        list[SymmetricHeap]
+            One heap per GPU rank.  ``heaps[i]`` is on ``cuda:i``.
+        """
+        num_gpus = torch.cuda.device_count()
+        if world_size > num_gpus:
+            raise RuntimeError(
+                f"Requested world_size={world_size} but only {num_gpus} "
+                f"GPUs available"
             )
-            self._ipc_setup_done = True
-            return
 
-        # 1. Initialise IPC on the backend (may be a no-op).
+        # Phase 1: Enable peer access between all GPU pairs via backend.
+        backend_name, backend_impl = _resolve_backend(backend)
+        for i in range(world_size):
+            torch.cuda.set_device(i)
+            for j in range(world_size):
+                if i != j and torch.cuda.can_device_access_peer(i, j):
+                    try:
+                        backend_impl.enable_peer_access(j)
+                    except RuntimeError:
+                        pass  # already enabled
+
+        # Phase 2: Allocate heap buffers on each GPU.
+        buffers: list[torch.Tensor] = []
+        bases: list[int] = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            buf = torch.empty(size, dtype=torch.uint8, device=f"cuda:{rank}")
+            buffers.append(buf)
+            bases.append(buf.data_ptr())
+
+        # Phase 3: Create SymmetricHeap objects with peer bases.
+        heaps: list[SymmetricHeap] = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            heap = cls.__new__(cls)
+            heap._size = size
+            heap._rank = rank
+            heap._world_size = world_size
+            backend_name, backend_impl = _resolve_backend(backend)
+            heap._backend_name = backend_name
+            heap._backend = backend_impl
+            heap._device = torch.device("cuda", rank)
+            heap._buffer = buffers[rank]
+            heap._local_ptr = bases[rank]
+            heap._remote_ptrs = list(bases)
+            heap._ipc_opened = []
+            heap._heap_bases = torch.tensor(
+                bases, dtype=torch.int64, device=f"cuda:{rank}",
+            )
+            heap._bump_offset = 0
+            heap._alloc_records = []
+            heap._cleaned_up = False
+            heaps.append(heap)
+
+        logger.info(
+            "Created %d symmetric heaps (%s each) with peer access",
+            world_size, _human_bytes(size),
+        )
+        return heaps
+
+    # ---------------------------------------------------------- multi-process
+
+    def _setup_multiprocess(self) -> None:
+        """Exchange heap pointers across ranks for multi-process mode.
+
+        First tries CUDA IPC handles.  If IPC is unavailable (e.g. some
+        container environments), falls back to exchanging raw pointers
+        with peer access enabled -- this requires all processes to be on
+        the same node with NVLink/NVSwitch.
+        """
         self._backend.init_ipc()
 
-        # 2. Get this rank's IPC handle for the heap allocation.
-        local_handle: bytes = self._backend.get_ipc_handle(self._local_ptr)
+        # Try IPC handle exchange
+        try:
+            local_handle: bytes = self._backend.get_ipc_handle(self._local_ptr)
+            handle_len = len(local_handle)
 
-        # 3. All-gather handles across ranks.
-        #    We wrap the handle bytes into a uint8 tensor for transport.
-        handle_len = len(local_handle)
-        local_tensor = torch.frombuffer(bytearray(local_handle), dtype=torch.uint8).clone()
+            # Exchange handles as GPU uint8 tensors (NCCL-compatible)
+            local_t = torch.tensor(
+                list(local_handle), dtype=torch.uint8, device=self._device,
+            )
+            gathered = [
+                torch.zeros(handle_len, dtype=torch.uint8, device=self._device)
+                for _ in range(self._world_size)
+            ]
+            dist.all_gather(gathered, local_t)
 
-        gathered: list[torch.Tensor] = [
-            torch.zeros(handle_len, dtype=torch.uint8) for _ in range(self._world_size)
-        ]
-        dist.all_gather(gathered, local_tensor)
+            # Open each remote handle
+            remote_ptrs: list[int] = []
+            ipc_opened: list[Optional[int]] = []
+            for r in range(self._world_size):
+                if r == self._rank:
+                    remote_ptrs.append(self._local_ptr)
+                    ipc_opened.append(None)
+                else:
+                    handle_bytes = bytes(gathered[r].cpu().tolist())
+                    remote_ptr = self._backend.open_ipc_handle(handle_bytes)
+                    remote_ptrs.append(remote_ptr)
+                    ipc_opened.append(remote_ptr)
 
-        # 4. Open each remote handle to obtain a local-address-space pointer.
-        remote_ptrs: list[int] = []
-        for r in range(self._world_size):
-            if r == self._rank:
-                remote_ptrs.append(self._local_ptr)
-            else:
-                handle_bytes = bytes(gathered[r].tolist())
-                remote_ptr = self._backend.open_ipc_handle(handle_bytes)
-                remote_ptrs.append(remote_ptr)
-                logger.debug(
-                    "Rank %d: opened IPC handle from rank %d -> 0x%x",
-                    self._rank, r, remote_ptr,
-                )
+            self._remote_ptrs = remote_ptrs
+            self._ipc_opened = ipc_opened
+            self._heap_bases = torch.tensor(
+                remote_ptrs, dtype=torch.int64, device=self._device,
+            )
+            dist.barrier()
+            logger.info("Rank %d: IPC setup complete", self._rank)
+            return
 
-        self._remote_ptrs = remote_ptrs
+        except RuntimeError as e:
+            logger.warning(
+                "Rank %d: IPC handle exchange failed (%s), "
+                "falling back to peer-access pointer exchange",
+                self._rank, e,
+            )
 
-        # 5. Build heap_bases tensor on the current GPU.
-        self._heap_bases = torch.tensor(
-            remote_ptrs, dtype=torch.int64, device=f"cuda:{self._rank}"
+        # Fallback: exchange raw base pointers via all_gather.
+        # This works when all ranks are on the same node with peer access.
+        local_base = torch.tensor(
+            [self._local_ptr], dtype=torch.int64, device=self._device,
         )
-        self._ipc_setup_done = True
+        all_bases = [
+            torch.zeros(1, dtype=torch.int64, device=self._device)
+            for _ in range(self._world_size)
+        ]
+        dist.all_gather(all_bases, local_base)
 
-        # 6. Barrier to make sure every rank has finished opening handles
-        #    before anyone starts issuing remote accesses.
+        self._remote_ptrs = [int(b.item()) for b in all_bases]
+        self._heap_bases = torch.cat(all_bases).to(device=self._device)
+        self._ipc_opened = []
         dist.barrier()
-        logger.info("Rank %d: IPC setup complete", self._rank)
+        logger.info("Rank %d: peer-access pointer exchange complete", self._rank)
 
     # ---------------------------------------------------------- allocation
 
     def allocate_tensor(self, shape: tuple[int, ...], dtype: torch.dtype) -> torch.Tensor:
         """Allocate a tensor within the symmetric heap.
 
-        The returned :class:`torch.Tensor` is backed by a slice of the
-        pre-allocated heap memory.  Its data pointer lies within
-        ``[heap_base, heap_base + heap_size)``.
+        The returned tensor is a view of the pre-allocated heap buffer.
+        Its ``data_ptr()`` lies within ``[heap_base, heap_base + size)``.
 
         Parameters
         ----------
         shape : tuple[int, ...]
             Desired tensor shape.
         dtype : torch.dtype
-            Element data type (e.g. ``torch.float16``, ``torch.float32``).
+            Element data type.
 
         Returns
         -------
         torch.Tensor
-            A tensor whose storage lives inside this symmetric heap.
 
         Raises
         ------
         RuntimeError
             If the heap does not have enough free space.
         """
+        if self._buffer is None:
+            raise RuntimeError("SymmetricHeap has been cleaned up")
+
         numel = math.prod(shape)
         element_size = torch.tensor([], dtype=dtype).element_size()
         byte_size = numel * element_size
 
-        # Align the current bump offset.
         aligned_offset = _round_up(self._bump_offset, _ALIGN)
 
         if aligned_offset + byte_size > self._size:
@@ -250,20 +379,9 @@ class SymmetricHeap:
                 f"({self._size - aligned_offset} bytes remaining)"
             )
 
-        # Compute the device pointer for this allocation.
-        tensor_ptr = self._local_ptr + aligned_offset
+        byte_slice = self._buffer.narrow(0, aligned_offset, byte_size)
+        tensor = byte_slice.view(dtype).reshape(shape)
 
-        # Create a torch.Tensor backed by our heap memory.
-        # torch.from_blob (available since PyTorch 2.4, a project dependency)
-        # accepts a raw data pointer and produces a tensor without copying.
-        tensor = _tensor_from_device_ptr(
-            ptr=tensor_ptr,
-            shape=shape,
-            dtype=dtype,
-            device_index=self._rank,
-        )
-
-        # Bookkeeping.
         record = _AllocRecord(
             offset=aligned_offset, size=byte_size, shape=shape, dtype=dtype,
         )
@@ -271,28 +389,23 @@ class SymmetricHeap:
         self._bump_offset = aligned_offset + byte_size
 
         logger.debug(
-            "Rank %d: allocated tensor %s %s at heap offset 0x%x",
+            "Rank %d: allocated tensor %s %s at heap+0x%x (ptr 0x%x)",
             self._rank, shape, dtype, aligned_offset,
+            self._local_ptr + aligned_offset,
         )
         return tensor
 
     # ---------------------------------------------------------- query
 
     def get_heap_bases(self) -> torch.Tensor:
-        """Return a tensor of all ranks' heap base addresses.
+        """Return a ``(world_size,)`` int64 tensor of all ranks' heap bases.
 
-        Returns
-        -------
-        torch.Tensor
-            A ``torch.int64`` tensor of shape ``(world_size,)`` residing on
-            the current GPU.  Entry ``i`` is the device pointer to rank *i*'s
-            heap, **as mapped into this rank's address space** (via IPC).
-
-        This tensor is intended to be passed into ``@triton.jit`` kernels
-        for device-side pointer translation.
+        Entry ``i`` is the device pointer to rank *i*'s heap, directly
+        dereferenceable by kernels on this GPU (via peer access or IPC).
+        Pass this tensor to ``@triton.jit`` kernels for :func:`translate_ptr`.
         """
         if self._heap_bases is None:
-            raise RuntimeError("IPC setup has not been completed.")
+            raise RuntimeError("Heap bases not initialized.")
         return self._heap_bases
 
     @property
@@ -307,12 +420,12 @@ class SymmetricHeap:
 
     @property
     def rank(self) -> int:
-        """This process's rank."""
+        """This GPU's rank."""
         return self._rank
 
     @property
     def world_size(self) -> int:
-        """Total number of ranks."""
+        """Total number of GPUs."""
         return self._world_size
 
     @property
@@ -330,26 +443,8 @@ class SymmetricHeap:
     def translate(self, local_ptr: int, to_rank: int) -> int:
         """Host-side pointer translation (primarily for debugging).
 
-        Converts a device pointer that lies within **this** rank's heap to
-        the equivalent pointer inside *to_rank*'s heap (as mapped into this
-        rank's address space via IPC).
-
-        Parameters
-        ----------
-        local_ptr : int
-            A pointer within this rank's heap.
-        to_rank : int
-            Target rank whose address space to translate into.
-
-        Returns
-        -------
-        int
-            The translated pointer.
-
-        Raises
-        ------
-        ValueError
-            If *local_ptr* is outside this rank's heap or *to_rank* is invalid.
+        Converts a pointer within **this** rank's heap to the equivalent
+        pointer in *to_rank*'s heap.
         """
         if to_rank < 0 or to_rank >= self._world_size:
             raise ValueError(
@@ -359,23 +454,7 @@ class SymmetricHeap:
         return self._remote_ptrs[to_rank] + offset
 
     def get_offset(self, ptr: int) -> int:
-        """Return the byte offset of *ptr* within this rank's heap.
-
-        Parameters
-        ----------
-        ptr : int
-            Device pointer that must lie within ``[local_base, local_base + size)``.
-
-        Returns
-        -------
-        int
-            Offset in bytes from the heap base.
-
-        Raises
-        ------
-        ValueError
-            If *ptr* is outside the heap bounds.
-        """
+        """Return the byte offset of *ptr* within this rank's heap."""
         offset = ptr - self._local_ptr
         if offset < 0 or offset >= self._size:
             raise ValueError(
@@ -387,50 +466,40 @@ class SymmetricHeap:
     # ---------------------------------------------------------- sync
 
     def barrier(self) -> None:
-        """Global barrier across all ranks.
+        """Synchronize the current GPU stream.
 
-        Ensures all ranks have reached this point before any proceeds.
-        Also synchronises the current GPU stream so that all preceding
-        device operations are visible.
+        For multi-process mode, also calls ``dist.barrier()``.
         """
         self._backend.synchronize()
-        if self._world_size > 1:
+        if self._world_size > 1 and dist.is_initialized():
             dist.barrier()
 
     # ---------------------------------------------------------- cleanup
 
     def cleanup(self) -> None:
-        """Release all IPC resources and free the heap.
-
-        Safe to call multiple times.
-        """
+        """Release resources.  Safe to call multiple times."""
         if self._cleaned_up:
             return
         self._cleaned_up = True
 
         logger.info("Rank %d: cleaning up symmetric heap", self._rank)
 
-        # Release remote IPC mappings.
-        # NOTE: The backend's ``open_ipc_handle`` returns pointers that must
-        # *not* be freed with ``free``; they are unmapped by closing the IPC
-        # handle.  Concrete backends should expose a ``close_ipc_handle`` if
-        # the runtime requires it.  For now, we rely on process-exit cleanup
-        # because both CUDA and HIP automatically unmap IPC handles when the
-        # opening process terminates.
+        # Close IPC handles if any
+        for ptr in self._ipc_opened:
+            if ptr is not None:
+                try:
+                    self._backend.close_ipc_handle(ptr)
+                except Exception:
+                    logger.debug(
+                        "Rank %d: failed to close IPC handle 0x%x",
+                        self._rank, ptr, exc_info=True,
+                    )
 
-        # Free our local heap allocation.
-        if self._local_ptr:
-            try:
-                self._backend.free(self._local_ptr)
-            except Exception:
-                logger.warning(
-                    "Rank %d: failed to free heap allocation", self._rank,
-                    exc_info=True,
-                )
-            self._local_ptr = 0
-
+        self._buffer = None
+        self._local_ptr = 0
         self._heap_bases = None
         self._remote_ptrs = []
+        self._ipc_opened = []
         self._alloc_records.clear()
         self._bump_offset = 0
 
@@ -443,7 +512,6 @@ class SymmetricHeap:
         self.cleanup()
 
     def __del__(self) -> None:
-        # Best-effort cleanup when the object is garbage-collected.
         try:
             self.cleanup()
         except Exception:
@@ -459,34 +527,8 @@ class SymmetricHeap:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Helpers
 # ---------------------------------------------------------------------------
-
-def _tensor_from_device_ptr(
-    ptr: int,
-    shape: tuple[int, ...],
-    dtype: torch.dtype,
-    device_index: int,
-) -> torch.Tensor:
-    """Create a :class:`torch.Tensor` that directly references device memory
-    at *ptr*, without copying.
-
-    This uses :func:`torch.from_blob` (available since PyTorch 2.4) which
-    accepts a raw data pointer and produces a tensor backed by that memory.
-    """
-    import ctypes
-
-    numel = math.prod(shape)
-    # torch.from_blob expects a ctypes pointer (or int) and the target device.
-    device = torch.device("cuda", device_index)
-    tensor = torch.from_blob(
-        ctypes.c_void_p(ptr),
-        size=shape,
-        dtype=dtype,
-        device=device,
-    )
-    return tensor
-
 
 def _human_bytes(n: int) -> str:
     """Return a human-readable byte string (e.g. ``'1.00 GiB'``)."""

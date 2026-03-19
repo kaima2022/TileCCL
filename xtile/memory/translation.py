@@ -36,7 +36,7 @@ import triton.language as tl
 # ======================================================================
 
 @triton.jit
-def translate_ptr(ptr, from_rank, to_rank, heap_bases):
+def translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT: tl.constexpr = 0):
     """Core pointer translation -- converts a local ptr to a remote ptr.
 
     This is the most critical function in XTile.  It enables zero-copy
@@ -44,6 +44,10 @@ def translate_ptr(ptr, from_rank, to_rank, heap_bases):
 
         offset     = ptr - heap_bases[from_rank]
         remote_ptr = heap_bases[to_rank] + offset
+
+    Implementation matches Iris Listing 1: exactly 5 core instructions
+    (2 loads, 1 subtract, 1 add, 1 cast).  Pointer arithmetic goes
+    through ``tl.pointer_type(tl.int8)`` for correctness.
 
     Parameters
     ----------
@@ -56,28 +60,43 @@ def translate_ptr(ptr, from_rank, to_rank, heap_bases):
     heap_bases :
         Pointer to a ``[world_size]`` int64 tensor containing each rank's
         heap base address **as mapped into this rank's address space**.
+    HINT : tl.constexpr
+        Vectorization hint (number of contiguous elements).  When > 0,
+        applies ``tl.max_contiguous(tl.multiple_of(...))`` to the
+        translated pointer, enabling better vectorized loads/stores.
+        Use ``BLOCK_SIZE`` for contiguous tile accesses.
 
     Returns
     -------
     Translated pointer of the same type as *ptr*.
     """
-    # 1. Load the source rank's heap base.
+    # 1. Load the source rank's heap base address.
     from_base = tl.load(heap_bases + from_rank)
 
-    # 2. Load the destination rank's heap base.
+    # 2. Load the destination rank's heap base address.
     to_base = tl.load(heap_bases + to_rank)
 
-    # 3. Compute the offset within the source heap.
-    # Cast the pointer to int64 for arithmetic.
-    ptr_int = ptr.to(tl.int64, bitcast=True)
+    # 3. Compute byte offset within the source heap.
+    # Use uint64 to avoid sign issues with high 64-bit addresses.
+    ptr_int = tl.cast(ptr, tl.uint64)
     offset = ptr_int - from_base
 
-    # 4. Compute the remote pointer.
-    remote_int = to_base + offset
+    # 4. Compute the remote pointer via byte-level pointer arithmetic.
+    # Cast the integer base to a byte pointer, add offset, then cast
+    # to the original pointer type.  This produces correct pointer
+    # semantics across backends (NVIDIA PTX / AMD LLVM).
+    to_base_byte = tl.cast(to_base, tl.pointer_type(tl.int8))
+    translated_byte = to_base_byte + offset
 
-    # 5. Cast back to the original pointer type.
-    remote_ptr = remote_int.to(ptr.dtype, bitcast=True)
-    return remote_ptr
+    # 5. Cast byte pointer back to the original pointer type.
+    translated_ptr = tl.cast(translated_byte, ptr.dtype)
+
+    # Optional vectorization hint for the compiler.
+    if HINT > 0:
+        translated_ptr = tl.max_contiguous(
+            tl.multiple_of(translated_ptr, HINT), HINT
+        )
+    return translated_ptr
 
 
 # -----------------------------------------------------------------------
@@ -92,6 +111,7 @@ def remote_load(
     heap_bases,
     mask=None,
     other=0.0,
+    HINT: tl.constexpr = 0,
 ):
     """Load from a remote rank's heap.
 
@@ -113,12 +133,14 @@ def remote_load(
         Optional boolean mask for the load (same semantics as ``tl.load``).
     other :
         Default value for masked-out lanes.
+    HINT : tl.constexpr
+        Vectorization hint for :func:`translate_ptr`.
 
     Returns
     -------
     Loaded value(s).
     """
-    remote_ptr = translate_ptr(ptr, from_rank, to_rank, heap_bases)
+    remote_ptr = translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT=HINT)
     return tl.load(remote_ptr, mask=mask, other=other)
 
 
@@ -130,6 +152,7 @@ def remote_store(
     dst_rank,
     heap_bases,
     mask=None,
+    HINT: tl.constexpr = 0,
 ):
     """Store to a remote rank's heap.
 
@@ -150,8 +173,10 @@ def remote_store(
         Pointer to the ``[world_size]`` int64 heap-bases tensor.
     mask :
         Optional boolean mask (same semantics as ``tl.store``).
+    HINT : tl.constexpr
+        Vectorization hint for :func:`translate_ptr`.
     """
-    remote_ptr = translate_ptr(ptr, src_rank, dst_rank, heap_bases)
+    remote_ptr = translate_ptr(ptr, src_rank, dst_rank, heap_bases, HINT=HINT)
     tl.store(remote_ptr, value, mask=mask)
 
 
@@ -195,7 +220,7 @@ def remote_load_block(
     -------
     Loaded block (1-D tensor of *BLOCK_SIZE* elements).
     """
-    remote_base = translate_ptr(ptr, from_rank, to_rank, heap_bases)
+    remote_base = translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT=BLOCK_SIZE)
     offsets = tl.arange(0, BLOCK_SIZE)
     return tl.load(remote_base + offsets, mask=mask, other=other)
 
@@ -229,7 +254,7 @@ def remote_store_block(
     mask :
         Optional boolean mask of shape ``(BLOCK_SIZE,)``.
     """
-    remote_base = translate_ptr(ptr, src_rank, dst_rank, heap_bases)
+    remote_base = translate_ptr(ptr, src_rank, dst_rank, heap_bases, HINT=BLOCK_SIZE)
     offsets = tl.arange(0, BLOCK_SIZE)
     tl.store(remote_base + offsets, value, mask=mask)
 

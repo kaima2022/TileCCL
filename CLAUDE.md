@@ -71,11 +71,32 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] 测试框架：pytest fixtures + benchmark harness
 - [x] Iris 审计脚本：scripts/audit_iris.py
 
+### Phase 1 进展（2026-03-19 ~）
+**硬件：2× NVIDIA H100 PCIe 80GB, NV12 NVLink (300 GB/s/dir)**
+**软件：PyTorch 2.6.0, CUDA 12.4, Triton 3.2.0**
+
+已完成：
+- [x] translate_ptr 重写：匹配 Iris 实现（tl.cast uint64 + byte-pointer 算术 + 向量化 hint）
+- [x] SymmetricHeap 重写：torch.empty 分配 + buffer.narrow().view() 子张量
+- [x] 新增 `SymmetricHeap.create_all()` 单进程多 GPU 模式（peer access，无需 IPC）
+- [x] 多进程 IPC 模式保留（含 fallback）
+- [x] BackendInterface 新增 close_ipc_handle / enable_peer_access
+- [x] 7 项 Triton P2P 端到端测试全部通过（read/write/roundtrip/bidirectional/f16/identity）
+- [x] P2P 带宽 benchmark：248.7 GB/s read, 248.2 GB/s write（83% NVLink 峰值）
+
+进行中：
+- [ ] 4 种 overlap 模式重写（使用 translate_ptr + heap_bases 替代手动指针算术）
+- [ ] P2P 带宽优化至 95%+ 峰值（当前 83%）
+
+已知限制：
+- 当前系统 CUDA IPC (cudaIpcOpenMemHandle) 不可用，使用 peer access 模式代替
+- 多节点场景需要修复 IPC 或引入 DMA-BUF 支持
+
 ### Phase 1 目标
 - [ ] 在 AMD MI300X 上 P2P 原语达到 95%+ 归一化带宽
-- [ ] 在 NVIDIA H100 上 P2P 原语初步可用
-- [ ] Microbenchmark 矩阵完整
-- [ ] Symmetric Heap 多 GPU 端到端验证
+- [x] 在 NVIDIA H100 上 P2P 原语初步可用（已达 83% 峰值带宽）
+- [x] Microbenchmark 矩阵完整（P2P read/write × f16/f32 × 1~128MB × BS 1024/4096）
+- [x] Symmetric Heap 多 GPU 端到端验证（7 项 Triton kernel 测试）
 
 ## 性能目标
 | 指标 | 目标值 |

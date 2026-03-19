@@ -359,6 +359,10 @@ class HIPBackend(BackendInterface):
             )
         return _hip.ipc_open_handle(handle)
 
+    def close_ipc_handle(self, ptr: int) -> None:
+        """Close a remote HIP IPC mapping."""
+        _hip.ipc_close_handle(ptr)
+
     def get_heap_bases(self, local_ptr: int, world_size: int) -> torch.Tensor:
         """Exchange base pointers across all ranks via torch.distributed.
 

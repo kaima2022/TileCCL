@@ -408,6 +408,10 @@ class CUDABackend(BackendInterface):
             )
         return _cuda.ipc_open_handle(handle)
 
+    def close_ipc_handle(self, ptr: int) -> None:
+        """Close a remote CUDA IPC mapping."""
+        _cuda.ipc_close_handle(ptr)
+
     def get_heap_bases(self, local_ptr: int, world_size: int) -> torch.Tensor:
         """Exchange base pointers across all ranks via torch.distributed.
 
@@ -505,6 +509,10 @@ class CUDABackend(BackendInterface):
                 compute_capability=(0, 0),
                 backend_type="cuda",
             )
+
+    def enable_peer_access(self, peer_device: int) -> None:
+        """Enable peer access to *peer_device* from the current device."""
+        _cuda.enable_peer_access(peer_device)
 
     # -- Synchronization ---------------------------------------------------
 

@@ -123,6 +123,18 @@ class BackendInterface(abc.ABC):
             process's address space and maps the same physical memory.
         """
 
+    def close_ipc_handle(self, ptr: int) -> None:
+        """Close an IPC mapping previously opened by :meth:`open_ipc_handle`.
+
+        The pointer becomes invalid after this call.  Implementations
+        should call the runtime's close/unmap function (e.g.
+        ``cudaIpcCloseMemHandle``).  The default implementation is a no-op
+        (process-exit cleanup is sufficient for most runtimes).
+
+        Args:
+            ptr: Device pointer obtained from :meth:`open_ipc_handle`.
+        """
+
     # ------------------------------------------------------------------
     # Memory management
     # ------------------------------------------------------------------
@@ -201,6 +213,15 @@ class BackendInterface(abc.ABC):
 
         Returns:
             A :class:`DeviceProperties` populated from the runtime.
+        """
+
+    def enable_peer_access(self, peer_device: int) -> None:
+        """Enable direct memory access to *peer_device* from the current device.
+
+        Safe to call multiple times (already-enabled is silently ignored).
+
+        Args:
+            peer_device: Device ordinal to enable access to.
         """
 
     # ------------------------------------------------------------------
