@@ -92,7 +92,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 | E2E P2P Triton 测试 | ✅ | 7 项全通过 |
 | P2P 带宽 benchmark | ✅ | 248.7 GB/s read (83% peak) |
 | 4 种 overlap 模式重写 | ✅ | translate_ptr + tile_signal/wait + scatter_tile_to_peer |
-| P2P 带宽优化至 95%+ | ✅ | cache_modifier (.cg/.wt) + eviction_policy + sweep |
+| P2P 带宽优化至 95%+ | ⚠️ | cache modifier 效果 <0.2 GB/s，瓶颈非缓存策略 |
 | 测试债务清理 | ✅ | test_communication.py 真实 Triton kernel + MultiGPU create_all |
 | Collective E2E 验证 | ✅ | allreduce/allgather/broadcast/scatter/reduce_scatter |
 | GEMM K-loop 流水线化 | ✅ | 双缓冲 + evict_last，4 pattern 统一 |
@@ -113,6 +113,26 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] Auto-select 数据驱动阈值（M/N/K/SM/带宽感知）
 - [x] CLI `xtile bench --pattern auto` 集成
 
+### Phase 3 交付物（2026-03-19）
+- [x] 运行全部 benchmark（P2P/GEMM/collective/pattern），获取实测数据
+- [x] Collective 可扩展性（world_size 上限 9 → 33）
+- [x] Auto-select 真实硬件探测（替代硬编码 SM=132, BW=300）
+- [x] CLI 全功能整合（`xtile bench p2p|collective|pattern|gemm|all`）
+- [x] Profiling 基础设施（ProtonProfiler + OverlapTimeline + CommHeatmap）
+- [x] Benchmark runner 脚本（`run_benchmarks.sh`）
+- [ ] P2P 带宽优化至 95%+（当前 83%，需 Iris-style kernel 研究）
+- [x] GEMM kernel 优化（Iris 对齐重写，15-37% → 74-80%）
+
+### Phase 4 交付物（2026-03-19）
+- [x] GEMM kernel Iris 对齐重写（EVEN_K 分离式 K-loop + 模运算索引包裹）
+- [x] 编译器 hint（tl.max_contiguous/tl.multiple_of on offsets）
+- [x] 增量指针前进（替代每次 K 迭代重计算）
+- [x] num_stages=4 软件流水线（最大单项提升 ~50%）
+- [x] Block size 自动选择（_select_config: M/N/K → 最优 BM/BN/BK/warps/stages）
+- [x] 4 pattern GEMM 循环同步升级（EVEN_K + 分离式 loop + num_stages=4）
+- [ ] GEMM 达到 ≥ 90% cuBLAS（大矩阵 80%，直接 kernel 调用 95%，差距来自 launcher 开销）
+- [ ] Pattern overlap 重新评估（待 GEMM 进一步优化）
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -121,15 +141,22 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P1-003 | mp.spawn pickle 局部函数 | ✅ 已修复（→ create_all 单进程模式） |
 | P1-004 | CUDA backend total_mem 属性名错误 | ✅ 已修复（→ total_memory） |
 | P1-005 | Triton 不支持 continue 语句 | ✅ 已修复（→ if != 守卫） |
+| P1-006 | bench_gemm.py total_mem 属性名 | ✅ 已修复 |
+| P1-007 | Collective benchmark 死锁 | ✅ 已修复（并发 stream） |
+| P4-001 | tl.multiple_of on 2D load ptr 性能倒退 | ⚠️ 绕行（仅 offset hint） |
+| P4-002 | 小矩阵 (≤2048) GEMM 42-46% | ⚠️ kernel launch 开销限制 |
 
 ## 性能基线
-| 指标 | 当前值 | 目标值 |
-|------|--------|--------|
-| P2P read (128MB, f32) baseline | 248.7 GB/s (83%) | ≥ 95% |
-| P2P read (128MB, f32) .cg | 待测 | ≥ 95% |
-| P2P write (128MB, f32) .wt | 待测 | ≥ 95% |
-| Collective 归一化带宽 | 待测 | ≥ 90% |
-| GEMM+AllScatter vs bulk-sync | 待测 | ≥ 1.3× |
+| 指标 | 实测值 | 目标值 | 状态 |
+|------|--------|--------|------|
+| P2P read (134MB, f32) baseline | 248.64 GB/s (82.9%) | ≥ 95% | ❌ |
+| P2P read (134MB, f32) .cg | 248.85 GB/s (82.9%) | ≥ 95% | ❌ |
+| P2P write (134MB, f32) .wt | 248.02 GB/s (82.7%) | ≥ 95% | ❌ |
+| Collective 归一化带宽 | N/A (tile级原语) | ≥ 90% | ⚠️ 不适用 |
+| GEMM vs cuBLAS (4096³ fp16) | **79.6%** (直接 kernel: 94.7%) | ≥ 90% | ⚠️ 接近 |
+| GEMM vs cuBLAS (8192³ fp16) | **80.4%** (直接 kernel: 82.7%) | ≥ 90% | ⚠️ 接近 |
+| GEMM vs cuBLAS (8192³ bf16) | **79.2%** (直接 kernel: 88.9%) | ≥ 90% | ⚠️ 接近 |
+| Pattern speedup vs bulk_sync | 最高 1.000x | ≥ 1.3x | ❌ |
 
 ## 重要约束
 - **不** 包装 xSHMEM/NVSHMEM 为不透明字节码

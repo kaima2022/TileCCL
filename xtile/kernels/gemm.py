@@ -1,10 +1,15 @@
 """xtile.kernels.gemm - Optimized Triton GEMM kernel.
 
-Provides a persistent-style GEMM (C = A @ B) with:
+Provides a persistent-style GEMM (C = A @ B) aligned with the Iris
+persistent_gemm pattern:
+
+- Split K-loop: mask-free main loop + masked remainder (EVEN_K)
+- Compiler hints: tl.max_contiguous + tl.multiple_of for vector loads
+- Incremental pointer advancement (no recomputation)
+- Modular index wrapping (% M, % N) eliminates M/N boundary masks in K-loop
 - Tile-level swizzling (GROUP_SIZE_M) for L2 locality
-- K-loop software pipelining (double-buffering) for latency hiding
 - Persistent launch via NUM_SMS
-- TF32 support
+- Auto-select block sizes based on M/N/K
 
 The host-side :func:`gemm` launcher sets up the grid, allocates the output
 tensor (if needed), and invokes the kernel.
@@ -17,7 +22,26 @@ import triton.language as tl
 
 
 # ---------------------------------------------------------------------------
-# Triton JIT kernel -- optimized with software pipelining
+# Block size auto-selection
+# ---------------------------------------------------------------------------
+
+def _select_config(M: int, N: int, K: int) -> tuple[int, int, int, int, int]:
+    """Select optimal (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps, num_stages).
+
+    Heuristic based on H100 PCIe benchmarking:
+    - 128x128x64 with num_stages=4 is universally best for large matrices
+    - num_stages controls Triton's software pipelining depth (critical for
+      hiding memory latency on H100)
+    - Small M: smaller tiles to avoid wasted work
+    """
+    if M <= 512:
+        return 64, 64, 32, 4, 4
+    else:
+        return 128, 128, 64, 4, 4
+
+
+# ---------------------------------------------------------------------------
+# Triton JIT kernel
 # ---------------------------------------------------------------------------
 
 @triton.jit
@@ -43,18 +67,16 @@ def gemm_kernel(
     BLOCK_SIZE_K: tl.constexpr,
     GROUP_SIZE_M: tl.constexpr,
     NUM_SMS: tl.constexpr,
+    EVEN_K: tl.constexpr,
     ALLOW_TF32: tl.constexpr = True,
 ):
-    """Persistent tile-swizzled GEMM kernel with K-loop pipelining: C = A @ B.
+    """Persistent tile-swizzled GEMM kernel: C = A @ B.
 
-    Each program instance loops over multiple output tiles (persistent style)
-    so that the grid size equals ``NUM_SMS`` rather than the total tile count.
-
-    K-loop software pipelining: loads the next K-tile while computing the
-    current one, hiding global memory latency behind arithmetic.
-
-    Tile swizzling via ``GROUP_SIZE_M`` improves L2 locality by reordering
-    the tile-ID to program-ID mapping.
+    Optimized K-loop with Iris-style mask elimination:
+    - Modular index wrapping (% M, % N) removes M/N boundary masks from loads
+    - EVEN_K splits K-loop into mask-free main + masked remainder
+    - Compiler hints (max_contiguous, multiple_of) enable wide vector loads
+    - Incremental pointer advancement minimizes address arithmetic
 
     Args:
         A_ptr: Pointer to A of shape ``(M, K)``.
@@ -69,6 +91,7 @@ def gemm_kernel(
         BLOCK_SIZE_K: Inner-loop tile depth (constexpr).
         GROUP_SIZE_M: Number of row-tiles to group for L2 swizzle (constexpr).
         NUM_SMS: Total number of SMs; controls persistent grid size (constexpr).
+        EVEN_K: True when K % BLOCK_SIZE_K == 0 (constexpr).
         ALLOW_TF32: Enable TF32 accumulation for fp32 inputs (constexpr).
     """
     pid = tl.program_id(0)
@@ -83,46 +106,51 @@ def gemm_kernel(
         # Swizzled tile -> (tile_m, tile_n) mapping for L2 locality.
         num_tiles_in_group = GROUP_SIZE_M * num_tiles_n
         group_id = tile_id // num_tiles_in_group
-        first_tile_m_in_group = group_id * GROUP_SIZE_M
-        group_size_m_actual = tl.minimum(num_tiles_m - first_tile_m_in_group, GROUP_SIZE_M)
-        tile_m = first_tile_m_in_group + ((tile_id % num_tiles_in_group) % group_size_m_actual)
-        tile_n = (tile_id % num_tiles_in_group) // group_size_m_actual
+        first_tile_m = group_id * GROUP_SIZE_M
+        group_size_m = tl.minimum(num_tiles_m - first_tile_m, GROUP_SIZE_M)
+        tile_m = first_tile_m + ((tile_id % num_tiles_in_group) % group_size_m)
+        tile_n = (tile_id % num_tiles_in_group) // group_size_m
 
-        # Offsets for this tile
-        offs_m = tile_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
-        offs_n = tile_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+        # Index offsets with modular wrapping — all indices land in [0, M)
+        # and [0, N), eliminating M/N boundary masks from the entire K-loop.
+        rm = (tile_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)) % M
+        rn = (tile_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)) % N
+        rm = tl.max_contiguous(tl.multiple_of(rm, BLOCK_SIZE_M), BLOCK_SIZE_M)
+        rn = tl.max_contiguous(tl.multiple_of(rn, BLOCK_SIZE_N), BLOCK_SIZE_N)
+
+        rk = tl.arange(0, BLOCK_SIZE_K)
+
+        # Base pointers — advanced incrementally each K iteration
+        A_BASE = A_ptr + rm[:, None] * stride_am + rk[None, :] * stride_ak
+        B_BASE = B_ptr + rk[:, None] * stride_bk + rn[None, :] * stride_bn
 
         # Accumulator in fp32
         acc = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
 
-        # ---- K-loop with software pipelining (double-buffer) ----
-        # Prefetch the first A/B tile
-        offs_k_0 = tl.arange(0, BLOCK_SIZE_K)
-        a_ptrs_0 = A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak
-        b_ptrs_0 = B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn
-        mask_a_0 = (offs_m[:, None] < M) & (offs_k_0[None, :] < K)
-        mask_b_0 = (offs_k_0[:, None] < K) & (offs_n[None, :] < N)
-        a = tl.load(a_ptrs_0, mask=mask_a_0, other=0.0)
-        b = tl.load(b_ptrs_0, mask=mask_b_0, other=0.0)
+        # ---- Split K-loop: main iterations without any masks ----
+        loop_k = tl.cdiv(K, BLOCK_SIZE_K)
+        if not EVEN_K:
+            loop_k -= 1
 
-        num_k_iters = tl.cdiv(K, BLOCK_SIZE_K)
+        for k in range(0, loop_k):
+            a = tl.load(A_BASE)
+            b = tl.load(B_BASE)
+            acc = tl.dot(a, b, acc, allow_tf32=ALLOW_TF32)
+            A_BASE += BLOCK_SIZE_K * stride_ak
+            B_BASE += BLOCK_SIZE_K * stride_bk
 
-        for k_iter in range(0, num_k_iters):
-            # Compute on the current tile
+        # ---- Remainder: K-boundary mask only (no M/N masks) ----
+        if not EVEN_K:
+            rk_rem = loop_k * BLOCK_SIZE_K + tl.arange(0, BLOCK_SIZE_K)
+            A_REM = A_ptr + rm[:, None] * stride_am + rk_rem[None, :] * stride_ak
+            B_REM = B_ptr + rk_rem[:, None] * stride_bk + rn[None, :] * stride_bn
+            a = tl.load(A_REM, mask=rk_rem[None, :] < K, other=0.0)
+            b = tl.load(B_REM, mask=rk_rem[:, None] < K, other=0.0)
             acc = tl.dot(a, b, acc, allow_tf32=ALLOW_TF32)
 
-            # Prefetch the NEXT tile (if not last iteration)
-            next_k_start = (k_iter + 1) * BLOCK_SIZE_K
-            if next_k_start < K:
-                offs_k_next = next_k_start + tl.arange(0, BLOCK_SIZE_K)
-                a_ptrs_next = A_ptr + offs_m[:, None] * stride_am + offs_k_next[None, :] * stride_ak
-                b_ptrs_next = B_ptr + offs_k_next[:, None] * stride_bk + offs_n[None, :] * stride_bn
-                mask_a_next = (offs_m[:, None] < M) & (offs_k_next[None, :] < K)
-                mask_b_next = (offs_k_next[:, None] < K) & (offs_n[None, :] < N)
-                a = tl.load(a_ptrs_next, mask=mask_a_next, other=0.0, eviction_policy="evict_last")
-                b = tl.load(b_ptrs_next, mask=mask_b_next, other=0.0, eviction_policy="evict_last")
-
-        # Store C tile
+        # ---- Store C tile (M/N boundary mask needed only here) ----
+        offs_m = tile_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+        offs_n = tile_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
         c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
         mask_c = (offs_m[:, None] < M) & (offs_n[None, :] < N)
         tl.store(c_ptrs, acc, mask=mask_c)
@@ -137,23 +165,26 @@ def gemm(
     B,
     C=None,
     *,
-    BLOCK_SIZE_M: int = 128,
-    BLOCK_SIZE_N: int = 128,
-    BLOCK_SIZE_K: int = 32,
+    BLOCK_SIZE_M: int | None = None,
+    BLOCK_SIZE_N: int | None = None,
+    BLOCK_SIZE_K: int | None = None,
     GROUP_SIZE_M: int = 8,
     NUM_SMS: int | None = None,
     allow_tf32: bool = True,
 ):
     """Launch the persistent GEMM kernel: ``C = A @ B``.
 
+    When block sizes are not specified, an auto-tuning heuristic selects
+    optimal values based on the matrix dimensions.
+
     Args:
         A: Input tensor of shape ``(M, K)`` on GPU.
         B: Input tensor of shape ``(K, N)`` on GPU.
         C: Optional output tensor of shape ``(M, N)``.  If ``None``, a new
             tensor is allocated on the same device as *A*.
-        BLOCK_SIZE_M: Tile height (default 128).
-        BLOCK_SIZE_N: Tile width (default 128).
-        BLOCK_SIZE_K: Inner-loop depth (default 32).
+        BLOCK_SIZE_M: Tile height (default: auto-select).
+        BLOCK_SIZE_N: Tile width (default: auto-select).
+        BLOCK_SIZE_K: Inner-loop depth (default: auto-select).
         GROUP_SIZE_M: Swizzle group size (default 8).
         NUM_SMS: Persistent grid size.  Defaults to the device SM count.
         allow_tf32: Enable TF32 for fp32 accumulation (default True).
@@ -173,8 +204,17 @@ def gemm(
     else:
         assert C.shape == (M, N), f"C shape mismatch: expected ({M}, {N}), got {C.shape}"
 
+    # Auto-select block sizes and launch parameters if not specified
+    num_warps = 4
+    num_stages = 4
+    if BLOCK_SIZE_M is None or BLOCK_SIZE_N is None or BLOCK_SIZE_K is None:
+        BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps, num_stages = _select_config(M, N, K)
+
     if NUM_SMS is None:
         NUM_SMS = torch.cuda.get_device_properties(A.device).multi_processor_count
+
+    # EVEN_K: when K is divisible by BLOCK_SIZE_K, no remainder mask needed
+    EVEN_K = (K % BLOCK_SIZE_K == 0)
 
     # Adaptive GROUP_SIZE_M based on M/N ratio
     num_tiles_m = (M + BLOCK_SIZE_M - 1) // BLOCK_SIZE_M
@@ -196,7 +236,10 @@ def gemm(
         BLOCK_SIZE_K=BLOCK_SIZE_K,
         GROUP_SIZE_M=effective_group_size,
         NUM_SMS=NUM_SMS,
+        EVEN_K=EVEN_K,
         ALLOW_TF32=allow_tf32,
+        num_warps=num_warps,
+        num_stages=num_stages,
     )
 
     return C

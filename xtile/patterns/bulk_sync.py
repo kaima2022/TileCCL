@@ -92,6 +92,7 @@ class BulkSyncPattern(Pattern):
 
         # Phase 1: GEMM kernel (persistent)
         grid = (min(num_sms, total_tiles),)
+        EVEN_K = (K % self.BLOCK_K == 0)
         self._gemm_kernel[grid](
             A, B, C,
             M, N, K,
@@ -104,6 +105,9 @@ class BulkSyncPattern(Pattern):
             BLOCK_N=self.BLOCK_N,
             BLOCK_K=self.BLOCK_K,
             NUM_SMS=num_sms,
+            EVEN_K=EVEN_K,
+            num_warps=4,
+            num_stages=4,
         )
 
         # Phase 2: Device-wide barrier -- GEMM must be fully complete
@@ -154,54 +158,59 @@ class BulkSyncPattern(Pattern):
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
         NUM_SMS: tl.constexpr,
+        EVEN_K: tl.constexpr,
     ):
         """Persistent GEMM kernel: C = A @ B.
 
         Each program instance loops over tiles in a round-robin fashion
         (persistent kernel style), computing one BLOCK_M x BLOCK_N output
-        tile per iteration.
+        tile per iteration.  Uses Iris-style mask-free K-loop with
+        modular index wrapping and compiler vectorization hints.
         """
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
 
         # Persistent loop: each SM processes multiple tiles
         for tile_id in range(pid, total_tiles, NUM_SMS):
-            # Decompose linear tile_id into 2D tile coordinates
             tile_m = tile_id // num_tiles_n
             tile_n = tile_id % num_tiles_n
 
-            # Compute row/col offsets for this tile
-            offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
-            offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+            # Wrapped offsets for mask-free A/B loads
+            rm = (tile_m * BLOCK_M + tl.arange(0, BLOCK_M)) % M
+            rn = (tile_n * BLOCK_N + tl.arange(0, BLOCK_N)) % N
+            rm = tl.max_contiguous(tl.multiple_of(rm, BLOCK_M), BLOCK_M)
+            rn = tl.max_contiguous(tl.multiple_of(rn, BLOCK_N), BLOCK_N)
 
-            # Accumulator
+            rk = tl.arange(0, BLOCK_K)
+            A_BASE = A_ptr + rm[:, None] * stride_am + rk[None, :] * stride_ak
+            B_BASE = B_ptr + rk[:, None] * stride_bk + rn[None, :] * stride_bn
+
             acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-            # K-loop with software pipelining: prefetch next tile
-            offs_k_0 = tl.arange(0, BLOCK_K)
-            a_ptrs_0 = A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak
-            b_ptrs_0 = B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn
-            a = tl.load(a_ptrs_0, mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0)
-            b = tl.load(b_ptrs_0, mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0)
+            # Split K-loop: main iterations without masks
+            loop_k = tl.cdiv(K, BLOCK_K)
+            if not EVEN_K:
+                loop_k -= 1
 
-            num_k_iters = tl.cdiv(K, BLOCK_K)
-            for k_iter in range(0, num_k_iters):
+            for k in range(0, loop_k):
+                a = tl.load(A_BASE)
+                b = tl.load(B_BASE)
                 acc = tl.dot(a, b, acc, allow_tf32=True)
-                next_k = (k_iter + 1) * BLOCK_K
-                if next_k < K:
-                    offs_k_n = next_k + tl.arange(0, BLOCK_K)
-                    a = tl.load(
-                        A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
-                        mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
-                        eviction_policy="evict_last",
-                    )
-                    b = tl.load(
-                        B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
-                        mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
-                        eviction_policy="evict_last",
-                    )
+                A_BASE += BLOCK_K * stride_ak
+                B_BASE += BLOCK_K * stride_bk
 
-            # Store result tile
+            # Remainder: K-mask only
+            if not EVEN_K:
+                rk_rem = loop_k * BLOCK_K + tl.arange(0, BLOCK_K)
+                A_REM = A_ptr + rm[:, None] * stride_am + rk_rem[None, :] * stride_ak
+                B_REM = B_ptr + rk_rem[:, None] * stride_bk + rn[None, :] * stride_bn
+                a = tl.load(A_REM, mask=rk_rem[None, :] < K, other=0.0)
+                b = tl.load(B_REM, mask=rk_rem[:, None] < K, other=0.0)
+                acc = tl.dot(a, b, acc, allow_tf32=True)
+
+            # Store result tile (M/N boundary mask only here)
+            offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+            offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
             c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
             c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
             tl.store(c_ptrs, acc.to(C_ptr.dtype.element_ty), mask=c_mask)

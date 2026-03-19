@@ -48,3 +48,5 @@ Thumbs.db
 
 # Benchmark results (keep templates, ignore outputs)
 benchmarks/results/
+results/*.txt
+results/*.json

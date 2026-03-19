@@ -364,7 +364,7 @@ if __name__ == "__main__":
     print("=" * 80)
     print(f"  Device         : {props.name}")
     print(f"  SMs            : {props.multi_processor_count}")
-    print(f"  VRAM           : {props.total_mem / (1024**3):.1f} GB")
+    print(f"  VRAM           : {props.total_memory / (1024**3):.1f} GB")
     print(f"  Warmup iters   : {_WARMUP_ITERS}")
     print(f"  Timed iters    : {_TIMED_ITERS}")
     print(f"  Target ratio   : >= {_TARGET_RATIO * 100:.0f}% of torch.matmul")

@@ -18,6 +18,24 @@ if TYPE_CHECKING:
     from xtile.patterns import Pattern
 
 
+def _detect_hardware_info():
+    """Probe real hardware for SM count and link bandwidth.
+
+    Returns:
+        Tuple of (sm_count, bandwidth_gbps) detected from the current device.
+        Falls back to conservative defaults if detection fails.
+    """
+    try:
+        from xtile.utils.topology import detect_backend, detect_topology
+        backend = detect_backend()
+        topo = detect_topology(backend)
+        sm_count = topo.compute_units if topo.compute_units > 0 else 132
+        bw = topo.peak_bandwidth_gbps if topo.peak_bandwidth_gbps > 0 else 300.0
+        return sm_count, bw
+    except Exception:
+        return 132, 300.0
+
+
 def auto_select(
     op: str,
     M: int,
@@ -85,7 +103,8 @@ def auto_select(
                                  world_size=8)
         pattern = PatternCls(my_ctx)
 
-    TODO: Incorporate hw_info (SM count, bandwidth) into the decision.
+    Note: When hw_info is None, the function auto-detects SM count and
+    link bandwidth from the current device via topology detection.
     TODO: Add learned auto-tuning based on historical benchmark data.
     TODO: Support "gemm_allgather" and other fused operations.
     """
@@ -113,11 +132,12 @@ def auto_select(
     # Hardware-specific threshold adjustments
     # H100 PCIe: 132 SMs, 300 GB/s NVLink, 50 MB L2
     # MI300X: 304 CUs, ~800 GB/s Infinity Fabric, 256 MB L2
-    sm_count = 132  # default H100
-    bw_gb_s = 300.0
+    # Auto-detect from hardware if hw_info not provided
     if hw_info is not None:
-        sm_count = getattr(hw_info, "compute_units", sm_count)
-        bw_gb_s = getattr(hw_info, "link_bandwidth_gbps", bw_gb_s)
+        sm_count = getattr(hw_info, "compute_units", 132)
+        bw_gb_s = getattr(hw_info, "link_bandwidth_gbps", 300.0)
+    else:
+        sm_count, bw_gb_s = _detect_hardware_info()
 
     # Compute intensity heuristic: flops / bytes
     # GEMM flops: 2*M*N*K, scatter bytes: M*N_per_rank*element_size
@@ -125,28 +145,33 @@ def auto_select(
     scatter_bytes = M * n_per_rank * 2  # assume fp16
     compute_intensity = flops / max(scatter_bytes, 1)
 
+    # Bandwidth-aware K threshold scaling: higher bandwidth means
+    # communication is cheaper, so we can use simpler patterns at
+    # higher K values.  Scale thresholds relative to 300 GB/s baseline.
+    bw_scale = bw_gb_s / 300.0 if bw_gb_s > 0 else 1.0
+
     if M < 256:
         # Very small M: not enough rows for persistent kernel overlap.
         # Bulk-sync avoids overhead of lock/signal mechanisms.
         selected_cls = BulkSyncPattern
 
-    elif n_per_rank < 1024 and K > 12288:
+    elif n_per_rank < 1024 and K > int(12288 * bw_scale):
         # Small output shard, large K: fused sequential is sufficient.
         # Scatter per tile is tiny relative to GEMM, so simple fusion
         # achieves good overlap without dual-stream complexity.
         selected_cls = FusedSequentialPattern
 
-    elif n_per_rank < 2048 and K > 6144:
+    elif n_per_rank < 2048 and K > int(6144 * bw_scale):
         # Moderate output shard: producer-consumer decouples compute
         # and comm onto separate streams for better overlap.
         selected_cls = ProducerConsumerPattern
 
-    elif total_tiles_128 >= sm_count and K > 4096:
+    elif total_tiles_128 >= sm_count and K > int(4096 * bw_scale):
         # Large problem: enough tiles to saturate both compute and comm
         # SM pools within a single kernel launch.
         selected_cls = WGSpecializedPattern
 
-    elif N > 4096 and K > 8192:
+    elif N > 4096 and K > int(8192 * bw_scale):
         # Fallback for large-N cases not caught above
         selected_cls = WGSpecializedPattern
 

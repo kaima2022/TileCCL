@@ -5,6 +5,10 @@ Measures the bandwidth of allreduce, allgather, and broadcast operations
 at various buffer sizes, and reports normalized bandwidth relative to
 the theoretical NVLink peak.
 
+Note: Ring-based collectives (allreduce, reduce_scatter) are cooperative
+and require concurrent execution across GPUs.  This benchmark uses
+per-device CUDA streams to launch kernels concurrently.
+
 Usage:
     python3 tests/benchmarks/bench_collectives.py
 
@@ -81,6 +85,33 @@ class CollBenchResult:
     normalized_bw: float  # fraction of peak
 
 
+def _launch_on_streams(
+    heaps, world_size, collective, tensors, block_size,
+    streams, src_tensors=None, dst_tensors=None,
+):
+    """Launch collective kernels concurrently on per-device streams."""
+    for rank in range(world_size):
+        torch.cuda.set_device(rank)
+        bases = heaps[rank].get_heap_bases()
+        with torch.cuda.stream(streams[rank]):
+            if collective == "allreduce":
+                _allreduce_kernel[(1,)](
+                    tensors[rank], bases, rank, world_size,
+                    BLOCK_SIZE=block_size,
+                )
+            elif collective == "allgather":
+                _allgather_kernel[(1,)](
+                    src_tensors[rank], dst_tensors[rank], bases,
+                    rank, world_size,
+                    BLOCK_SIZE=block_size,
+                )
+            elif collective == "broadcast":
+                _broadcast_kernel[(1,)](
+                    tensors[rank], bases, rank, world_size, 0,
+                    BLOCK_SIZE=block_size,
+                )
+
+
 def benchmark_collective(
     collective: str,
     heaps: list[SymmetricHeap],
@@ -90,12 +121,20 @@ def benchmark_collective(
     iters: int = 100,
     theoretical_peak: float = 300.0,
 ) -> CollBenchResult:
-    """Benchmark a collective operation."""
+    """Benchmark a collective operation with concurrent multi-GPU execution."""
     world_size = len(heaps)
     el_size = torch.tensor([], dtype=dtype).element_size()
 
+    # Create per-device streams for concurrent kernel launches
+    streams = []
+    for rank in range(world_size):
+        torch.cuda.set_device(rank)
+        streams.append(torch.cuda.Stream(device=rank))
+
+    src_tensors = None
+    dst_tensors = None
+
     if collective == "allreduce":
-        # Allreduce: in-place on buffer of size world_size * block_size
         total_elements = block_size * world_size
         size_bytes = total_elements * el_size
 
@@ -106,21 +145,10 @@ def benchmark_collective(
             t.fill_(float(rank + 1))
             tensors.append(t)
 
-        for rank in range(world_size):
-            torch.cuda.synchronize(rank)
-
-        def run():
-            for rank in range(world_size):
-                torch.cuda.set_device(rank)
-                bases = heaps[rank].get_heap_bases()
-                _allreduce_kernel[(1,)](
-                    tensors[rank], bases, rank, world_size,
-                    BLOCK_SIZE=block_size,
-                )
-
     elif collective == "allgather":
         size_bytes = block_size * el_size
 
+        tensors = None
         src_tensors = []
         dst_tensors = []
         for rank in range(world_size):
@@ -132,19 +160,6 @@ def benchmark_collective(
             src_tensors.append(src)
             dst_tensors.append(dst)
 
-        for rank in range(world_size):
-            torch.cuda.synchronize(rank)
-
-        def run():
-            for rank in range(world_size):
-                torch.cuda.set_device(rank)
-                bases = heaps[rank].get_heap_bases()
-                _allgather_kernel[(1,)](
-                    src_tensors[rank], dst_tensors[rank], bases,
-                    rank, world_size,
-                    BLOCK_SIZE=block_size,
-                )
-
     elif collective == "broadcast":
         size_bytes = block_size * el_size
 
@@ -155,38 +170,38 @@ def benchmark_collective(
             t.fill_(float(rank + 1))
             tensors.append(t)
 
-        for rank in range(world_size):
-            torch.cuda.synchronize(rank)
-
-        def run():
-            for rank in range(world_size):
-                torch.cuda.set_device(rank)
-                bases = heaps[rank].get_heap_bases()
-                _broadcast_kernel[(1,)](
-                    tensors[rank], bases, rank, world_size, 0,
-                    BLOCK_SIZE=block_size,
-                )
-
     else:
         raise ValueError(f"Unknown collective: {collective}")
 
-    # Warmup
-    for _ in range(warmup):
-        run()
     for rank in range(world_size):
         torch.cuda.synchronize(rank)
 
-    # Timed iterations
+    # Warmup with concurrent launches
+    for _ in range(warmup):
+        _launch_on_streams(
+            heaps, world_size, collective, tensors, block_size,
+            streams, src_tensors, dst_tensors,
+        )
+    for rank in range(world_size):
+        torch.cuda.synchronize(rank)
+
+    # Timed iterations using device 0 events
+    torch.cuda.set_device(0)
     start_events = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
     end_events = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
 
-    torch.cuda.set_device(0)
     for i in range(iters):
-        start_events[i].record()
-        run()
-        end_events[i].record()
+        start_events[i].record(streams[0])
+        _launch_on_streams(
+            heaps, world_size, collective, tensors, block_size,
+            streams, src_tensors, dst_tensors,
+        )
+        # Record end event on device 0's stream after all launches
+        end_events[i].record(streams[0])
 
     torch.cuda.synchronize(0)
+    for rank in range(1, world_size):
+        torch.cuda.synchronize(rank)
 
     times_ms = [s.elapsed_time(e) for s, e in zip(start_events, end_events)]
     min_ms = min(times_ms)
@@ -227,34 +242,41 @@ def main():
     heap_size = 256 * 1024 * 1024  # 256 MB
     world_size = 2
 
-    collectives = ["allreduce", "allgather", "broadcast"]
+    collectives = ["allgather", "broadcast", "allreduce"]
 
-    # Block sizes chosen to be within Triton's constexpr limits
-    # and powers of 2.  These represent the per-chunk size.
-    block_sizes_kb = [4, 16, 64, 256, 1024]
+    # Block sizes: per-chunk element count (float32).
+    # Keep moderate to avoid Triton register pressure.
+    block_sizes_kb = [4, 16, 64, 256]
 
-    for collective in collectives:
-        print(f"--- {collective} ---")
-        for size_kb in block_sizes_kb:
-            heaps = SymmetricHeap.create_all(size=heap_size, world_size=world_size)
-            try:
-                block_size = size_kb * 1024 // 4  # float32 elements
-                r = benchmark_collective(
-                    collective, heaps, block_size,
-                    warmup=5, iters=50,
-                    theoretical_peak=theoretical_peak,
-                )
-                print(
-                    f"  {r.size_bytes/1e6:7.1f} MB | "
-                    f"{r.bandwidth_gbps:7.2f} GB/s | "
-                    f"{r.normalized_bw*100:5.1f}% peak | "
-                    f"{r.time_us:8.1f} us"
-                )
-            except Exception as e:
-                print(f"  {size_kb:5d} KB | ERROR: {e}")
-            finally:
+    heaps = SymmetricHeap.create_all(size=heap_size, world_size=world_size)
+    try:
+        for collective in collectives:
+            print(f"--- {collective} ---")
+            for size_kb in block_sizes_kb:
+                # Reset bump allocator for each test
                 for h in heaps:
-                    h.cleanup()
+                    h._bump_offset = 0
+                    h._alloc_records.clear()
+                try:
+                    block_size = size_kb * 1024 // 4  # float32 elements
+                    r = benchmark_collective(
+                        collective, heaps, block_size,
+                        warmup=5, iters=50,
+                        theoretical_peak=theoretical_peak,
+                    )
+                    print(
+                        f"  {r.size_bytes/1e6:7.1f} MB | "
+                        f"{r.bandwidth_gbps:7.2f} GB/s | "
+                        f"{r.normalized_bw*100:5.1f}% peak | "
+                        f"{r.time_us:8.1f} us"
+                    )
+                except Exception as e:
+                    import traceback
+                    print(f"  {size_kb:5d} KB | ERROR: {e}")
+                    traceback.print_exc()
+    finally:
+        for h in heaps:
+            h.cleanup()
 
     print()
     print("Done.")

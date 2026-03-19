@@ -101,6 +101,7 @@ class FusedSequentialPattern(Pattern):
         N_per_rank = N // world_size
 
         grid = (min(num_sms, total_tiles),)
+        EVEN_K = (K % self.BLOCK_K == 0)
         self._fused_kernel[grid](
             A, B, C,
             heap_bases,
@@ -116,6 +117,9 @@ class FusedSequentialPattern(Pattern):
             BLOCK_N=self.BLOCK_N,
             BLOCK_K=self.BLOCK_K,
             NUM_SMS=num_sms,
+            EVEN_K=EVEN_K,
+            num_warps=4,
+            num_stages=4,
         )
 
     # ------------------------------------------------------------------
@@ -143,6 +147,7 @@ class FusedSequentialPattern(Pattern):
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
         NUM_SMS: tl.constexpr,
+        EVEN_K: tl.constexpr,
     ):
         """Fused GEMM + scatter kernel (Iris Listing 4 style).
 
@@ -152,9 +157,8 @@ class FusedSequentialPattern(Pattern):
             2. Store to local C
             3. Scatter the tile to every peer via translate_ptr
 
-        Hardware overlap occurs because the remote stores from tile[i] can
-        overlap with the GEMM arithmetic of tile[i+1] at the memory
-        subsystem level.
+        Uses Iris-style mask-free K-loop with modular index wrapping
+        and compiler vectorization hints.
         """
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
@@ -164,39 +168,41 @@ class FusedSequentialPattern(Pattern):
             tile_m = tile_id // num_tiles_n
             tile_n = tile_id % num_tiles_n
 
+            # Original offsets for C store and scatter
             offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
             offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-            # ---- Phase 1: GEMM accumulation (pipelined K-loop) ----
+            # Wrapped offsets for mask-free A/B loads
+            rm = offs_m % M
+            rn = offs_n % N
+            rm = tl.max_contiguous(tl.multiple_of(rm, BLOCK_M), BLOCK_M)
+            rn = tl.max_contiguous(tl.multiple_of(rn, BLOCK_N), BLOCK_N)
+
+            # ---- Phase 1: GEMM accumulation (optimized K-loop) ----
+            rk = tl.arange(0, BLOCK_K)
+            A_BASE = A_ptr + rm[:, None] * stride_am + rk[None, :] * stride_ak
+            B_BASE = B_ptr + rk[:, None] * stride_bk + rn[None, :] * stride_bn
+
             acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-            # Prefetch first K-tile
-            offs_k_0 = tl.arange(0, BLOCK_K)
-            a = tl.load(
-                A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak,
-                mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0,
-            )
-            b = tl.load(
-                B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn,
-                mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0,
-            )
+            loop_k = tl.cdiv(K, BLOCK_K)
+            if not EVEN_K:
+                loop_k -= 1
 
-            num_k_iters = tl.cdiv(K, BLOCK_K)
-            for k_iter in range(0, num_k_iters):
+            for k in range(0, loop_k):
+                a = tl.load(A_BASE)
+                b = tl.load(B_BASE)
                 acc = tl.dot(a, b, acc, allow_tf32=True)
-                next_k = (k_iter + 1) * BLOCK_K
-                if next_k < K:
-                    offs_k_n = next_k + tl.arange(0, BLOCK_K)
-                    a = tl.load(
-                        A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
-                        mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
-                        eviction_policy="evict_last",
-                    )
-                    b = tl.load(
-                        B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
-                        mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
-                        eviction_policy="evict_last",
-                    )
+                A_BASE += BLOCK_K * stride_ak
+                B_BASE += BLOCK_K * stride_bk
+
+            if not EVEN_K:
+                rk_rem = loop_k * BLOCK_K + tl.arange(0, BLOCK_K)
+                A_REM = A_ptr + rm[:, None] * stride_am + rk_rem[None, :] * stride_ak
+                B_REM = B_ptr + rk_rem[:, None] * stride_bk + rn[None, :] * stride_bn
+                a = tl.load(A_REM, mask=rk_rem[None, :] < K, other=0.0)
+                b = tl.load(B_REM, mask=rk_rem[:, None] < K, other=0.0)
+                acc = tl.dot(a, b, acc, allow_tf32=True)
 
             # Cast accumulator to output dtype
             result = acc.to(C_ptr.dtype.element_ty)
@@ -207,9 +213,6 @@ class FusedSequentialPattern(Pattern):
             tl.store(c_ptrs, result, mask=c_mask)
 
             # ---- Phase 3: Scatter to all peers via translate_ptr ----
-            # Immediately after computing the tile, push it to every peer.
-            # The hardware memory subsystem can overlap these remote writes
-            # with the next tile's GEMM computation.
             for peer in range(world_size):
                 if peer != rank:
                     dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)

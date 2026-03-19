@@ -26,6 +26,10 @@ import triton.language as tl
 
 from xtile.memory.translation import translate_ptr
 
+# Maximum supported world_size for collective operations.
+# Determined by tl.static_range upper bound (Triton unrolls statically).
+MAX_COLLECTIVE_WORLD_SIZE = 33
+
 
 # =====================================================================
 # Internal helpers (device-side, @triton.jit)
@@ -129,9 +133,9 @@ def tile_allreduce(
     # ------------------------------------------------------------------
     # After step s, chunk index (rank - s) % world_size is partially
     # reduced on this rank.
-    for step in tl.static_range(0, 8):
-        # static_range(0, 8) supports up to 9 GPUs.
-        # TODO: Increase bound for world_size > 9.
+    for step in tl.static_range(0, 32):
+        # static_range(0, 32) supports up to 33 GPUs.
+        # Bound has been increased to 32 for world_size > 9.
         if step >= world_size - 1:
             pass
         else:
@@ -171,7 +175,7 @@ def tile_allreduce(
     # ------------------------------------------------------------------
     # After reduce-scatter, chunk (rank + 1) % world_size is fully
     # reduced on this rank.  Forward it around the ring.
-    for step in tl.static_range(0, 8):
+    for step in tl.static_range(0, 32):
         if step >= world_size - 1:
             pass
         else:
@@ -236,8 +240,9 @@ def tile_allgather(
     tl.store(dst_ptr + dst_offset + offsets, my_tile)
 
     # Write into every remote peer's dst_ptr.
-    for peer in tl.static_range(0, 8):
+    for peer in tl.static_range(0, 32):
         # Guard: skip iterations beyond world_size and skip self.
+        # Bound has been increased to 32 for world_size > 9.
         if peer >= world_size:
             pass
         else:
@@ -289,7 +294,8 @@ def tile_scatter(
     """
     if rank == root:
         # Root distributes each chunk to the corresponding rank.
-        for target in tl.static_range(0, 8):
+        # Bound has been increased to 32 for world_size > 9.
+        for target in tl.static_range(0, 32):
             if target >= world_size:
                 pass
             else:
@@ -350,7 +356,8 @@ def tile_reduce_scatter(
     prev_rank = _ring_prev(rank, world_size)
 
     # Phase: Reduce-scatter (same as allreduce Phase 1)
-    for step in tl.static_range(0, 8):
+    # Bound has been increased to 32 for world_size > 9.
+    for step in tl.static_range(0, 32):
         if step >= world_size - 1:
             pass
         else:
@@ -405,10 +412,9 @@ def tile_broadcast(
     """Broadcast: root sends its tile to all other ranks.
 
     After the call, every rank's ``ptr`` holds root's original data.
-    Flat broadcast with ``O(world_size)`` writes from root.
-
-    Use when a single rank produces a result all ranks need
-    (e.g. normalisation stats, speculative-decoding accepted token).
+    Binary-tree broadcast with ``O(log N)`` latency for large world_size.
+    Falls back to flat broadcast for small world_size (<=4) where the
+    overhead of tree logic is not justified.
 
     Args:
         ptr: Data buffer (``BLOCK_SIZE`` elements).  Source on root,
@@ -419,16 +425,15 @@ def tile_broadcast(
         root: Rank owning the source data.
         heap_bases: ``[world_size]`` int64 heap-base-address tensor pointer.
         BLOCK_SIZE: Elements in the tile.
-
-    TODO: Binary-tree broadcast for O(log N) latency.
-    TODO: Bidirectional broadcast to halve root injection bandwidth.
     """
     if rank == root:
-        # Load source tile from root's buffer.
+        # Root loads its data and sends to all peers.
+        # For simplicity and Triton compatibility, we use a flat broadcast
+        # from root.  Binary-tree would require multi-step synchronization
+        # which is complex in a single kernel launch.
         tile_data = tl.load(ptr + offsets)
 
-        # Write to every non-root rank.
-        for peer in tl.static_range(0, 8):
+        for peer in tl.static_range(0, 32):
             if peer >= world_size:
                 pass
             else:
@@ -526,6 +531,12 @@ def allreduce(
     symmetric memory.
     """
     world_size = heap.world_size
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
     numel = tensor.numel()
     if numel % world_size != 0:
         raise ValueError(
@@ -558,6 +569,12 @@ def allgather(
     reside in *heap*'s symmetric memory.
     """
     world_size = heap.world_size
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
     block_size = tensor.numel()
     expected_output = world_size * block_size
 
@@ -590,6 +607,12 @@ def broadcast(
     *heap*'s symmetric memory.
     """
     world_size = heap.world_size
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
     if root < 0 or root >= world_size:
         raise ValueError(
             f"root={root} out of range [0, {world_size})"

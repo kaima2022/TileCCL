@@ -134,6 +134,7 @@ class ProducerConsumerPattern(Pattern):
         # Launch producer on compute stream
         producer_grid = (min(compute_sms, total_tiles),)
         with torch.cuda.stream(compute_stream):
+            EVEN_K = (K % self.BLOCK_K == 0)
             self._producer_kernel[producer_grid](
                 A, B, C,
                 locks,
@@ -147,6 +148,9 @@ class ProducerConsumerPattern(Pattern):
                 BLOCK_N=self.BLOCK_N,
                 BLOCK_K=self.BLOCK_K,
                 NUM_SMS=compute_sms,
+                EVEN_K=EVEN_K,
+                num_warps=4,
+                num_stages=4,
             )
 
         # Launch consumer on comm stream
@@ -195,12 +199,13 @@ class ProducerConsumerPattern(Pattern):
         BLOCK_N: tl.constexpr,
         BLOCK_K: tl.constexpr,
         NUM_SMS: tl.constexpr,
+        EVEN_K: tl.constexpr,
     ):
         """Producer: persistent GEMM with tile-level signalling.
 
-        After computing each output tile, signals the corresponding lock
-        via :func:`~xtile.sync.primitives.tile_signal` (release semantics)
-        so the consumer knows the tile is ready.
+        Uses Iris-style mask-free K-loop. After computing each output
+        tile, signals the corresponding lock via tile_signal (release
+        semantics) so the consumer knows the tile is ready.
         """
         pid = tl.program_id(0)
         total_tiles = num_tiles_m * num_tiles_n
@@ -212,35 +217,37 @@ class ProducerConsumerPattern(Pattern):
             offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
             offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-            # ---- GEMM accumulation (pipelined K-loop) ----
+            # Wrapped offsets for mask-free A/B loads
+            rm = offs_m % M
+            rn = offs_n % N
+            rm = tl.max_contiguous(tl.multiple_of(rm, BLOCK_M), BLOCK_M)
+            rn = tl.max_contiguous(tl.multiple_of(rn, BLOCK_N), BLOCK_N)
+
+            # ---- GEMM accumulation (optimized K-loop) ----
+            rk = tl.arange(0, BLOCK_K)
+            A_BASE = A_ptr + rm[:, None] * stride_am + rk[None, :] * stride_ak
+            B_BASE = B_ptr + rk[:, None] * stride_bk + rn[None, :] * stride_bn
+
             acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
 
-            offs_k_0 = tl.arange(0, BLOCK_K)
-            a = tl.load(
-                A_ptr + offs_m[:, None] * stride_am + offs_k_0[None, :] * stride_ak,
-                mask=(offs_m[:, None] < M) & (offs_k_0[None, :] < K), other=0.0,
-            )
-            b = tl.load(
-                B_ptr + offs_k_0[:, None] * stride_bk + offs_n[None, :] * stride_bn,
-                mask=(offs_k_0[:, None] < K) & (offs_n[None, :] < N), other=0.0,
-            )
+            loop_k = tl.cdiv(K, BLOCK_K)
+            if not EVEN_K:
+                loop_k -= 1
 
-            num_k_iters = tl.cdiv(K, BLOCK_K)
-            for k_iter in range(0, num_k_iters):
+            for k in range(0, loop_k):
+                a = tl.load(A_BASE)
+                b = tl.load(B_BASE)
                 acc = tl.dot(a, b, acc, allow_tf32=True)
-                next_k = (k_iter + 1) * BLOCK_K
-                if next_k < K:
-                    offs_k_n = next_k + tl.arange(0, BLOCK_K)
-                    a = tl.load(
-                        A_ptr + offs_m[:, None] * stride_am + offs_k_n[None, :] * stride_ak,
-                        mask=(offs_m[:, None] < M) & (offs_k_n[None, :] < K), other=0.0,
-                        eviction_policy="evict_last",
-                    )
-                    b = tl.load(
-                        B_ptr + offs_k_n[:, None] * stride_bk + offs_n[None, :] * stride_bn,
-                        mask=(offs_k_n[:, None] < K) & (offs_n[None, :] < N), other=0.0,
-                        eviction_policy="evict_last",
-                    )
+                A_BASE += BLOCK_K * stride_ak
+                B_BASE += BLOCK_K * stride_bk
+
+            if not EVEN_K:
+                rk_rem = loop_k * BLOCK_K + tl.arange(0, BLOCK_K)
+                A_REM = A_ptr + rm[:, None] * stride_am + rk_rem[None, :] * stride_ak
+                B_REM = B_ptr + rk_rem[:, None] * stride_bk + rn[None, :] * stride_bn
+                a = tl.load(A_REM, mask=rk_rem[None, :] < K, other=0.0)
+                b = tl.load(B_REM, mask=rk_rem[:, None] < K, other=0.0)
+                acc = tl.dot(a, b, acc, allow_tf32=True)
 
             # ---- Store result tile ----
             result = acc.to(C_ptr.dtype.element_ty)
@@ -249,8 +256,6 @@ class ProducerConsumerPattern(Pattern):
             tl.store(c_ptrs, result, mask=c_mask)
 
             # ---- Signal tile completion ----
-            # Release semantics ensure the consumer sees the tile data
-            # after it acquires this lock.
             tile_signal(locks_ptr, tile_id)
 
     @staticmethod

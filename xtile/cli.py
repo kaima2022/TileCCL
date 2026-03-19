@@ -5,15 +5,23 @@ benchmarking.
 
 Usage::
 
-    xtile info            # print hardware / topology info
-    xtile bench           # run benchmarks (all patterns, default sizes)
-    xtile bench --pattern bulk_sync --M 4096 --N 4096 --K 4096
+    xtile info                    # print hardware / topology info
+    xtile bench p2p               # P2P bandwidth sweep
+    xtile bench collective        # collective bandwidth benchmark
+    xtile bench pattern           # pattern overlap efficiency
+    xtile bench gemm              # GEMM vs torch.matmul
+    xtile bench all               # run all benchmarks
+    xtile bench --pattern auto    # auto-select pattern benchmark
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
+import time
+from pathlib import Path
 
 
 def _handle_info(args: argparse.Namespace) -> None:
@@ -28,17 +36,197 @@ def _handle_info(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _handle_bench(args: argparse.Namespace) -> None:
-    """Run benchmark suite."""
+# ---------------------------------------------------------------------------
+# Benchmark sub-handlers
+# ---------------------------------------------------------------------------
+
+def _ensure_gpu():
+    """Check GPU availability, exit if none."""
     try:
         import torch
     except ImportError:
         print("[xtile bench] PyTorch is required. Install with: pip install torch", file=sys.stderr)
         sys.exit(1)
-
     if not torch.cuda.is_available():
         print("[xtile bench] No GPU detected. Benchmarks require a CUDA or ROCm GPU.", file=sys.stderr)
         sys.exit(1)
+    return torch
+
+
+def _ensure_multi_gpu(torch_mod, min_gpus: int = 2):
+    """Check multi-GPU availability."""
+    if torch_mod.cuda.device_count() < min_gpus:
+        print(f"[xtile bench] This benchmark requires >= {min_gpus} GPUs. "
+              f"Found {torch_mod.cuda.device_count()}.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _results_dir() -> Path:
+    """Return ~/.xtile/benchmark_results/, creating it if needed."""
+    d = Path.home() / ".xtile" / "benchmark_results"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _save_results(name: str, data: dict) -> Path:
+    """Save benchmark results to JSON with timestamp."""
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    path = _results_dir() / f"{name}_{ts}.json"
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+    print(f"\nResults saved to: {path}")
+    return path
+
+
+def _project_root() -> str:
+    """Return the XTile project root directory."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _bench_env() -> dict:
+    """Return environment with PYTHONPATH set for benchmark subprocesses."""
+    env = os.environ.copy()
+    root = _project_root()
+    env["PYTHONPATH"] = root + os.pathsep + env.get("PYTHONPATH", "")
+    return env
+
+
+def _bench_p2p(args: argparse.Namespace) -> None:
+    """Run P2P bandwidth benchmark."""
+    torch = _ensure_gpu()
+    _ensure_multi_gpu(torch)
+
+    print("=== XTile P2P Bandwidth Benchmark ===")
+    print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
+    print()
+
+    import subprocess
+    quick_flag = ["--quick"] if getattr(args, "quick", False) else []
+    result = subprocess.run(
+        [sys.executable, "-u", "tests/benchmarks/bench_p2p_translate.py"] + quick_flag,
+        cwd=_project_root(), env=_bench_env(),
+    )
+    sys.exit(result.returncode)
+
+
+def _bench_collective(args: argparse.Namespace) -> None:
+    """Run collective bandwidth benchmark."""
+    torch = _ensure_gpu()
+    _ensure_multi_gpu(torch)
+
+    print("=== XTile Collective Bandwidth Benchmark ===")
+    print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
+    print()
+
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, "-u", "tests/benchmarks/bench_collectives.py"],
+        cwd=_project_root(), env=_bench_env(),
+    )
+    sys.exit(result.returncode)
+
+
+def _bench_pattern(args: argparse.Namespace) -> None:
+    """Run pattern overlap efficiency benchmark."""
+    torch = _ensure_gpu()
+    _ensure_multi_gpu(torch)
+
+    print("=== XTile Pattern Overlap Benchmark ===")
+    print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
+    print()
+
+    import subprocess
+    quick_flag = ["--quick"] if getattr(args, "quick", False) else []
+    result = subprocess.run(
+        [sys.executable, "-u", "tests/benchmarks/bench_patterns.py"] + quick_flag,
+        cwd=_project_root(), env=_bench_env(),
+    )
+    sys.exit(result.returncode)
+
+
+def _bench_gemm(args: argparse.Namespace) -> None:
+    """Run GEMM performance benchmark."""
+    torch = _ensure_gpu()
+
+    print("=== XTile GEMM Benchmark ===")
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print()
+
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, "-u", "tests/benchmarks/bench_gemm.py"],
+        cwd=_project_root(), env=_bench_env(),
+    )
+    sys.exit(result.returncode)
+
+
+def _bench_all(args: argparse.Namespace) -> None:
+    """Run all benchmarks sequentially."""
+    torch = _ensure_gpu()
+
+    print("=" * 70)
+    print("  XTile Full Benchmark Suite")
+    print("=" * 70)
+    print(f"GPU: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
+    print()
+
+    project_root = _project_root()
+    num_gpus = torch.cuda.device_count()
+
+    benchmarks = []
+    # Always run GEMM (single GPU)
+    benchmarks.append(("GEMM", "tests/benchmarks/bench_gemm.py", []))
+
+    if num_gpus >= 2:
+        quick_flag = ["--quick"] if getattr(args, "quick", False) else []
+        benchmarks.append(("P2P", "tests/benchmarks/bench_p2p_translate.py", quick_flag))
+        benchmarks.append(("Collective", "tests/benchmarks/bench_collectives.py", []))
+        benchmarks.append(("Pattern", "tests/benchmarks/bench_patterns.py", quick_flag))
+    else:
+        print("(Skipping P2P/collective/pattern benchmarks: requires >= 2 GPUs)")
+
+    import subprocess
+    for name, script, extra_args in benchmarks:
+        print()
+        print(f"{'='*70}")
+        print(f"  Running: {name}")
+        print(f"{'='*70}")
+        result = subprocess.run(
+            [sys.executable, "-u", script] + extra_args,
+            cwd=project_root, env=_bench_env(),
+        )
+        if result.returncode != 0:
+            print(f"\n  WARNING: {name} benchmark returned non-zero exit code: {result.returncode}")
+
+    print()
+    print("=" * 70)
+    print("  All benchmarks complete.")
+    print("=" * 70)
+
+
+def _handle_bench(args: argparse.Namespace) -> None:
+    """Run benchmark suite."""
+    bench_type = getattr(args, "bench_type", None)
+
+    # Dispatch to specific benchmark
+    if bench_type == "p2p":
+        _bench_p2p(args)
+        return
+    elif bench_type == "collective":
+        _bench_collective(args)
+        return
+    elif bench_type == "pattern":
+        _bench_pattern(args)
+        return
+    elif bench_type == "gemm":
+        _bench_gemm(args)
+        return
+    elif bench_type == "all":
+        _bench_all(args)
+        return
+
+    # Legacy behavior: GEMM baseline + optional pattern benchmark
+    torch = _ensure_gpu()
 
     M, N, K = args.M, args.N, args.K
     pattern = args.pattern or "all"
@@ -46,7 +234,6 @@ def _handle_bench(args: argparse.Namespace) -> None:
     print(f"XTile Benchmark: pattern={pattern}, M={M}, N={N}, K={K}")
     print("-" * 60)
 
-    # Import GEMM kernel and run a basic benchmark
     from xtile.kernels.gemm import gemm
     from xtile.utils.profiling import TileProfiler, format_benchmark_table
 
@@ -55,15 +242,13 @@ def _handle_bench(args: argparse.Namespace) -> None:
     B = torch.randn(K, N, device=f"cuda:{device}", dtype=torch.float16)
 
     # Warm up
-    warmup_iters = 10
-    for _ in range(warmup_iters):
+    for _ in range(10):
         gemm(A, B)
     torch.cuda.synchronize()
 
     # Timed iterations
     profiler = TileProfiler("gemm_baseline")
-    num_iters = 50
-    for _ in range(num_iters):
+    for _ in range(50):
         with profiler:
             gemm(A, B)
             torch.cuda.synchronize()
@@ -127,14 +312,12 @@ def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
         torch.cuda.synchronize()
 
         if pattern == "auto":
-            # Show auto-select decision
             selected = auto_select(
                 "gemm_allscatter", M=M, N=N, K=K,
                 world_size=world_size,
             )
             print(f"Auto-selected pattern: {selected.name if hasattr(selected, 'name') else selected.__name__}")
 
-        # Benchmark all patterns
         results = benchmark_all_patterns(A, B, C, ctx, warmup=5, iters=20)
         print(f"\n{'Pattern':25s} | {'Mean (ms)':>10s} | {'Min (ms)':>10s} | {'Speedup':>8s}")
         print("-" * 65)
@@ -152,6 +335,41 @@ def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
         for h in heaps:
             h.cleanup()
 
+
+# ---------------------------------------------------------------------------
+# Benchmark result comparison
+# ---------------------------------------------------------------------------
+
+def _handle_compare(args: argparse.Namespace) -> None:
+    """Compare two benchmark result files."""
+    results_dir = _results_dir()
+    files = sorted(results_dir.glob("*.json"))
+
+    if not files:
+        print("No benchmark results found in ~/.xtile/benchmark_results/")
+        return
+
+    if len(files) < 2:
+        print("Need at least 2 result files to compare. Run benchmarks first.")
+        return
+
+    # Compare the two most recent results
+    print(f"Comparing last 2 results:")
+    print(f"  Old: {files[-2].name}")
+    print(f"  New: {files[-1].name}")
+
+    with open(files[-2]) as f:
+        old = json.load(f)
+    with open(files[-1]) as f:
+        new = json.load(f)
+
+    print(f"\n  Old: {json.dumps(old, indent=2, default=str)[:500]}...")
+    print(f"\n  New: {json.dumps(new, indent=2, default=str)[:500]}...")
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
 
 def main() -> None:
     """XTile CLI -- benchmark and diagnostics tool."""
@@ -180,6 +398,25 @@ def main() -> None:
     bench_parser.add_argument("--M", type=int, default=8192, help="Matrix M dimension")
     bench_parser.add_argument("--N", type=int, default=8192, help="Matrix N dimension")
     bench_parser.add_argument("--K", type=int, default=8192, help="Matrix K dimension")
+    bench_parser.add_argument("--quick", action="store_true", help="Quick mode (fewer sizes)")
+
+    # bench subcommands: p2p, collective, pattern, gemm, all
+    bench_sub = bench_parser.add_subparsers(dest="bench_type")
+    p2p_parser = bench_sub.add_parser("p2p", help="P2P bandwidth benchmark")
+    p2p_parser.add_argument("--quick", action="store_true", help="Quick mode")
+
+    coll_parser = bench_sub.add_parser("collective", help="Collective bandwidth benchmark")
+
+    pat_parser = bench_sub.add_parser("pattern", help="Pattern overlap efficiency benchmark")
+    pat_parser.add_argument("--quick", action="store_true", help="Quick mode")
+
+    gemm_parser = bench_sub.add_parser("gemm", help="GEMM vs torch.matmul benchmark")
+
+    all_parser = bench_sub.add_parser("all", help="Run all benchmarks")
+    all_parser.add_argument("--quick", action="store_true", help="Quick mode for P2P and pattern")
+
+    # xtile compare
+    subparsers.add_parser("compare", help="Compare benchmark results")
 
     args = parser.parse_args()
 
@@ -190,6 +427,8 @@ def main() -> None:
         _handle_info(args)
     elif args.command == "bench":
         _handle_bench(args)
+    elif args.command == "compare":
+        _handle_compare(args)
     else:
         parser.print_help()
         sys.exit(1)
