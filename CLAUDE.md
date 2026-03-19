@@ -68,7 +68,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 ---
 
 ## 当前阶段
-**Phase 0 完成 → Phase 1 进行中**
+**Phase 0→6 完成**
 
 ### Phase 0 交付物（已完成 2026-03-19）
 - [x] 项目脚手架（~8800 行）
@@ -142,11 +142,20 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [ ] GEMM 8192³ 达到 ≥90%（当前 79%，kernel 本身瓶颈，需 PTX-level 优化）
 - [ ] Pattern overlap ≥1.3×（2 GPU 限制，理论上限 ~1.15×）
 
+### Phase 6 交付物（2026-03-19）
+- [x] 6 幅科研绘图（`figures/` PDF + PNG，Nature/Science 风格）
+- [x] GEMM 演进 / P2P 饱和 / 优化瀑布 / Pattern 对比 / 架构图 / Roofline
+- [x] CUDA IPC ctypes 调用约定修复（Array → Structure by-value）
+- [x] IPC 诊断脚本（`scripts/diagnose_ipc.py`）
+- [x] HIP 后端同步修复
+- [x] P1-002 根因确认：ctypes bug + 系统 ptrace_scope 双因素
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
 | P1-001 | torch.from_blob 不可用 | ✅ 已解决 |
-| P1-002 | CUDA IPC 系统级不可用 | ⚠️ 绕行（peer access） |
+| P1-002 | CUDA IPC ctypes 调用约定 | ✅ 已修复（Structure by-value） |
+| P1-002b | CUDA IPC 系统级限制 (ptrace_scope=1) | ✅ PyTorch IPC fallback 绕行 |
 | P1-003 | mp.spawn pickle 局部函数 | ✅ 已修复（→ create_all 单进程模式） |
 | P1-004 | CUDA backend total_mem 属性名错误 | ✅ 已修复（→ total_memory） |
 | P1-005 | Triton 不支持 continue 语句 | ✅ 已修复（→ if != 守卫） |

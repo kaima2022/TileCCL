@@ -46,6 +46,20 @@ AMD_WARP_SIZE: int = 64
 """AMD wavefront width."""
 
 
+class HipIpcMemHandle(ctypes.Structure):
+    """ctypes Structure matching ``hipIpcMemHandle_t``.
+
+    Must be a Structure (not a ctypes Array) so that ctypes passes the
+    64-byte payload **by value** on the C calling convention, matching the
+    HIP API signature::
+
+        hipError_t hipIpcOpenMemHandle(void **devPtr,
+                                       hipIpcMemHandle_t handle,  // by value
+                                       unsigned int flags);
+    """
+    _fields_ = [("reserved", ctypes.c_char * HIP_IPC_HANDLE_SIZE)]
+
+
 # ---------------------------------------------------------------------------
 # ctypes wrapper around libamdhip64
 # ---------------------------------------------------------------------------
@@ -122,15 +136,18 @@ class _HIPRuntime:
 
         # hipIpcGetMemHandle(hipIpcMemHandle_t* handle, void* devPtr)
         lib.hipIpcGetMemHandle.argtypes = [
-            ctypes.c_char * HIP_IPC_HANDLE_SIZE,
+            ctypes.POINTER(HipIpcMemHandle),
             ctypes.c_void_p,
         ]
         lib.hipIpcGetMemHandle.restype = ctypes.c_int
 
         # hipIpcOpenMemHandle(void** devPtr, hipIpcMemHandle_t handle, unsigned int flags)
+        # NOTE: handle is passed BY VALUE (64-byte struct on the stack).
+        # Using ctypes.Structure ensures by-value semantics; a ctypes Array
+        # would decay to a pointer, causing hipErrorInvalidValue.
         lib.hipIpcOpenMemHandle.argtypes = [
             ctypes.POINTER(ctypes.c_void_p),
-            ctypes.c_char * HIP_IPC_HANDLE_SIZE,
+            HipIpcMemHandle,
             ctypes.c_uint,
         ]
         lib.hipIpcOpenMemHandle.restype = ctypes.c_int
@@ -213,19 +230,20 @@ class _HIPRuntime:
         """``hipIpcGetMemHandle`` -- return 64-byte IPC handle."""
         if self._lib is None:
             raise RuntimeError("HIP runtime library not loaded")
-        handle = (ctypes.c_char * HIP_IPC_HANDLE_SIZE)()
-        err = self._lib.hipIpcGetMemHandle(handle, ctypes.c_void_p(ptr))
+        handle = HipIpcMemHandle()
+        err = self._lib.hipIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(ptr))
         self._check(err, "hipIpcGetMemHandle")
-        return bytes(handle)
+        return bytes(handle.reserved)
 
     def ipc_open_handle(self, handle: bytes) -> int:
         """``hipIpcOpenMemHandle`` -- open peer handle, return local pointer."""
         if self._lib is None:
             raise RuntimeError("HIP runtime library not loaded")
-        buf = (ctypes.c_char * HIP_IPC_HANDLE_SIZE).from_buffer_copy(handle)
+        h = HipIpcMemHandle()
+        ctypes.memmove(h.reserved, handle, HIP_IPC_HANDLE_SIZE)
         ptr = ctypes.c_void_p()
         # flags = 0 : default (hipIpcMemLazyEnablePeerAccess)
-        err = self._lib.hipIpcOpenMemHandle(ctypes.byref(ptr), buf, ctypes.c_uint(0))
+        err = self._lib.hipIpcOpenMemHandle(ctypes.byref(ptr), h, ctypes.c_uint(0))
         self._check(err, "hipIpcOpenMemHandle")
         return ptr.value or 0
 

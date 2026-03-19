@@ -44,6 +44,20 @@ NVIDIA_WARP_SIZE: int = 32
 """NVIDIA warp width."""
 
 
+class CudaIpcMemHandle(ctypes.Structure):
+    """ctypes Structure matching ``cudaIpcMemHandle_t``.
+
+    Must be a Structure (not a ctypes Array) so that ctypes passes the
+    64-byte payload **by value** on the C calling convention, matching the
+    CUDA API signature::
+
+        cudaError_t cudaIpcOpenMemHandle(void **devPtr,
+                                         cudaIpcMemHandle_t handle,  // by value
+                                         unsigned int flags);
+    """
+    _fields_ = [("reserved", ctypes.c_char * CUDA_IPC_HANDLE_SIZE)]
+
+
 # ---------------------------------------------------------------------------
 # ctypes wrapper around libcudart
 # ---------------------------------------------------------------------------
@@ -123,15 +137,18 @@ class _CUDARuntime:
 
         # cudaIpcGetMemHandle(cudaIpcMemHandle_t* handle, void* devPtr)
         lib.cudaIpcGetMemHandle.argtypes = [
-            ctypes.c_char * CUDA_IPC_HANDLE_SIZE,
+            ctypes.POINTER(CudaIpcMemHandle),
             ctypes.c_void_p,
         ]
         lib.cudaIpcGetMemHandle.restype = ctypes.c_int
 
         # cudaIpcOpenMemHandle(void** devPtr, cudaIpcMemHandle_t handle, unsigned int flags)
+        # NOTE: handle is passed BY VALUE (64-byte struct on the stack).
+        # Using ctypes.Structure ensures by-value semantics; a ctypes Array
+        # would decay to a pointer, causing cudaErrorInvalidValue.
         lib.cudaIpcOpenMemHandle.argtypes = [
             ctypes.POINTER(ctypes.c_void_p),
-            ctypes.c_char * CUDA_IPC_HANDLE_SIZE,
+            CudaIpcMemHandle,
             ctypes.c_uint,
         ]
         lib.cudaIpcOpenMemHandle.restype = ctypes.c_int
@@ -214,19 +231,20 @@ class _CUDARuntime:
         """``cudaIpcGetMemHandle`` -- return 64-byte IPC handle."""
         if self._lib is None:
             raise RuntimeError("CUDA runtime library not loaded")
-        handle = (ctypes.c_char * CUDA_IPC_HANDLE_SIZE)()
-        err = self._lib.cudaIpcGetMemHandle(handle, ctypes.c_void_p(ptr))
+        handle = CudaIpcMemHandle()
+        err = self._lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(ptr))
         self._check(err, "cudaIpcGetMemHandle")
-        return bytes(handle)
+        return bytes(handle.reserved)
 
     def ipc_open_handle(self, handle: bytes) -> int:
         """``cudaIpcOpenMemHandle`` -- open peer handle, return local pointer."""
         if self._lib is None:
             raise RuntimeError("CUDA runtime library not loaded")
-        buf = (ctypes.c_char * CUDA_IPC_HANDLE_SIZE).from_buffer_copy(handle)
+        h = CudaIpcMemHandle()
+        ctypes.memmove(h.reserved, handle, CUDA_IPC_HANDLE_SIZE)
         ptr = ctypes.c_void_p()
         # flags = 1 : cudaIpcMemLazyEnablePeerAccess
-        err = self._lib.cudaIpcOpenMemHandle(ctypes.byref(ptr), buf, ctypes.c_uint(1))
+        err = self._lib.cudaIpcOpenMemHandle(ctypes.byref(ptr), h, ctypes.c_uint(1))
         self._check(err, "cudaIpcOpenMemHandle")
         return ptr.value or 0
 

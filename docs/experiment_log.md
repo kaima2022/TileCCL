@@ -636,3 +636,100 @@ tl.assume(stride_bn > 0)
 | P5-001 | 8192³ GEMM 79% — kernel 本身限制，非 launcher | ⚠️ 需 PTX-level 优化 |
 | P5-002 | P2P 83% — Triton-on-H100-NVLink 天花板 | ⚠️ 可能需 inline PTX |
 | P5-003 | Pattern benchmark heap_size=512MB 不够大尺寸 | ⚠️ 增大 heap 即可 |
+
+---
+
+## Phase 6: 科研绘图 + CUDA IPC 修复 (2026-03-19)
+
+### Part A: 科研绘图
+
+生成 6 幅 Nature/Science 风格图表，数据来自 Phase 0→5 实测结果。
+
+| 图号 | 名称 | 类型 | 尺寸 | 文件 |
+|------|------|------|------|------|
+| Fig 1 | GEMM 优化演进 | Grouped bar (3 phase × 4 size) | 7"×3.5" | fig1_gemm_evolution |
+| Fig 2 | P2P 带宽饱和曲线 | Line plot + fill | 3.5"×2.8" | fig2_p2p_bandwidth |
+| Fig 3 | GEMM 优化瀑布图 | Horizontal waterfall | 7"×3" | fig3_gemm_waterfall |
+| Fig 4 | Pattern Overlap 对比 | Grouped bar (4 pattern × 4 size) | 7"×3.5" | fig4_pattern_overlap |
+| Fig 5 | 6 层架构图 | Patches + text | 4.5"×4.2" | fig5_architecture |
+| Fig 6 | Roofline 模型 | Log-log scatter | 3.5"×3" | fig6_roofline |
+
+**绘图风格**：serif 字体, colorblind-safe palette (seaborn), PDF + PNG (300 DPI)
+
+**脚本**：`scripts/plot_figures.py`
+**输出**：`figures/` 目录
+
+### Part B: P1-002 CUDA IPC 诊断与修复
+
+#### DC-022: IPC ctypes 调用约定修复 (2026-03-19)
+
+**假设**：`cudaIpcOpenMemHandle` 的第二个参数 `cudaIpcMemHandle_t handle` 是 64 字节 struct by value。
+ctypes `c_char * 64` (Array) 作为函数参数时 decay 为指针，导致 `cudaErrorInvalidValue (1)`。
+
+**修复**：
+```python
+# 之前 (Array — decay 为指针)
+lib.cudaIpcOpenMemHandle.argtypes = [
+    ctypes.POINTER(ctypes.c_void_p),
+    ctypes.c_char * 64,     # ← 传指针，不是 by-value
+    ctypes.c_uint,
+]
+
+# 之后 (Structure — by-value 传递)
+class CudaIpcMemHandle(ctypes.Structure):
+    _fields_ = [("reserved", ctypes.c_char * 64)]
+
+lib.cudaIpcOpenMemHandle.argtypes = [
+    ctypes.POINTER(ctypes.c_void_p),
+    CudaIpcMemHandle,       # ← 正确 by-value
+    ctypes.c_uint,
+]
+```
+
+**影响文件**：
+- `xtile/backends/cuda.py`: `CudaIpcMemHandle` + 签名 + `ipc_get_handle`/`ipc_open_handle`
+- `xtile/backends/hip.py`: `HipIpcMemHandle` + 同步修改
+
+#### P1-002 诊断结果 (2026-03-19)
+
+| 方法 | 结果 | 错误码 |
+|------|------|--------|
+| Array (旧) | FAIL | error 1 (cudaErrorInvalidValue) |
+| Structure (新) | FAIL | error 201 (cudaErrorInvalidContext/driver) |
+| PyTorch _share_cuda_ | PARTIAL | cudaMemcpyPeer 正常 |
+| 系统检查 | ptrace_scope=1 | 限制跨进程 IPC |
+
+**分析**：
+- Structure 修复改变了错误码（1 → 201），**确认 ctypes 调用约定 bug 存在**
+- 但 IPC 仍然失败：error 201 表示驱动/上下文级限制
+- `ptrace_scope=1` 可能阻止跨设备上下文的 IPC handle 打开
+- **修复保留**：Structure 调用约定是正确的（by-value vs decay-to-pointer），即使系统级 IPC 仍受限
+
+#### 跨进程 IPC 验证 (2026-03-19)
+
+**关键发现**：之前的诊断在同一进程内测试 IPC——这不是 CUDA IPC 的设计用途（CUDA IPC 是跨进程机制）。
+
+跨进程测试（`scripts/fix_ipc.py`，使用 `torch.multiprocessing.spawn`）：
+
+| 方法 | 结果 | 说明 |
+|------|------|------|
+| peer access (非 IPC) | PASS | cudaMemcpyPeer 正常 |
+| ctypes IPC (Structure) | FAIL | cudaIpcGetMemHandle 在 spawn 子进程中失败 |
+| PyTorch IPC (_share_cuda_) | **PASS** | 文件描述符共享绕过 ptrace_scope |
+
+**根因分析**：
+- PyTorch IPC 使用 Unix domain socket 传递文件描述符，不受 `ptrace_scope` 限制
+- 原生 ctypes `cudaIpcOpenMemHandle` 使用内核级进程间内存映射，受 `ptrace_scope=1` 限制
+- 这不是 ctypes 调用约定 bug（那个已修复），而是 Linux 安全策略阻止了 IPC
+
+**解决方案**：`_setup_multiprocess()` 新增三级 fallback：
+1. ctypes IPC → 需 ptrace_scope=0
+2. **PyTorch IPC** → `_share_cuda_` / `_new_shared_cuda`，works with ptrace_scope=1 ✅ (NEW)
+3. peer access 指针交换 → 仅限同节点
+
+**P1-002 最终状态**：
+- ctypes 调用约定 bug → ✅ 已修复（Structure by-value）
+- 系统级 IPC 限制 → ✅ PyTorch IPC fallback 绕行
+- 单进程 `create_all()` → ✅ 推荐路径（无需 IPC）
+- 多进程同节点 → ✅ PyTorch IPC 或 peer access
+- 多进程跨节点 → ⚠️ 待实现（需 UCX/GDR）

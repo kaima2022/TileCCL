@@ -270,19 +270,24 @@ class SymmetricHeap:
     def _setup_multiprocess(self) -> None:
         """Exchange heap pointers across ranks for multi-process mode.
 
-        First tries CUDA IPC handles.  If IPC is unavailable (e.g. some
-        container environments), falls back to exchanging raw pointers
-        with peer access enabled -- this requires all processes to be on
-        the same node with NVLink/NVSwitch.
+        Tries three strategies in order:
+
+        1. **Raw ctypes IPC** — ``cudaIpcGetMemHandle`` / ``cudaIpcOpenMemHandle``
+           (requires ``ptrace_scope=0`` on Linux).
+        2. **PyTorch IPC** — ``storage._share_cuda_()`` / ``_new_shared_cuda()``
+           Uses file-descriptor sharing over Unix domain sockets, which
+           works even with ``ptrace_scope=1`` on same-node.
+        3. **Peer-access pointer exchange** — ``dist.all_gather`` of raw
+           ``data_ptr()`` values.  Works when all ranks have NVLink/NVSwitch
+           peer access on the same node.
         """
         self._backend.init_ipc()
 
-        # Try IPC handle exchange
+        # --- Strategy 1: raw ctypes IPC handle exchange ---
         try:
             local_handle: bytes = self._backend.get_ipc_handle(self._local_ptr)
             handle_len = len(local_handle)
 
-            # Exchange handles as GPU uint8 tensors (NCCL-compatible)
             local_t = torch.tensor(
                 list(local_handle), dtype=torch.uint8, device=self._device,
             )
@@ -292,7 +297,6 @@ class SymmetricHeap:
             ]
             dist.all_gather(gathered, local_t)
 
-            # Open each remote handle
             remote_ptrs: list[int] = []
             ipc_opened: list[Optional[int]] = []
             for r in range(self._world_size):
@@ -311,18 +315,57 @@ class SymmetricHeap:
                 remote_ptrs, dtype=torch.int64, device=self._device,
             )
             dist.barrier()
-            logger.info("Rank %d: IPC setup complete", self._rank)
+            logger.info("Rank %d: ctypes IPC setup complete", self._rank)
             return
 
         except RuntimeError as e:
             logger.warning(
-                "Rank %d: IPC handle exchange failed (%s), "
-                "falling back to peer-access pointer exchange",
+                "Rank %d: ctypes IPC failed (%s), trying PyTorch IPC",
                 self._rank, e,
             )
 
-        # Fallback: exchange raw base pointers via all_gather.
-        # This works when all ranks are on the same node with peer access.
+        # --- Strategy 2: PyTorch-native IPC (file-descriptor sharing) ---
+        try:
+            storage = self._buffer.untyped_storage()
+            share_info = storage._share_cuda_()
+
+            # Exchange via all_gather_object (supports arbitrary Python objects)
+            all_infos: list[object] = [None] * self._world_size
+            dist.all_gather_object(all_infos, share_info)
+
+            remote_ptrs = []
+            ipc_storages: list[Optional[torch.UntypedStorage]] = []
+            for r in range(self._world_size):
+                if r == self._rank:
+                    remote_ptrs.append(self._local_ptr)
+                    ipc_storages.append(None)
+                else:
+                    remote_storage = torch.UntypedStorage._new_shared_cuda(
+                        *all_infos[r]
+                    )
+                    # The storage's data_ptr is the IPC-mapped address
+                    remote_ptr = remote_storage.data_ptr()
+                    remote_ptrs.append(remote_ptr)
+                    ipc_storages.append(remote_storage)
+
+            self._remote_ptrs = remote_ptrs
+            self._ipc_opened = []  # PyTorch manages handle lifetime
+            self._ipc_storages = ipc_storages  # prevent GC
+            self._heap_bases = torch.tensor(
+                remote_ptrs, dtype=torch.int64, device=self._device,
+            )
+            dist.barrier()
+            logger.info("Rank %d: PyTorch IPC setup complete", self._rank)
+            return
+
+        except Exception as e:
+            logger.warning(
+                "Rank %d: PyTorch IPC failed (%s), falling back to "
+                "peer-access pointer exchange",
+                self._rank, e,
+            )
+
+        # --- Strategy 3: raw pointer exchange with peer access ---
         local_base = torch.tensor(
             [self._local_ptr], dtype=torch.int64, device=self._device,
         )
