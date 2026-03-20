@@ -542,6 +542,8 @@ AMD Infinity Fabric 硬件自动路由：
 
 【修订】本节保留“目标接口 / 设想 API”的表达方式，但不应再被理解为当前 `XTile/` 仓库已全部公开这些接口。当前真实实现与限制，请以《XTile现状流程_修订版.md》为准。
 
+【新增核对】下面这节里的部分代码块仍然是“目标态伪接口”，例如 `ctx.randn(...)`、`ctx.empty(...)`、`xtile.fused_gemm_scatter(...)`。这些名字当前并不是仓库里可直接调用的一键 API。
+
 ### 第 1 层：用户代码（Triton + XTile auto-select）
 
 ```python
@@ -549,7 +551,7 @@ import triton
 import triton.language as tl
 import xtile
 
-# ====== 方式 A：一键自动（最简单）======
+# ====== 方式 A：一键自动（最简单，目标态伪代码）======
 def run_auto(rank, world_size):
     ctx = xtile.init(backend="auto")  # 自动检测 NVIDIA / AMD
     A = ctx.randn((M, K), dtype=torch.float16)
@@ -562,9 +564,10 @@ def run_auto(rank, world_size):
         strategy="auto",  # 自动选择 pattern
         ctx=ctx
     )
-    # 内部 auto-select 判断：
-    #   N=4608, K=36864, 4 GPUs → N/world_size=1152 < 2048, K > 8192
-    #   → 选择 "fused_sequential" 模式
+    # 【修订】如果代入当前仓库里的 heuristics：
+    #   N=4608, K=36864, 4 GPUs → N/world_size=1152
+    #   不满足 fused_sequential 的 < 1024 分支
+    #   → 更接近 ProducerConsumerPattern，而不是 fused_sequential
 
 # ====== 方式 B：手动控制（高级用户）======
 @triton.jit
@@ -632,15 +635,15 @@ def wg_specialized_gemm_allscatter(
                     )
 
 # ⚠️ 三种方式使用【同一套原语】，只是组合方式不同
-# ⚠️ auto-select 在方式 A 中自动选择方式 B 或 C
+# ⚠️ 如果映射回当前仓库，auto-select 选择的是具体 pattern，而不是只有方式 B / C 两种
 ```
 
 ### 第 2 层：编译（标准 Triton，无特殊步骤）
 
 ```
 与 Iris 完全相同：标准 Triton 编译流水线。
-xtile.tile_remote_store 内部就是 __translate + tl.store。
-xtile.tile_signal 内部就是 tl.atomic_cas。
+xtile.tile_remote_store 内部就是 `translate_ptr + tl.store`。
+【修订】xtile.tile_signal 内部是 `tl.atomic_xchg`；`tile_wait` 才是 `tl.atomic_cas` 自旋等待。
 编译器对所有操作完全可见。
 
 唯一的差异在 host-side：
@@ -662,7 +665,7 @@ def tile_remote_store(pointer, value, from_rank, to_rank, heap_bases, mask=None)
 @triton.jit
 def tile_signal(locks, tile_id, sem="release", scope="gpu"):
     # 信号原语（借鉴 TileLink 的概念，用 Iris 的 atomic 实现）
-    tl.atomic_cas(locks + tile_id, 0, 1, sem=sem, scope=scope)
+    tl.atomic_xchg(locks + tile_id, 1, sem=sem, scope=scope)
 
 @triton.jit
 def tile_wait(locks, tile_id, sem="acquire", scope="gpu"):
@@ -742,41 +745,36 @@ AMD MI300X:
 
 ### 新增：Auto-Select 引擎
 
+【修订】如果把这一节从“设想”落回当前仓库，真实签名更接近
+`auto_select(op, M, N, K, world_size, hw_info=None, ctx=None)`；
+而对本例 `M=8192, N=4608, K=36864, world_size=4`，当前 heuristics 会更接近 `ProducerConsumerPattern`。
+
 ```python
-def auto_select(M, N, K, world_size, hw_info):
+def auto_select(op, M, N, K, world_size, hw_info=None, ctx=None):
     """
-    基于 Iris 论文 Section 5 实验数据的 heuristic：
+    更接近当前仓库实现的 heuristic（省略了 bw_scale / total_tiles 等细节）：
 
     输入: M=8192, N=4608, K=36864, world_size=4
     """
-    n_per_gpu = N // world_size  # 1152
-    comm_tiles = M * N * world_size  # 通信量
-    compute_flops = 2 * M * N * K   # 计算量
-    ratio = comm_tiles / compute_flops  # ~0.00003 → 通信远小于计算
+    n_per_rank = N // world_size  # 1152
 
-    if n_per_gpu < 2048 and K > 16384:
-        # 通信小、计算大 → Fused Sequential 最优
-        # Iris 论文验证：8192×4608×36864, 4 GPU → 1.8× speedup
+    if M < 256:
+        return BulkSyncPattern(ctx)
+
+    elif n_per_rank < 1024 and K > 12288:
         return FusedSequentialPattern(ctx)
 
-    elif n_per_gpu < 4096 and K > 8192:
-        # 可隐藏通信 → Producer-Consumer
-        # 需要分配 CU/SM：256 compute + 48 comm (MI300X)
-        return ProducerConsumerPattern(ctx,
-            compute_sms=hw_info.total_sms - 48,
-            comm_sms=48)
+    elif n_per_rank < 2048 and K > 6144:
+        return ProducerConsumerPattern(ctx)
 
-    elif N > 4096:
-        # 通信量大 → Workgroup Specialization
-        return WGSpecializedPattern(ctx,
-            compute_sms=hw_info.total_sms * 0.8,
-            comm_sms=hw_info.total_sms * 0.2)
+    elif N > 4096 and K > 8192:
+        return WGSpecializedPattern(ctx)
 
     else:
         return BulkSyncPattern(ctx)  # 安全默认
 
-    # 本例: n_per_gpu=1152 < 2048, K=36864 > 16384
-    # → 选择 FusedSequentialPattern ✓
+    # 本例: n_per_rank=1152 < 2048, K=36864 > 6144
+    # → 更接近 ProducerConsumerPattern ✓
 ```
 
 ---

@@ -69,7 +69,9 @@ pattern.execute(A, B, C)
 
 ## 第 2 层：Pattern 层（以 FusedSequential 为例）
 
-### 实际 kernel 代码
+### 核心 kernel 逻辑（从实际代码摘取，非逐参数原样转录）
+
+【新增核对】下面这段保留了当前 `xtile/patterns/fused_sequential.py` 的核心控制流和地址计算，但省略了 `heap_bases` 的真实参数位置、`num_tiles_m/num_tiles_n` 等样板参数。因此它应理解为“贴近源码的整理版”，不是逐行拷贝。
 
 ```python
 # xtile/patterns/fused_sequential.py — _fused_kernel
@@ -401,7 +403,7 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 | 4 种 overlap pattern | kernel 实现 | ✅ 全部实现 | 完成 |
 | GEMM kernel | ≥ 90% cuBLAS | ✅ 4096³: 100.7% | 完成 |
 | Auto-select | 硬件感知 | ✅ 启发式已实现，但未与一键 API / 统一 ctx 完全打通 | 基本完成 |
-| tile 级 collective | ring allreduce 等 | ⚠️ 代码已实现，但当前 collective benchmark 仍有 `invalid resource handle` | 部分完成 |
+| tile 级 collective | ring allreduce 等 | ⚠️ 代码已实现，但当前结果里至少 allreduce collective benchmark 仍报 `invalid resource handle` | 部分完成 |
 | 跨平台 HAL | CUDA + HIP | ✅ 代码就绪 | 待 AMD 硬件 |
 
 ### 未完成
