@@ -196,6 +196,11 @@ def benchmark_all_patterns(
     ctx: Any,
     warmup: int = 10,
     iters: int = 100,
+    *,
+    spec: Any | None = None,
+    full_N: int | None = None,
+    b_layout: str | None = None,
+    c_layout: str | None = None,
 ) -> Dict[str, Any]:
     """Run all overlap patterns and return a comparison table.
 
@@ -230,8 +235,20 @@ def benchmark_all_patterns(
     from xtile.patterns.producer_consumer import ProducerConsumerPattern
     from xtile.patterns.wg_specialized import WGSpecializedPattern
 
-    M, K = A.shape
-    _, N = B.shape
+    from xtile.patterns.contracts import resolve_pattern_execution
+
+    execution = spec
+    if execution is None:
+        execution = resolve_pattern_execution(
+            A,
+            B,
+            C,
+            rank=ctx.rank,
+            world_size=ctx.world_size,
+            full_N=full_N,
+            b_layout=b_layout,
+            c_layout=c_layout,
+        )
 
     all_pattern_classes = [
         BulkSyncPattern,
@@ -244,7 +261,14 @@ def benchmark_all_patterns(
     for cls in all_pattern_classes:
         pattern = cls(ctx)
         try:
-            result = pattern.benchmark(A, B, C, warmup=warmup, iters=iters)
+            result = pattern.benchmark(
+                A,
+                B,
+                C,
+                warmup=warmup,
+                iters=iters,
+                spec=execution,
+            )
             results.append(result)
         except Exception as e:
             # Record the failure but continue with other patterns.
@@ -266,8 +290,10 @@ def benchmark_all_patterns(
     return {
         "results": results,
         "best": best_name,
-        "M": M,
-        "N": N,
-        "K": K,
+        "M": execution.M,
+        "N": execution.full_N,
+        "K": execution.K,
+        "local_N": execution.local_N,
+        "layout_mode": execution.output_layout,
         "world_size": ctx.world_size,
     }

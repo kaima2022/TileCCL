@@ -14,7 +14,7 @@
 
 ## 架构层次（6 层）
 ```
-1. User API         xtile/__init__.py       init(), init_local(), XTileContext, SymmetricHeap
+1. User API         xtile/__init__.py       init(), init_local(), XTileContext, SymmetricHeap, xtile.ops
 2. Pattern Library   xtile/patterns/         BulkSync / FusedSeq / PC / WGSpec / AutoSelect
 3. Core Primitives   xtile/primitives/       compute / memory / communication（三位一体）
 4. Synchronization   xtile/sync/             atomic_* + tile_signal/wait + barrier
@@ -47,6 +47,13 @@ memory/symmetric_heap → backends/{hip,cuda}
    - tile_atomic_* = 远端原语（跨 GPU，需 target_rank + caller_rank + heap_bases）
 7. **Persistent kernel 风格**：所有 GEMM 和 pattern 内核使用 round-robin `range(pid, total, NUM_SMS)`
 8. **禁止手工拼装伪 ctx**：CLI / tests / benchmarks 应复用 `XTileContext`，不得再用 `_Ctx`/`DistCtx` 临时对象绕过真实 runtime 契约
+9. **Pattern 多 GPU 调用必须显式声明 contract**：
+   - `pattern.execute(...)` 在多 GPU 下不应再靠 `B.shape[1]` / `C.shape[1]` 猜 full-vs-shard 语义
+   - 推荐默认入口：`xtile.ops.gemm_allscatter(...)`
+   - 若直接调用 pattern，则显式传 `spec=...` 或 `full_N + b_layout + c_layout`
+10. **benchmark / figures 共享结构化数据源**：
+   - pattern benchmark 输出写入 `figures/data/pattern_overlap_latest.json`
+   - 图表脚本只在结果满足“可发布配置”时读取该 JSON；quick smoke run 不应污染正式 figures
 
 ## 关键参考实现
 - **Iris** (github.com/ROCm/iris): 核心算法参考（Listing 1/3/4/5），本地副本 `/home/makai/iris`
@@ -141,7 +148,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] Pattern overlap 重测（fused_sequential 首次达到正向 overlap）
 - [x] P2P 83% 天花板诊断（Iris 无法运行，translate_ptr 实现一致，确认硬件天花板）
 - [ ] GEMM 8192³ 达到 ≥90%（当前 79%，kernel 本身瓶颈，需 PTX-level 优化）
-- [ ] Pattern overlap ≥1.3×（2 GPU 限制，理论上限 ~1.15×）
+- [x] Pattern overlap ≥1.3×（2026-03-21 显式 contract 修正后 full 6-size rerun best = 1.659×）
 
 ### Phase 6 交付物（2026-03-19）
 - [x] 6 幅科研绘图（`figures/` PDF + PNG，Nature/Science 风格）
@@ -167,6 +174,16 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] CLI `xtile bench pattern` 新增 `--warmup/--iters/--heap-size-mb`
 - [x] `producer_consumer` / `wg_specialized` 复用 lock buffer 与 stream，削减每次 `execute()` 的主机端辅助开销
 
+### Phase 8 交付物（2026-03-21）
+- [x] Pattern execution contract 显式化：新增 `xtile.patterns.contracts`
+- [x] `PatternExecutionSpec` / `PatternTensorSpec`：统一 full/shard layout metadata
+- [x] 4 个 overlap pattern 改为消费显式 contract，不再在多 GPU 下隐式猜 `N`
+- [x] 新增 `xtile.ops.gemm_allscatter(...)` 高层入口
+- [x] Pattern benchmark 结构化 JSON 输出：`figures/data/pattern_overlap_latest.json`
+- [x] `scripts/plot_figures.py` 改为优先读取结构化 benchmark 数据，并过滤 quick smoke run
+- [x] `SymmetricHeap.mode` / `transport_strategy` 元数据暴露给 benchmark 结果
+- [x] Pattern overlap full 6-size rerun 重跑：best speedup vs bulk_sync = **1.659×**
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -183,6 +200,9 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P5-001 | 8192³ GEMM 仍仅 84-86% of cuBLAS（3 次 official helper 复测中位数） | ⚠️ 仍需 kernel-level 优化 |
 | P5-002 | P2P 83% — Triton-on-H100-NVLink 天花板 | ⚠️ 可能需 inline PTX |
 | P5-003 | Pattern benchmark heap_size=512MB 不够大尺寸 | ✅ 已修复（动态估算 + CLI override） |
+| P8-001 | pattern `execute()` 曾依赖 `B.shape[1]` 隐式猜 full/shard 语义 | ✅ 已修复（显式 execution contract） |
+| P8-002 | plot_figures 可能被 quick benchmark 最新结果污染 | ✅ 已修复（结构化 metadata + canonical result gate） |
+| P8-003 | pattern benchmark shard path 曾把 `N` 语义隐式缩两次，导致 overlap 结论失真 | ✅ 已修复（显式 `full_N + shard/full layout` contract） |
 
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |
@@ -194,7 +214,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 | GEMM vs cuBLAS (4096³ bf16) | **91.1%** (official helper 3 次复测中位数) | ≥ 90% | ✅ |
 | GEMM vs cuBLAS (8192³ fp16) | 84.2% (official helper 3 次复测中位数) | ≥ 90% | ⚠️ 未达标但优于 Phase 5 |
 | GEMM vs cuBLAS (8192³ bf16) | 86.1% (official helper 3 次复测中位数) | ≥ 90% | ⚠️ 未达标但优于 Phase 5 |
-| Pattern overlap (full 6-size rerun) | **1.004×** best stable speedup | ≥ 1.3× | ⚠️ 旧的 1.067× 单点结果未复现 |
+| Pattern overlap (full 6-size rerun) | **1.659×** best speedup（`wg_specialized`, 8192×4608×36864） | ≥ 1.3× | ✅ contract 修正后已达标 |
 
 ## 重要约束
 - **不** 包装 xSHMEM/NVSHMEM 为不透明字节码

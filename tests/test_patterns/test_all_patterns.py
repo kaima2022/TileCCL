@@ -130,7 +130,7 @@ class TestPatternScatterCorrectness:
         )
 
         pattern = pattern_cls(ctx, BLOCK_M=128, BLOCK_N=128, BLOCK_K=64)
-        pattern.execute(A, B, C0)
+        pattern.execute(A, B, C0, full_N=N, b_layout="full", c_layout="full")
         torch.cuda.synchronize()
 
         # Verify GEMM correctness on GPU 0

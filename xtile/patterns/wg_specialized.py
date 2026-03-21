@@ -140,8 +140,18 @@ class WGSpecializedPattern(Pattern):
         """
         import torch
 
+        spec = self.resolve_execution(
+            A,
+            B,
+            C,
+            spec=kwargs.get("spec"),
+            full_N=kwargs.get("full_N"),
+            b_layout=kwargs.get("b_layout"),
+            c_layout=kwargs.get("c_layout"),
+            storage_kind=kwargs.get("storage_kind", "symmetric"),
+        )
         M, K = A.shape
-        _, N = B.shape
+        N = spec.local_N
 
         compute_sms, comm_sms = self._resolve_sm_split()
         total_sms = compute_sms + comm_sms
@@ -152,7 +162,6 @@ class WGSpecializedPattern(Pattern):
 
         world_size = self.ctx.world_size
         heap_bases = self.ctx.heap_bases
-        N_per_rank = N // world_size
 
         # Lock tensor for tile-level synchronization between compute and
         # comm workers within the same kernel.
@@ -165,7 +174,11 @@ class WGSpecializedPattern(Pattern):
             A, B, C,
             locks,
             heap_bases,
-            M, N, K, N_per_rank,
+            M, N, K,
+            spec.scatter_src_col_offset,
+            spec.scatter_cols,
+            spec.scatter_dst_leading_dim,
+            spec.scatter_dst_col_offset,
             A.stride(0), A.stride(1),
             B.stride(0), B.stride(1),
             C.stride(0), C.stride(1),
@@ -197,7 +210,11 @@ class WGSpecializedPattern(Pattern):
         locks_ptr,
         heap_bases,
         # Dimensions
-        M, N, K, N_per_rank,
+        M, N, K,
+        scatter_src_col_offset,
+        scatter_cols,
+        scatter_dst_leading_dim,
+        scatter_dst_col_offset,
         # Strides
         stride_am, stride_ak,
         stride_bk, stride_bn,
@@ -314,8 +331,10 @@ class WGSpecializedPattern(Pattern):
                 # ---- Scatter to all peers via translate_ptr ----
                 for peer in range(world_size):
                     if peer != rank:
-                        dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
                         scatter_tile_to_peer(
                             C_ptr, tile_data, offs_m, offs_n,
-                            rank, peer, N, N_per_rank, heap_bases, dst_mask,
+                            rank, peer, heap_bases,
+                            scatter_src_col_offset, scatter_cols,
+                            scatter_dst_leading_dim, scatter_dst_col_offset,
+                            c_mask,
                         )

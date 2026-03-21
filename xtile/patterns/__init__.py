@@ -31,11 +31,11 @@ from __future__ import annotations
 
 import abc
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import torch
+    from xtile.patterns.contracts import PatternExecutionSpec
 
 
 # ---------------------------------------------------------------------------
@@ -79,10 +79,11 @@ class Pattern(abc.ABC):
 
         Args:
             A: Input tensor of shape ``(M, K)`` on the local device.
-            B: Input tensor of shape ``(K, N)`` on the local device.
-            C: Output tensor of shape ``(M, N)`` (or the local shard)
-               on the local device.  Written in-place.
-            **kwargs: Pattern-specific overrides (e.g. block sizes).
+            B: Input tensor of shape ``(K, N)`` or ``(K, N_per_rank)``
+               depending on the explicit execution contract.
+            C: Output tensor of shape ``(M, N)`` or ``(M, N_per_rank)``.
+            **kwargs: Contract metadata such as ``spec``, ``full_N``,
+               ``b_layout`` and ``c_layout``.
         """
 
     def benchmark(
@@ -92,6 +93,7 @@ class Pattern(abc.ABC):
         C: "torch.Tensor",
         warmup: int = 10,
         iters: int = 100,
+        **execute_kwargs: Any,
     ) -> Dict[str, Any]:
         """Benchmark this pattern and return timing statistics.
 
@@ -110,14 +112,14 @@ class Pattern(abc.ABC):
 
         # Warm-up
         for _ in range(warmup):
-            self.execute(A, B, C)
+            self.execute(A, B, C, **execute_kwargs)
         torch.cuda.synchronize()
 
         # Timed iterations
         times: list[float] = []
         for _ in range(iters):
             start = time.perf_counter()
-            self.execute(A, B, C)
+            self.execute(A, B, C, **execute_kwargs)
             torch.cuda.synchronize()
             end = time.perf_counter()
             times.append((end - start) * 1e3)  # ms
@@ -130,12 +132,42 @@ class Pattern(abc.ABC):
             "iters": iters,
         }
 
+    def resolve_execution(
+        self,
+        A: "torch.Tensor",
+        B: "torch.Tensor",
+        C: "torch.Tensor",
+        *,
+        spec: "PatternExecutionSpec | None" = None,
+        full_N: int | None = None,
+        b_layout: str | None = None,
+        c_layout: str | None = None,
+        storage_kind: str = "symmetric",
+    ) -> "PatternExecutionSpec":
+        """Resolve or validate a canonical execution contract."""
+        if spec is not None:
+            return spec
+        from xtile.patterns.contracts import resolve_pattern_execution
+
+        return resolve_pattern_execution(
+            A,
+            B,
+            C,
+            rank=self.ctx.rank,
+            world_size=self.ctx.world_size,
+            full_N=full_N,
+            b_layout=b_layout,
+            c_layout=c_layout,
+            storage_kind=storage_kind,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Public imports -- concrete patterns and utilities
 # ---------------------------------------------------------------------------
 
 from xtile.patterns.bulk_sync import BulkSyncPattern
+from xtile.patterns.contracts import PatternExecutionSpec, PatternTensorSpec, resolve_pattern_execution
 from xtile.patterns.fused_sequential import FusedSequentialPattern
 from xtile.patterns.producer_consumer import ProducerConsumerPattern
 from xtile.patterns.wg_specialized import WGSpecializedPattern
@@ -147,6 +179,9 @@ __all__ = [
     "FusedSequentialPattern",
     "ProducerConsumerPattern",
     "WGSpecializedPattern",
+    "PatternExecutionSpec",
+    "PatternTensorSpec",
+    "resolve_pattern_execution",
     "auto_select",
     "benchmark_all_patterns",
 ]

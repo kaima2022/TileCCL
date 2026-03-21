@@ -155,6 +155,8 @@ class SymmetricHeap:
         self._remote_ptrs: list[int] = []
         self._heap_bases: Optional[torch.Tensor] = None
         self._ipc_opened: list[Optional[int]] = []
+        self._mode: str = "single_process" if _peer_bases is not None or world_size == 1 else "multiprocess"
+        self._transport_strategy: str = "local_only" if world_size == 1 else "unknown"
 
         if _peer_bases is not None:
             # Single-process mode: bases provided by create_all()
@@ -162,6 +164,7 @@ class SymmetricHeap:
             self._heap_bases = torch.tensor(
                 _peer_bases, dtype=torch.int64, device=self._device,
             )
+            self._transport_strategy = "peer_access"
         elif world_size == 1:
             # Trivial single-GPU case
             self._remote_ptrs = [self._local_ptr]
@@ -254,6 +257,8 @@ class SymmetricHeap:
             heap._heap_bases = torch.tensor(
                 bases, dtype=torch.int64, device=f"cuda:{rank}",
             )
+            heap._mode = "single_process"
+            heap._transport_strategy = "peer_access"
             heap._bump_offset = 0
             heap._alloc_records = []
             heap._cleaned_up = False
@@ -314,6 +319,7 @@ class SymmetricHeap:
             self._heap_bases = torch.tensor(
                 remote_ptrs, dtype=torch.int64, device=self._device,
             )
+            self._transport_strategy = "ctypes_ipc"
             dist.barrier()
             logger.info("Rank %d: ctypes IPC setup complete", self._rank)
             return
@@ -354,6 +360,7 @@ class SymmetricHeap:
             self._heap_bases = torch.tensor(
                 remote_ptrs, dtype=torch.int64, device=self._device,
             )
+            self._transport_strategy = "pytorch_ipc"
             dist.barrier()
             logger.info("Rank %d: PyTorch IPC setup complete", self._rank)
             return
@@ -378,6 +385,7 @@ class SymmetricHeap:
         self._remote_ptrs = [int(b.item()) for b in all_bases]
         self._heap_bases = torch.cat(all_bases).to(device=self._device)
         self._ipc_opened = []
+        self._transport_strategy = "peer_access_pointer_exchange"
         dist.barrier()
         logger.info("Rank %d: peer-access pointer exchange complete", self._rank)
 
@@ -480,6 +488,16 @@ class SymmetricHeap:
     def bytes_free(self) -> int:
         """Remaining free bytes in this heap."""
         return self._size - self._bump_offset
+
+    @property
+    def mode(self) -> str:
+        """Heap establishment mode: single_process or multiprocess."""
+        return self._mode
+
+    @property
+    def transport_strategy(self) -> str:
+        """Concrete heap-establishment strategy used by this heap."""
+        return self._transport_strategy
 
     # ---------------------------------------------------------- translation
 

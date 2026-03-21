@@ -23,9 +23,11 @@ def scatter_tile_to_peer(
     offs_n,
     rank,
     peer,
-    N,
-    N_per_rank,
     heap_bases,
+    src_col_offset,
+    valid_cols,
+    dst_leading_dim,
+    dst_col_offset,
     mask,
     CACHE_MODIFIER: tl.constexpr = ".wt",
 ):
@@ -33,11 +35,8 @@ def scatter_tile_to_peer(
 
     Translates the local output pointer to the peer's address space using
     :func:`~xtile.memory.translation.translate_ptr`, then stores the tile
-    at the column-sharded offset corresponding to the caller's rank.
-
-    Destination layout: each peer maintains a full ``(M, N)`` output buffer.
-    This rank's contribution occupies columns
-    ``[rank * N_per_rank, (rank + 1) * N_per_rank)``.
+    at the explicit destination layout described by the host-side
+    execution contract.
 
     Parameters
     ----------
@@ -54,14 +53,19 @@ def scatter_tile_to_peer(
         Caller's rank (the rank that owns *C_ptr*).
     peer :
         Target peer rank to scatter to.
-    N :
-        Total number of columns in the full (un-sharded) output matrix.
-    N_per_rank :
-        Columns per rank shard (``N // world_size``).
     heap_bases :
         Pointer to the ``[world_size]`` int64 tensor of per-rank
         symmetric-heap base addresses (as mapped into the caller's
         address space).
+    src_col_offset :
+        Starting column in the local source buffer that is allowed to
+        participate in the scatter.
+    valid_cols :
+        Number of valid source columns to scatter.
+    dst_leading_dim :
+        Row stride, in elements, of the destination layout on the peer.
+    dst_col_offset :
+        Starting destination column offset on the peer.
     mask :
         Boolean mask for boundary tiles, shape ``(BLOCK_M, BLOCK_N)``.
     CACHE_MODIFIER : tl.constexpr
@@ -73,13 +77,14 @@ def scatter_tile_to_peer(
     # maps to the equivalent location in peer's symmetric heap.
     remote_C = translate_ptr(C_ptr, rank, peer, heap_bases)
 
-    # Compute element offsets into the peer's full (M, N) buffer.
-    # Typed pointer arithmetic handles byte-to-element conversion
-    # automatically -- no manual `* primitive_bitwidth // 8` needed.
-    dst_col_offset = rank * N_per_rank
-    offsets = offs_m[:, None] * N + (dst_col_offset + offs_n[None, :])
+    # Convert the source columns into destination-local columns while
+    # masking out anything outside the explicitly declared scatter span.
+    col_mask = (offs_n >= src_col_offset) & (offs_n < src_col_offset + valid_cols)
+    safe_local_cols = tl.where(col_mask, offs_n - src_col_offset, 0)
+    offsets = offs_m[:, None] * dst_leading_dim + (dst_col_offset + safe_local_cols[None, :])
+    final_mask = mask & col_mask[None, :]
 
     if CACHE_MODIFIER == ".wt":
-        tl.store(remote_C + offsets, tile_data, mask=mask, cache_modifier=".wt")
+        tl.store(remote_C + offsets, tile_data, mask=final_mask, cache_modifier=".wt")
     else:
-        tl.store(remote_C + offsets, tile_data, mask=mask)
+        tl.store(remote_C + offsets, tile_data, mask=final_mask)

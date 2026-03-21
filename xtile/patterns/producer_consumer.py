@@ -153,8 +153,18 @@ class ProducerConsumerPattern(Pattern):
         """
         import torch
 
+        spec = self.resolve_execution(
+            A,
+            B,
+            C,
+            spec=kwargs.get("spec"),
+            full_N=kwargs.get("full_N"),
+            b_layout=kwargs.get("b_layout"),
+            c_layout=kwargs.get("c_layout"),
+            storage_kind=kwargs.get("storage_kind", "symmetric"),
+        )
         M, K = A.shape
-        _, N = B.shape
+        N = spec.local_N
 
         compute_sms, comm_sms = self._resolve_sm_split()
 
@@ -164,7 +174,6 @@ class ProducerConsumerPattern(Pattern):
 
         world_size = self.ctx.world_size
         heap_bases = self.ctx.heap_bases
-        N_per_rank = N // world_size
 
         # Lock tensor for tile-level synchronization: one int32 per tile.
         # Producer writes 1, consumer waits for 1.
@@ -203,7 +212,11 @@ class ProducerConsumerPattern(Pattern):
                 C,
                 locks,
                 heap_bases,
-                M, N, N_per_rank,
+                M, N,
+                spec.scatter_src_col_offset,
+                spec.scatter_cols,
+                spec.scatter_dst_leading_dim,
+                spec.scatter_dst_col_offset,
                 C.stride(0), C.stride(1),
                 self.ctx.rank,
                 world_size,
@@ -314,7 +327,12 @@ class ProducerConsumerPattern(Pattern):
         locks_ptr,
         heap_bases,
         # Dimensions
-        M, N, N_per_rank,
+        M,
+        N,
+        scatter_src_col_offset,
+        scatter_cols,
+        scatter_dst_leading_dim,
+        scatter_dst_col_offset,
         # Strides
         stride_cm, stride_cn,
         # Distribution info
@@ -355,8 +373,10 @@ class ProducerConsumerPattern(Pattern):
             # ---- Scatter to all peers via translate_ptr ----
             for peer in range(world_size):
                 if peer != rank:
-                    dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
                     scatter_tile_to_peer(
                         C_ptr, tile_data, offs_m, offs_n,
-                        rank, peer, N, N_per_rank, heap_bases, dst_mask,
+                        rank, peer, heap_bases,
+                        scatter_src_col_offset, scatter_cols,
+                        scatter_dst_leading_dim, scatter_dst_col_offset,
+                        c_mask,
                     )

@@ -455,8 +455,15 @@ def __getattr__(name: str):
         from xtile.memory.symmetric_heap import SymmetricHeap
         return SymmetricHeap
     if name == "patterns":
-        from xtile import patterns as _patterns
+        import importlib
+
+        _patterns = importlib.import_module("xtile.patterns")
         return _patterns
+    if name == "ops":
+        import importlib
+
+        _ops = importlib.import_module("xtile.ops")
+        return _ops
     raise AttributeError(f"module 'xtile' has no attribute {name!r}")
 
 
@@ -471,4 +478,5 @@ __all__ = [
     "Tile",
     "SymmetricHeap",
     "patterns",
+    "ops",
 ]

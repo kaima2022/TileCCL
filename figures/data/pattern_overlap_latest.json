@@ -1,0 +1,568 @@
+{
+  "benchmark": "pattern_overlap",
+  "command": "tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json /home/makai/XTile/figures/data/pattern_overlap_latest.json",
+  "environment": {
+    "allocator_backend": "torch_bump",
+    "b_layout": "shard",
+    "backend": "cuda",
+    "c_layout": "shard",
+    "dtype": "float16",
+    "gpu_name": "NVIDIA H100 PCIe",
+    "heap_mode": "single_process",
+    "iters": 10,
+    "layout_mode": "shard",
+    "quick_mode": false,
+    "transport_strategy": "peer_access",
+    "visible_gpus": 2,
+    "warmup": 3,
+    "world_size": 2
+  },
+  "generated_at_utc": "2026-03-21T11:36:57.464540+00:00",
+  "schema_version": 1,
+  "sizes": [
+    {
+      "K": 4096,
+      "M": 4096,
+      "N": 4096,
+      "best_pattern": "fused_sequential",
+      "best_speedup_vs_bulk": 1.0828031572328518,
+      "heap_size_bytes": 134217728,
+      "local_N": 2048,
+      "metadata": {
+        "device": "cuda:0",
+        "dtype": "float16",
+        "spec": {
+          "K": 4096,
+          "M": 4096,
+          "full_N": 4096,
+          "local_N": 2048,
+          "output": {
+            "full_shape": [
+              4096,
+              4096
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              4096,
+              2048
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "rank": 0,
+          "rhs": {
+            "full_shape": [
+              4096,
+              4096
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              4096,
+              2048
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "scatter": {
+            "cols": 2048,
+            "dst_col_offset": 0,
+            "dst_leading_dim": 2048,
+            "src_col_offset": 0
+          },
+          "world_size": 2
+        }
+      },
+      "required_heap_bytes": 134217728,
+      "results": [
+        {
+          "max_ms": 2.088259905576706,
+          "mean_ms": 2.0740054547786713,
+          "min_ms": 2.065662294626236,
+          "overlap_efficiency": 0.0,
+          "pattern": "bulk_sync",
+          "speedup_vs_bulk": 1.0
+        },
+        {
+          "max_ms": 1.9284598529338837,
+          "mean_ms": 1.9166018813848495,
+          "min_ms": 1.9076988101005554,
+          "overlap_efficiency": 0.07647110804927715,
+          "pattern": "fused_sequential",
+          "speedup_vs_bulk": 1.0828031572328518
+        },
+        {
+          "max_ms": 2.5888942182064056,
+          "mean_ms": 2.42030993103981,
+          "min_ms": 2.320554107427597,
+          "overlap_efficiency": -0.1233947162924236,
+          "pattern": "producer_consumer",
+          "speedup_vs_bulk": 0.8901590736516305
+        },
+        {
+          "max_ms": 2.1649785339832306,
+          "mean_ms": 2.0756810903549194,
+          "min_ms": 2.048879861831665,
+          "overlap_efficiency": 0.008124480384925414,
+          "pattern": "wg_specialized",
+          "speedup_vs_bulk": 1.0081910282331379
+        }
+      ]
+    },
+    {
+      "K": 36864,
+      "M": 8192,
+      "N": 4608,
+      "best_pattern": "wg_specialized",
+      "best_speedup_vs_bulk": 1.6590918079391779,
+      "heap_size_bytes": 939524096,
+      "local_N": 2304,
+      "metadata": {
+        "device": "cuda:0",
+        "dtype": "float16",
+        "spec": {
+          "K": 36864,
+          "M": 8192,
+          "full_N": 4608,
+          "local_N": 2304,
+          "output": {
+            "full_shape": [
+              8192,
+              4608
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              8192,
+              2304
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "rank": 0,
+          "rhs": {
+            "full_shape": [
+              36864,
+              4608
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              36864,
+              2304
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "scatter": {
+            "cols": 2304,
+            "dst_col_offset": 0,
+            "dst_leading_dim": 2304,
+            "src_col_offset": 0
+          },
+          "world_size": 2
+        }
+      },
+      "required_heap_bytes": 939524096,
+      "results": [
+        {
+          "max_ms": 8.145563304424286,
+          "mean_ms": 8.080151677131653,
+          "min_ms": 7.970061153173447,
+          "overlap_efficiency": 0.0,
+          "pattern": "bulk_sync",
+          "speedup_vs_bulk": 1.0
+        },
+        {
+          "max_ms": 7.380269467830658,
+          "mean_ms": 7.182923331856728,
+          "min_ms": 7.030259817838669,
+          "overlap_efficiency": 0.11791645224209812,
+          "pattern": "fused_sequential",
+          "speedup_vs_bulk": 1.1336794598899622
+        },
+        {
+          "max_ms": 5.456302314996719,
+          "mean_ms": 5.335338786244392,
+          "min_ms": 5.202341824769974,
+          "overlap_efficiency": 0.34726450339737325,
+          "pattern": "producer_consumer",
+          "speedup_vs_bulk": 1.532014123951928
+        },
+        {
+          "max_ms": 5.0743818283081055,
+          "mean_ms": 4.876859486103058,
+          "min_ms": 4.803869873285294,
+          "overlap_efficiency": 0.39726060051966705,
+          "pattern": "wg_specialized",
+          "speedup_vs_bulk": 1.6590918079391779
+        }
+      ]
+    },
+    {
+      "K": 14336,
+      "M": 8192,
+      "N": 3584,
+      "best_pattern": "fused_sequential",
+      "best_speedup_vs_bulk": 1.20603803010585,
+      "heap_size_bytes": 402653184,
+      "local_N": 1792,
+      "metadata": {
+        "device": "cuda:0",
+        "dtype": "float16",
+        "spec": {
+          "K": 14336,
+          "M": 8192,
+          "full_N": 3584,
+          "local_N": 1792,
+          "output": {
+            "full_shape": [
+              8192,
+              3584
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              8192,
+              1792
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "rank": 0,
+          "rhs": {
+            "full_shape": [
+              14336,
+              3584
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              14336,
+              1792
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "scatter": {
+            "cols": 1792,
+            "dst_col_offset": 0,
+            "dst_leading_dim": 1792,
+            "src_col_offset": 0
+          },
+          "world_size": 2
+        }
+      },
+      "required_heap_bytes": 402653184,
+      "results": [
+        {
+          "max_ms": 4.331652075052261,
+          "mean_ms": 4.299205541610718,
+          "min_ms": 4.263639450073242,
+          "overlap_efficiency": 0.0,
+          "pattern": "bulk_sync",
+          "speedup_vs_bulk": 1.0
+        },
+        {
+          "max_ms": 3.6558061838150024,
+          "mean_ms": 3.5797622054815292,
+          "min_ms": 3.5352446138858795,
+          "overlap_efficiency": 0.17083875048929154,
+          "pattern": "fused_sequential",
+          "speedup_vs_bulk": 1.20603803010585
+        },
+        {
+          "max_ms": 4.064973443746567,
+          "mean_ms": 4.0269020944833755,
+          "min_ms": 3.976043313741684,
+          "overlap_efficiency": 0.06745320276240008,
+          "pattern": "producer_consumer",
+          "speedup_vs_bulk": 1.0723322443036754
+        },
+        {
+          "max_ms": 3.6828964948654175,
+          "mean_ms": 3.6596830934286118,
+          "min_ms": 3.5993270576000214,
+          "overlap_efficiency": 0.15580876390985854,
+          "pattern": "wg_specialized",
+          "speedup_vs_bulk": 1.1845657207145202
+        }
+      ]
+    },
+    {
+      "K": 30720,
+      "M": 8192,
+      "N": 8192,
+      "best_pattern": "wg_specialized",
+      "best_speedup_vs_bulk": 1.6202102132770915,
+      "heap_size_bytes": 939524096,
+      "local_N": 4096,
+      "metadata": {
+        "device": "cuda:0",
+        "dtype": "float16",
+        "spec": {
+          "K": 30720,
+          "M": 8192,
+          "full_N": 8192,
+          "local_N": 4096,
+          "output": {
+            "full_shape": [
+              8192,
+              8192
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              8192,
+              4096
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "rank": 0,
+          "rhs": {
+            "full_shape": [
+              30720,
+              8192
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              30720,
+              4096
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "scatter": {
+            "cols": 4096,
+            "dst_col_offset": 0,
+            "dst_leading_dim": 4096,
+            "src_col_offset": 0
+          },
+          "world_size": 2
+        }
+      },
+      "required_heap_bytes": 939524096,
+      "results": [
+        {
+          "max_ms": 13.161342591047287,
+          "mean_ms": 13.011492043733597,
+          "min_ms": 12.883882969617844,
+          "overlap_efficiency": 0.0,
+          "pattern": "bulk_sync",
+          "speedup_vs_bulk": 1.0
+        },
+        {
+          "max_ms": 12.155313044786453,
+          "mean_ms": 11.600058525800705,
+          "min_ms": 11.153407394886017,
+          "overlap_efficiency": 0.1343132019137826,
+          "pattern": "fused_sequential",
+          "speedup_vs_bulk": 1.1551521892336931
+        },
+        {
+          "max_ms": 8.806835860013962,
+          "mean_ms": 8.74001681804657,
+          "min_ms": 8.683998137712479,
+          "overlap_efficiency": 0.325979740875428,
+          "pattern": "producer_consumer",
+          "speedup_vs_bulk": 1.4836349300521257
+        },
+        {
+          "max_ms": 8.516043424606323,
+          "mean_ms": 8.127354085445404,
+          "min_ms": 7.951982319355011,
+          "overlap_efficiency": 0.38279613854712935,
+          "pattern": "wg_specialized",
+          "speedup_vs_bulk": 1.6202102132770915
+        }
+      ]
+    },
+    {
+      "K": 8192,
+      "M": 4096,
+      "N": 8192,
+      "best_pattern": "fused_sequential",
+      "best_speedup_vs_bulk": 1.1598926759438308,
+      "heap_size_bytes": 268435456,
+      "local_N": 4096,
+      "metadata": {
+        "device": "cuda:0",
+        "dtype": "float16",
+        "spec": {
+          "K": 8192,
+          "M": 4096,
+          "full_N": 8192,
+          "local_N": 4096,
+          "output": {
+            "full_shape": [
+              4096,
+              8192
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              4096,
+              4096
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "rank": 0,
+          "rhs": {
+            "full_shape": [
+              8192,
+              8192
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              8192,
+              4096
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "scatter": {
+            "cols": 4096,
+            "dst_col_offset": 0,
+            "dst_leading_dim": 4096,
+            "src_col_offset": 0
+          },
+          "world_size": 2
+        }
+      },
+      "required_heap_bytes": 268435456,
+      "results": [
+        {
+          "max_ms": 4.450276494026184,
+          "mean_ms": 4.39671203494072,
+          "min_ms": 4.370696842670441,
+          "overlap_efficiency": 0.0,
+          "pattern": "bulk_sync",
+          "speedup_vs_bulk": 1.0
+        },
+        {
+          "max_ms": 3.79195436835289,
+          "mean_ms": 3.776921331882477,
+          "min_ms": 3.7681907415390015,
+          "overlap_efficiency": 0.13785126784572765,
+          "pattern": "fused_sequential",
+          "speedup_vs_bulk": 1.1598926759438308
+        },
+        {
+          "max_ms": 4.745103418827057,
+          "mean_ms": 4.321495071053505,
+          "min_ms": 4.228934645652771,
+          "overlap_efficiency": 0.03243468996377585,
+          "pattern": "producer_consumer",
+          "speedup_vs_bulk": 1.0335219644889517
+        },
+        {
+          "max_ms": 4.104770720005035,
+          "mean_ms": 3.9951570332050323,
+          "min_ms": 3.906581550836563,
+          "overlap_efficiency": 0.10618793948433836,
+          "pattern": "wg_specialized",
+          "speedup_vs_bulk": 1.118803431028975
+        }
+      ]
+    },
+    {
+      "K": 8192,
+      "M": 2048,
+      "N": 16384,
+      "best_pattern": "fused_sequential",
+      "best_speedup_vs_bulk": 1.1916211279033098,
+      "heap_size_bytes": 268435456,
+      "local_N": 8192,
+      "metadata": {
+        "device": "cuda:0",
+        "dtype": "float16",
+        "spec": {
+          "K": 8192,
+          "M": 2048,
+          "full_N": 16384,
+          "local_N": 8192,
+          "output": {
+            "full_shape": [
+              2048,
+              16384
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              2048,
+              8192
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "rank": 0,
+          "rhs": {
+            "full_shape": [
+              8192,
+              16384
+            ],
+            "layout_kind": "shard",
+            "local_shape": [
+              8192,
+              8192
+            ],
+            "rank": 0,
+            "storage_kind": "symmetric",
+            "world_size": 2
+          },
+          "scatter": {
+            "cols": 8192,
+            "dst_col_offset": 0,
+            "dst_leading_dim": 8192,
+            "src_col_offset": 0
+          },
+          "world_size": 2
+        }
+      },
+      "required_heap_bytes": 268435456,
+      "results": [
+        {
+          "max_ms": 4.563465714454651,
+          "mean_ms": 4.555996507406235,
+          "min_ms": 4.546646028757095,
+          "overlap_efficiency": 0.0,
+          "pattern": "bulk_sync",
+          "speedup_vs_bulk": 1.0
+        },
+        {
+          "max_ms": 3.8429200649261475,
+          "mean_ms": 3.831963613629341,
+          "min_ms": 3.815513104200363,
+          "overlap_efficiency": 0.16080709163026707,
+          "pattern": "fused_sequential",
+          "speedup_vs_bulk": 1.1916211279033098
+        },
+        {
+          "max_ms": 4.404395818710327,
+          "mean_ms": 4.374764114618301,
+          "min_ms": 4.3382905423641205,
+          "overlap_efficiency": 0.045826194754363225,
+          "pattern": "producer_consumer",
+          "speedup_vs_bulk": 1.0480270937039253
+        },
+        {
+          "max_ms": 4.213016480207443,
+          "mean_ms": 4.090070351958275,
+          "min_ms": 4.030667245388031,
+          "overlap_efficiency": 0.11348558478173765,
+          "pattern": "wg_specialized",
+          "speedup_vs_bulk": 1.128013242462388
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "best_speedup_vs_bulk": 1.6590918079391779,
+    "size_count": 6
+  }
+}

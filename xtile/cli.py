@@ -145,6 +145,8 @@ def _bench_pattern(args: argparse.Namespace) -> None:
         cmd.extend(["--iters", str(args.iters)])
     if getattr(args, "heap_size_mb", None) is not None:
         cmd.extend(["--heap-size-mb", str(args.heap_size_mb)])
+    if getattr(args, "output_json", None):
+        cmd.extend(["--output-json", str(args.output_json)])
     result = subprocess.run(
         cmd,
         cwd=_project_root(), env=_bench_env(),
@@ -415,6 +417,12 @@ def main() -> None:
         type=int,
         default=None,
         help="Per-rank symmetric heap size override in MiB",
+    )
+    pat_parser.add_argument(
+        "--output-json",
+        type=str,
+        default=None,
+        help="Structured JSON output path for benchmark results",
     )
 
     gemm_parser = bench_sub.add_parser("gemm", help="GEMM vs torch.matmul benchmark")

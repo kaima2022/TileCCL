@@ -87,8 +87,18 @@ class FusedSequentialPattern(Pattern):
         """
         import torch
 
+        spec = self.resolve_execution(
+            A,
+            B,
+            C,
+            spec=kwargs.get("spec"),
+            full_N=kwargs.get("full_N"),
+            b_layout=kwargs.get("b_layout"),
+            c_layout=kwargs.get("c_layout"),
+            storage_kind=kwargs.get("storage_kind", "symmetric"),
+        )
         M, K = A.shape
-        _, N = B.shape
+        N = spec.local_N
 
         num_sms = self.NUM_SMS or self.ctx.backend.get_device_properties().compute_units
 
@@ -98,14 +108,17 @@ class FusedSequentialPattern(Pattern):
 
         world_size = self.ctx.world_size
         heap_bases = self.ctx.heap_bases
-        N_per_rank = N // world_size
 
         grid = (min(num_sms, total_tiles),)
         EVEN_K = (K % self.BLOCK_K == 0)
         self._fused_kernel[grid](
             A, B, C,
             heap_bases,
-            M, N, K, N_per_rank,
+            M, N, K,
+            spec.scatter_src_col_offset,
+            spec.scatter_cols,
+            spec.scatter_dst_leading_dim,
+            spec.scatter_dst_col_offset,
             A.stride(0), A.stride(1),
             B.stride(0), B.stride(1),
             C.stride(0), C.stride(1),
@@ -133,7 +146,11 @@ class FusedSequentialPattern(Pattern):
         A_ptr, B_ptr, C_ptr,
         heap_bases,
         # Dimensions
-        M, N, K, N_per_rank,
+        M, N, K,
+        scatter_src_col_offset,
+        scatter_cols,
+        scatter_dst_leading_dim,
+        scatter_dst_col_offset,
         # Strides
         stride_am, stride_ak,
         stride_bk, stride_bn,
@@ -220,8 +237,10 @@ class FusedSequentialPattern(Pattern):
             # ---- Phase 3: Scatter to all peers (.wt write-through) ----
             for peer in range(world_size):
                 if peer != rank:
-                    dst_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
                     scatter_tile_to_peer(
                         C_ptr, result, offs_m, offs_n,
-                        rank, peer, N, N_per_rank, heap_bases, dst_mask,
+                        rank, peer, heap_bases,
+                        scatter_src_col_offset, scatter_cols,
+                        scatter_dst_leading_dim, scatter_dst_col_offset,
+                        c_mask,
                     )

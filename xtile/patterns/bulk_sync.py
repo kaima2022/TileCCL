@@ -80,8 +80,18 @@ class BulkSyncPattern(Pattern):
         """
         import torch
 
+        spec = self.resolve_execution(
+            A,
+            B,
+            C,
+            spec=kwargs.get("spec"),
+            full_N=kwargs.get("full_N"),
+            b_layout=kwargs.get("b_layout"),
+            c_layout=kwargs.get("c_layout"),
+            storage_kind=kwargs.get("storage_kind", "symmetric"),
+        )
         M, K = A.shape
-        _, N = B.shape
+        N = spec.local_N
 
         num_sms = self.NUM_SMS or self.ctx.backend.get_device_properties().compute_units
 
@@ -116,16 +126,20 @@ class BulkSyncPattern(Pattern):
         # Phase 3: Scatter kernel -- push local C tiles to all peers
         world_size = self.ctx.world_size
         heap_bases = self.ctx.heap_bases  # (world_size,) int64 heap base pointers
-        N_per_rank = N // world_size
         num_scatter_tiles_m = triton.cdiv(M, self.BLOCK_M)
-        num_scatter_tiles_n = triton.cdiv(N_per_rank, self.BLOCK_N)
+        num_scatter_tiles_n = triton.cdiv(spec.scatter_cols, self.BLOCK_N)
         total_scatter_tiles = num_scatter_tiles_m * num_scatter_tiles_n * world_size
 
         scatter_grid = (min(num_sms, total_scatter_tiles),)
         self._scatter_kernel[scatter_grid](
             C,
             heap_bases,
-            M, N, N_per_rank,
+            M,
+            spec.local_N,
+            spec.scatter_src_col_offset,
+            spec.scatter_cols,
+            spec.scatter_dst_leading_dim,
+            spec.scatter_dst_col_offset,
             C.stride(0), C.stride(1),
             self.ctx.rank,
             world_size,
@@ -227,7 +241,12 @@ class BulkSyncPattern(Pattern):
         C_ptr,
         heap_bases,  # int64 tensor of heap base pointers, shape (world_size,)
         # Dimensions
-        M, N, N_per_rank,
+        M,
+        local_N,
+        scatter_src_col_offset,
+        scatter_cols,
+        scatter_dst_leading_dim,
+        scatter_dst_col_offset,
         # Strides
         stride_cm, stride_cn,
         # Distribution info
@@ -262,11 +281,11 @@ class BulkSyncPattern(Pattern):
             if peer_idx != rank:
                 # Source offsets in local C
                 offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
-                offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+                offs_n = scatter_src_col_offset + tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
                 # Load local tile
                 src_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
-                mask = (offs_m[:, None] < M) & (offs_n[None, :] < N_per_rank)
+                mask = (offs_m[:, None] < M) & (offs_n[None, :] < scatter_src_col_offset + scatter_cols)
                 tile_data = tl.load(src_ptrs, mask=mask, other=0.0)
 
                 # Scatter via symmetric-heap pointer translation.
@@ -274,5 +293,8 @@ class BulkSyncPattern(Pattern):
                 # are used directly (no manual byte-size scaling).
                 scatter_tile_to_peer(
                     C_ptr, tile_data, offs_m, offs_n,
-                    rank, peer_idx, N, N_per_rank, heap_bases, mask,
+                    rank, peer_idx, heap_bases,
+                    scatter_src_col_offset, scatter_cols,
+                    scatter_dst_leading_dim, scatter_dst_col_offset,
+                    mask,
                 )

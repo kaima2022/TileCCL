@@ -731,34 +731,45 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 6. **绘图脚本修正**
    - 原来 `scripts/plot_figures.py` 里 `fig3_pattern_overlap` 直接把 `1.067×` 写死
-   - 现在已经改成基于最新 full 6-size rerun 的稳定结果出图，不再保留这个过期 headline
+   - 现在已经改成优先读取结构化 benchmark JSON，并只在“非 quick / 完整 6 尺寸”条件下更新正式图
 
-### 为什么现在结果看起来没有以前好？
+### 【新增状态更新 2026-03-21】为什么结果后来又明显变好了？
 
-主要有 4 个原因：
+关键原因不是“pattern kernel 突然被单独优化了一大轮”，而是 **U1/U2/U3 落地后，benchmark 的 shape/layout contract 被真正修正了**：
 
-1. **旧的 `1.067×` 不是当前最稳结论**
-   - 它来自旧阶段的单尺寸单轮次结果
-   - 当前统一 runtime + 动态 heap + 6 尺寸完整复测后，best stable 只有 `1.004×`
+1. **旧 benchmark path 的 `N` 语义确实不统一**
+   - benchmark 传的是 `B(K, N_per_rank)` / `C(M, N_per_rank)`
+   - 但 pattern host 侧又普遍把 `B.shape[1]` 当成 full `N`
+   - 然后再算一轮 `N_per_rank = N // world_size`
+   - 这会让 scatter / tile decomposition 在 benchmark path 下隐式“再缩一次”
 
-2. **旧图表曾经直接画了过期硬编码数据**
-   - 之前的 `fig3_pattern_overlap` 不是“重跑实验自动出图”，而是“把旧数值重新画一遍”
-   - 所以你会看到图还写着 `1.067×`
+2. **显式 contract 修正后，benchmark 才真正执行了预期的 shard/shard 语义**
+   - 现在 benchmark 路径显式传：
+     - `full_N=N`
+     - `b_layout="shard"`
+     - `c_layout="shard"`
+   - pattern 不再靠 `B.shape[1]` 猜 full-vs-shard
+   - full 6-size rerun 当前结果变成：
+     - best speedup vs `bulk_sync` = **`1.659×`**
+     - 最优点：`wg_specialized` on `8192×4608×36864`
 
-3. **这轮改动主要优化的是“工程正确性与复现性”，不是 pattern 内核性能本身**
-   - 真正明确改善的是 runtime 统一、benchmark 稳定性、heap 配置、实验口径
-   - 不是 fused pattern 的大规模算法升级
+3. **这说明旧的 `1.004×` 结论也不是“最终真相”**
+   - 它更像是“旧 benchmark contract 未统一时的稳定结果”
+   - 不是新 contract 下的正式结论
 
-4. **pattern 路径本来就还没有被证明稳定优于 baseline**
-   - 这轮复测只是把这个事实更清楚地暴露出来
-   - 从工程视角，这是“去掉了过强叙事”，不是“做出了可证实的负优化”
+4. **图表口径也终于和 benchmark 数据源绑定了**
+   - `bench_patterns.py` 会输出结构化 JSON
+   - `plot_figures.py` 只在完整 6 尺寸、非 quick 的正式结果下刷新 `fig3`
+   - quick smoke run 不再污染正式图表
 
 ### 那有没有真实的正向改进？
 
-有，但主要集中在工程主路径和 GEMM，而不是 overlap headline：
+有，而且这次已经不仅是工程主路径，也包括 overlap 结论本身：
 
 - `XTileContext` 主路径统一了，这是真的正向工程改进
 - pattern benchmark 大尺寸能稳定跑完了，这是真的正向改进
+- pattern 的 multi-GPU shape/layout contract 被显式化了，这修掉了 benchmark 语义层面的历史问题
+- pattern overlap 当前正式 full 6-size rerun 已达到 **`1.659×`**
 - GEMM 8192³ 的 official helper 3 次复测中位数现在约：
   - fp16: `84.2%`
   - bf16: `86.1%`
@@ -767,17 +778,18 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 ### 当前最准确的现状判断
 
 - **不是“XTile 被我做坏了”**
-- **而是“runtime 与 benchmark 更严谨了，旧的 pattern 最优结论站不住了”**
+- **而是“runtime / benchmark contract 被收敛后，pattern overlap 的真实表现被重新测准了”**
 - 现在 XTile 真正已经站稳的是：
   - transparent primitive 路线
   - unified runtime context
   - dynamic symmetric heap benchmark path
+  - explicit pattern execution contract（full/shard 不再隐式猜）
+  - `xtile.ops.gemm_allscatter(...)` 高层入口
   - 4096³ GEMM 达标
 - 现在仍然没站稳的是：
-  - overlap pattern 的稳定性能优势
   - 8192³ GEMM ≥ 90%
-  - 一键式高层 API
-  - shape 约定完全统一
+  - `allgather` / `gemm_reducescatter` 等高层 op 还没全部接上
+  - symmetric heap canonical allocator/import-map 路线还没完成
 
 ### 核心路径：完全实现
 
@@ -796,8 +808,8 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 | 组件 | 设想 | 现状 | 原因 |
 |------|------|------|------|
 | P2P ≥ 95% | 285 GB/s | ❌ 当前约 82.7%–82.9% 峰值 | Triton/PTX 路径与协议开销 |
-| 一键 API | `xtile.fused_gemm_scatter(...)` | ❌ 需手动组合 | 便利封装未做 |
+| 一键 API | `xtile.fused_gemm_scatter(...)` | ⚠️ `xtile.ops.gemm_allscatter(...)` 已接入，但其余 op 还没全部完成 | 高层 API 正在补齐 |
 | 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 当前约 84.2%–86.1% | 仍需更深 kernel-level 优化 |
-| Pattern ≥ 1.3× overlap | 多 GPU overlap | ❌ 当前 best stable 仅 1.004× | 旧 1.067× 单点结果未复现 |
+| Pattern ≥ 1.3× overlap | 多 GPU overlap | ✅ 当前 full 6-size rerun best = 1.659× | contract 修正后已达标 |
 | 跨节点 IPC | UCX/GDR | ❌ 待实现 | 需跨机通信基础设施 |
 | AMD 实测 | MI300X 验证 | ❌ 待硬件 | 无 AMD GPU |

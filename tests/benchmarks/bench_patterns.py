@@ -14,13 +14,17 @@ Requires >= 2 GPUs with peer access.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import math
 import sys
 import time
+from pathlib import Path
 from dataclasses import dataclass
 
 import torch
 import xtile
+from xtile.patterns.contracts import resolve_pattern_execution
+from xtile.utils.benchmark_results import default_pattern_benchmark_path, write_json
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +104,7 @@ def benchmark_size(
     ctx: xtile.XTileContext,
     warmup: int = 5,
     iters: int = 20,
-) -> list[PatternResult]:
+) -> tuple[list[PatternResult], dict[str, object]]:
     """Benchmark all 4 patterns on a given problem size."""
     from xtile.patterns.bulk_sync import BulkSyncPattern
     from xtile.patterns.fused_sequential import FusedSequentialPattern
@@ -117,6 +121,16 @@ def benchmark_size(
     B = ctx.randn(K, N_per_rank, dtype=torch.float16)
     C = ctx.zeros(M, N_per_rank, dtype=torch.float16)
     ctx.barrier()
+    execution = resolve_pattern_execution(
+        A,
+        B,
+        C,
+        rank=ctx.rank,
+        world_size=ctx.world_size,
+        full_N=N,
+        b_layout="shard",
+        c_layout="shard",
+    )
 
     pattern_classes = [
         BulkSyncPattern,
@@ -134,7 +148,7 @@ def benchmark_size(
             # Warmup
             for _ in range(warmup):
                 C.zero_()
-                pattern.execute(A, B, C)
+                pattern.execute(A, B, C, spec=execution)
             ctx.barrier()
 
             # Timed iterations
@@ -142,7 +156,7 @@ def benchmark_size(
             for _ in range(iters):
                 C.zero_()
                 start = time.perf_counter()
-                pattern.execute(A, B, C)
+                pattern.execute(A, B, C, spec=execution)
                 ctx.barrier()
                 end = time.perf_counter()
                 times.append((end - start) * 1e3)
@@ -188,7 +202,12 @@ def benchmark_size(
             if r.min_ms < float("inf") and r.pattern != "bulk_sync":
                 r.overlap_efficiency = 1.0 - (r.min_ms / bulk_sync_min)
 
-    return results
+    metadata = {
+        "spec": execution.to_dict(),
+        "dtype": str(A.dtype).replace("torch.", ""),
+        "device": str(A.device),
+    }
+    return results, metadata
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -202,6 +221,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         type=int,
         default=None,
         help="Per-rank symmetric heap size override in MiB. Must cover the estimated requirement.",
+    )
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default=str(default_pattern_benchmark_path()),
+        help="Structured JSON output path for the latest pattern benchmark results.",
     )
     return parser.parse_args(argv)
 
@@ -220,6 +245,7 @@ def main():
     world_size = 2
 
     all_results: list[PatternResult] = []
+    size_payloads: list[dict[str, object]] = []
 
     for M, N, K in sizes:
         required_heap = _required_heap_size(M, N, K, world_size, torch.float16)
@@ -241,7 +267,7 @@ def main():
                 f"{heap_size / 1024 / 1024:.0f} MiB "
                 f"(required {required_heap / 1024 / 1024:.0f} MiB)"
             )
-            results = benchmark_size(
+            results, size_metadata = benchmark_size(
                 M,
                 N,
                 K,
@@ -250,6 +276,29 @@ def main():
                 iters=args.iters,
             )
             all_results.extend(results)
+            best = min(results, key=lambda item: item.min_ms)
+            size_payloads.append({
+                "M": M,
+                "N": N,
+                "K": K,
+                "local_N": N // world_size,
+                "required_heap_bytes": required_heap,
+                "heap_size_bytes": heap_size,
+                "metadata": size_metadata,
+                "results": [
+                    {
+                        "pattern": r.pattern,
+                        "mean_ms": r.mean_ms,
+                        "min_ms": r.min_ms,
+                        "max_ms": r.max_ms,
+                        "speedup_vs_bulk": r.speedup_vs_bulk,
+                        "overlap_efficiency": r.overlap_efficiency,
+                    }
+                    for r in results
+                ],
+                "best_pattern": best.pattern,
+                "best_speedup_vs_bulk": best.speedup_vs_bulk,
+            })
 
             for r in results:
                 speedup_str = f"{r.speedup_vs_bulk:.3f}x" if r.speedup_vs_bulk > 0 else "N/A"
@@ -290,6 +339,39 @@ def main():
     best_speedup = max((r.speedup_vs_bulk for r in all_results), default=0.0)
     print(f"\nBest speedup vs bulk_sync: {best_speedup:.3f}x")
     print(f"Target (>=1.3x): {'MET' if best_speedup >= 1.3 else 'NOT MET'}")
+
+    if size_payloads:
+        sample_ctx = contexts[0] if "contexts" in locals() else None
+        sample_heap = sample_ctx.heap if sample_ctx is not None else None
+        payload = {
+            "schema_version": 1,
+            "benchmark": "pattern_overlap",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "command": " ".join(sys.argv),
+            "environment": {
+                "gpu_name": torch.cuda.get_device_name(0),
+                "visible_gpus": torch.cuda.device_count(),
+                "world_size": world_size,
+                "backend": sample_ctx.backend_name if sample_ctx is not None else "unknown",
+                "allocator_backend": "torch_bump",
+                "heap_mode": sample_heap.mode if sample_heap is not None else "unknown",
+                "transport_strategy": sample_heap.transport_strategy if sample_heap is not None else "unknown",
+                "layout_mode": "shard",
+                "b_layout": "shard",
+                "c_layout": "shard",
+                "dtype": "float16",
+                "quick_mode": args.quick,
+                "warmup": args.warmup,
+                "iters": args.iters,
+            },
+            "sizes": size_payloads,
+            "summary": {
+                "best_speedup_vs_bulk": best_speedup,
+                "size_count": len(size_payloads),
+            },
+        }
+        output_path = write_json(Path(args.output_json), payload)
+        print(f"Structured results written to: {output_path}")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,8 @@ Output: figures/ directory — PDF (vector) + PNG (300 DPI)
 """
 
 import os
+import json
+from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -51,6 +53,8 @@ plt.rcParams.update({
 
 OUTDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 os.makedirs(OUTDIR, exist_ok=True)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PATTERN_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "pattern_overlap_latest.json"
 
 
 # ---------------------------------------------------------------------------
@@ -75,9 +79,9 @@ GEMM_BARS = {
     "ratio_pct": [45.8, 49.8, 55.0, 79.6, 99.8, 92.1, 78.3, 84.9],
 }
 
-# Pattern data: `PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10`
-# full 6-size rerun on 2026-03-20. These are speedups vs bulk_sync.
-PATTERN_SPEEDUPS = {
+# Pattern data fallback: `PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10`
+# Used only when no structured benchmark JSON exists yet.
+_FALLBACK_PATTERN_SPEEDUPS = {
     "sizes": [
         "4096³",
         "8192×4608\n×36864",
@@ -91,6 +95,51 @@ PATTERN_SPEEDUPS = {
     "producer_consumer": [0.239, 0.856, 0.485, 0.763, 0.339, 0.360],
     "wg_specialized": [0.562, 0.817, 0.827, 0.849, 0.905, 0.854],
 }
+
+
+def _format_size_label(M, N, K):
+    if M == N == K:
+        return f"{M}³"
+    return f"{M}×{N}\n×{K}"
+
+
+def _load_pattern_speedups():
+    if not PATTERN_BENCHMARK_JSON.exists():
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.004}
+
+    with PATTERN_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    environment = payload.get("environment", {})
+    if environment.get("quick_mode") or len(payload.get("sizes", [])) < 6:
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.004}
+
+    sizes = []
+    series = {
+        "bulk_sync": [],
+        "fused_sequential": [],
+        "producer_consumer": [],
+        "wg_specialized": [],
+    }
+    for size_entry in payload.get("sizes", []):
+        sizes.append(_format_size_label(size_entry["M"], size_entry["N"], size_entry["K"]))
+        result_map = {
+            result["pattern"]: result["speedup_vs_bulk"]
+            for result in size_entry.get("results", [])
+        }
+        for pattern_name in series:
+            series[pattern_name].append(float(result_map.get(pattern_name, 0.0)))
+
+    if not sizes:
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.004}
+
+    return {
+        "sizes": sizes,
+        **series,
+    }, payload.get("summary", {})
+
+
+PATTERN_SPEEDUPS, PATTERN_SUMMARY = _load_pattern_speedups()
 
 
 def _save(fig, name):
@@ -202,7 +251,7 @@ def fig3_pattern_overlap():
     ax.axhline(1.0, color="gray", linestyle="-", linewidth=0.8, alpha=0.5)
 
     ax.annotate(
-        "best stable\n1.004×",
+        f"best stable\n{PATTERN_SUMMARY.get('best_speedup_vs_bulk', 1.004):.3f}×",
         xy=(0 - 0.5 * w, fused[0]),
         xytext=(0.15, 1.06),
         fontsize=8,
