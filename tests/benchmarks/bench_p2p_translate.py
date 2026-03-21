@@ -21,6 +21,9 @@ Requires >= 2 GPUs with peer access.
 
 from __future__ import annotations
 
+import argparse
+from datetime import datetime, timezone
+from pathlib import Path
 import sys
 from dataclasses import dataclass
 
@@ -30,6 +33,7 @@ import triton.language as tl
 
 from xtile.memory.symmetric_heap import SymmetricHeap
 from xtile.memory.translation import translate_ptr
+from xtile.utils.benchmark_results import default_p2p_benchmark_path, write_json
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +236,110 @@ class BenchResult:
     variant: str
 
 
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse standalone P2P translate benchmark arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--quick", action="store_true", help="Run a reduced sweep")
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default=str(default_p2p_benchmark_path()),
+        help="Structured JSON output path.",
+    )
+    return parser.parse_args(argv)
+
+
+def _summarize_by_size(results: list[BenchResult], *, dtype: str = "float32") -> list[dict[str, object]]:
+    """Summarize best read/write bandwidth per transfer size for one dtype."""
+    sizes = sorted({result.size_bytes for result in results if result.dtype == dtype})
+    summary: list[dict[str, object]] = []
+    for size_bytes in sizes:
+        subset = [
+            result for result in results
+            if result.dtype == dtype and result.size_bytes == size_bytes
+        ]
+        read = max((result for result in subset if result.direction == "read"), key=lambda item: item.bandwidth_gbps, default=None)
+        write = max((result for result in subset if result.direction == "write"), key=lambda item: item.bandwidth_gbps, default=None)
+        if read is None or write is None:
+            continue
+        summary.append({
+            "size_bytes": size_bytes,
+            "size_mb": round(size_bytes / 1e6, 1),
+            "dtype": dtype,
+            "best_read_gbps": round(read.bandwidth_gbps, 3),
+            "best_write_gbps": round(write.bandwidth_gbps, 3),
+            "best_read_variant": read.variant,
+            "best_write_variant": write.variant,
+            "best_read_block_size": read.block_size,
+            "best_write_block_size": write.block_size,
+            "best_read_grid": read.num_sms,
+            "best_write_grid": write.num_sms,
+        })
+    return summary
+
+
+def _p2p_payload(
+    *,
+    results: list[BenchResult],
+    quick: bool,
+    link: str,
+    theoretical_peak: float,
+    heaps: list[SymmetricHeap],
+) -> dict[str, object]:
+    """Build a structured P2P benchmark payload."""
+    best_read = max((r for r in results if r.direction == "read"), key=lambda item: item.bandwidth_gbps)
+    best_write = max((r for r in results if r.direction == "write"), key=lambda item: item.bandwidth_gbps)
+    return {
+        "schema_version": 1,
+        "benchmark": "p2p_translate",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "command": " ".join(sys.argv),
+        "environment": {
+            "gpu_name": torch.cuda.get_device_name(0),
+            "visible_gpus": torch.cuda.device_count(),
+            "world_size": 2,
+            "link": link,
+            "theoretical_peak_gbps": theoretical_peak,
+            "heap_mode": heaps[0].mode,
+            "transport_strategy": heaps[0].transport_strategy,
+            "quick_mode": quick,
+        },
+        "results": [
+            {
+                "direction": result.direction,
+                "dtype": result.dtype,
+                "size_bytes": result.size_bytes,
+                "block_size": result.block_size,
+                "bandwidth_gbps": result.bandwidth_gbps,
+                "time_us": result.time_us,
+                "num_sms": result.num_sms,
+                "variant": result.variant,
+            }
+            for result in results
+        ],
+        "summary": {
+            "best_read": {
+                "bandwidth_gbps": best_read.bandwidth_gbps,
+                "dtype": best_read.dtype,
+                "size_bytes": best_read.size_bytes,
+                "variant": best_read.variant,
+                "block_size": best_read.block_size,
+                "grid": best_read.num_sms,
+            },
+            "best_write": {
+                "bandwidth_gbps": best_write.bandwidth_gbps,
+                "dtype": best_write.dtype,
+                "size_bytes": best_write.size_bytes,
+                "variant": best_write.variant,
+                "block_size": best_write.block_size,
+                "grid": best_write.num_sms,
+            },
+            "float32_by_size": _summarize_by_size(results, dtype="float32"),
+            "float16_by_size": _summarize_by_size(results, dtype="float16"),
+        },
+    }
+
+
 def benchmark_p2p(
     heaps: list[SymmetricHeap],
     n_elements: int,
@@ -316,7 +424,8 @@ def benchmark_p2p(
 def main():
     assert torch.cuda.device_count() >= 2, "Need >= 2 GPUs"
 
-    quick = "--quick" in sys.argv
+    args = _parse_args(sys.argv[1:])
+    quick = args.quick
 
     # Get topology info
     link = "unknown"
@@ -459,6 +568,15 @@ def main():
         target_met = (best_read.bandwidth_gbps >= 285.0 and
                       best_write.bandwidth_gbps >= 285.0)
     print(f"\nTarget (≥95% = 285 GB/s): {'MET' if target_met else 'NOT MET'}")
+
+    output_path = write_json(Path(args.output_json), _p2p_payload(
+        results=results,
+        quick=quick,
+        link=link,
+        theoretical_peak=theoretical_peak,
+        heaps=heaps,
+    ))
+    print(f"Structured results written to: {output_path}")
 
     for h in heaps:
         h.cleanup()

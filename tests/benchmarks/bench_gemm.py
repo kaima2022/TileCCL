@@ -13,11 +13,17 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
+from datetime import datetime, timezone
+from pathlib import Path
+import sys
 import time
 from typing import Any
 
 import pytest
 import torch
+
+from xtile.utils.benchmark_results import default_gemm_benchmark_path, write_json
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +177,98 @@ def run_gemm_benchmark(device: str = "cuda:0") -> list[dict[str, Any]]:
             result = _run_gemm_comparison(M, N, K, dtype, device=device)
             results.append(result)
     return results
+
+
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def _aggregate_repeat_results(
+    repeat_results: list[list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Aggregate repeated full benchmark runs into one publication payload."""
+    if not repeat_results:
+        return []
+
+    aggregated: list[dict[str, Any]] = []
+    num_configs = len(repeat_results[0])
+    for config_idx in range(num_configs):
+        runs = [results[config_idx] for results in repeat_results]
+        reference = runs[0]
+        aggregated.append({
+            "M": reference["M"],
+            "N": reference["N"],
+            "K": reference["K"],
+            "dtype": reference["dtype"],
+            "torch_ms": round(_median([float(run["torch_ms"]) for run in runs]), 3),
+            "torch_tflops": round(_median([float(run["torch_tflops"]) for run in runs]), 2),
+            "xtile_ms": round(_median([float(run["xtile_ms"]) for run in runs]), 3),
+            "xtile_tflops": round(_median([float(run["xtile_tflops"]) for run in runs]), 2),
+            "ratio": round(_median([float(run["ratio"]) for run in runs]), 4),
+            "ratio_pct": round(_median([float(run["ratio_pct"]) for run in runs]), 1),
+            "correct": all(bool(run["correct"]) for run in runs),
+        })
+    return aggregated
+
+
+def _gemm_payload(
+    *,
+    results: list[dict[str, Any]],
+    device: str,
+    repeats: int,
+) -> dict[str, Any]:
+    """Build a structured GEMM benchmark payload."""
+    ratios = [float(item["ratio"]) for item in results]
+    return {
+        "schema_version": 1,
+        "benchmark": "gemm_comparison",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "command": " ".join(sys.argv),
+        "environment": {
+            "gpu_name": torch.cuda.get_device_name(device),
+            "visible_gpus": torch.cuda.device_count(),
+            "device": device,
+            "warmup": _WARMUP_ITERS,
+            "iters": _TIMED_ITERS,
+            "repeats": repeats,
+            "aggregation": "median_of_full_runs",
+        },
+        "results": results,
+        "summary": {
+            "target_ratio": _TARGET_RATIO,
+            "min_ratio": min(ratios) if ratios else 0.0,
+            "max_ratio": max(ratios) if ratios else 0.0,
+            "result_count": len(results),
+        },
+    }
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse standalone GEMM benchmark arguments."""
+    parser = argparse.ArgumentParser(description="Run the standalone GEMM benchmark.")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda:0",
+        help='CUDA device string, default: "cuda:0"',
+    )
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=3,
+        help="Number of full benchmark repeats to aggregate with median.",
+    )
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default=str(default_gemm_benchmark_path()),
+        help="Structured JSON output path.",
+    )
+    return parser.parse_args(argv)
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +464,8 @@ if __name__ == "__main__":
         print("No GPU detected. Exiting.")
         raise SystemExit(1)
 
-    device = "cuda:0"
+    args = _parse_args(sys.argv[1:])
+    device = args.device
     props = torch.cuda.get_device_properties(device)
 
     print("=" * 80)
@@ -377,10 +476,12 @@ if __name__ == "__main__":
     print(f"  VRAM           : {props.total_memory / (1024**3):.1f} GB")
     print(f"  Warmup iters   : {_WARMUP_ITERS}")
     print(f"  Timed iters    : {_TIMED_ITERS}")
+    print(f"  Full repeats   : {args.repeats}")
     print(f"  Target ratio   : >= {_TARGET_RATIO * 100:.0f}% of torch.matmul")
     print("=" * 80)
 
-    results = run_gemm_benchmark(device=device)
+    repeat_results = [run_gemm_benchmark(device=device) for _ in range(args.repeats)]
+    results = _aggregate_repeat_results(repeat_results)
     _print_results_table(results)
 
     # Summary
@@ -403,4 +504,10 @@ if __name__ == "__main__":
                 f"{r['ratio_pct']:.1f}%"
             )
 
+    output_path = write_json(Path(args.output_json), _gemm_payload(
+        results=results,
+        device=device,
+        repeats=args.repeats,
+    ))
+    print(f"  Structured results written to: {output_path}")
     print("=" * 80)

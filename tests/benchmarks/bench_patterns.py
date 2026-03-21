@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import torch
 import xtile
-from xtile.patterns.contracts import resolve_pattern_execution
+from xtile.ops import build_gemm_allscatter_plan
 from xtile.utils.benchmark_results import default_pattern_benchmark_path, write_json
 
 
@@ -121,16 +121,16 @@ def benchmark_size(
     B = ctx.randn(K, N_per_rank, dtype=torch.float16)
     C = ctx.zeros(M, N_per_rank, dtype=torch.float16)
     ctx.barrier()
-    execution = resolve_pattern_execution(
+    reference_plan = build_gemm_allscatter_plan(
         A,
         B,
         C,
-        rank=ctx.rank,
-        world_size=ctx.world_size,
+        ctx=ctx,
         full_N=N,
         b_layout="shard",
         c_layout="shard",
     )
+    execution = reference_plan.execution
 
     pattern_classes = [
         BulkSyncPattern,
@@ -143,12 +143,21 @@ def benchmark_size(
     bulk_sync_min = None
 
     for cls in pattern_classes:
-        pattern = cls(ctx)
+        plan = build_gemm_allscatter_plan(
+            A,
+            B,
+            C,
+            ctx=ctx,
+            full_N=N,
+            b_layout="shard",
+            c_layout="shard",
+            pattern=cls,
+        )
         try:
             # Warmup
             for _ in range(warmup):
                 C.zero_()
-                pattern.execute(A, B, C, spec=execution)
+                plan.execute(A, B, C, validate=False)
             ctx.barrier()
 
             # Timed iterations
@@ -156,7 +165,7 @@ def benchmark_size(
             for _ in range(iters):
                 C.zero_()
                 start = time.perf_counter()
-                pattern.execute(A, B, C, spec=execution)
+                plan.execute(A, B, C, validate=False)
                 ctx.barrier()
                 end = time.perf_counter()
                 times.append((end - start) * 1e3)
@@ -165,11 +174,11 @@ def benchmark_size(
             min_ms = min(times)
             max_ms = max(times)
 
-            if pattern.name == "bulk_sync":
+            if plan.pattern_name == "bulk_sync":
                 bulk_sync_min = min_ms
 
             results.append(PatternResult(
-                pattern=pattern.name,
+                pattern=plan.pattern_name,
                 M=M, N=N, K=K,
                 mean_ms=mean_ms,
                 min_ms=min_ms,
@@ -179,7 +188,7 @@ def benchmark_size(
             ))
         except Exception as e:
             results.append(PatternResult(
-                pattern=pattern.name,
+                pattern=plan.pattern_name,
                 M=M, N=N, K=K,
                 mean_ms=float("inf"),
                 min_ms=float("inf"),
@@ -187,7 +196,7 @@ def benchmark_size(
                 speedup_vs_bulk=0.0,
                 overlap_efficiency=0.0,
             ))
-            print(f"    {pattern.name}: ERROR - {e}")
+            print(f"    {plan.pattern_name}: ERROR - {e}")
 
     # Compute speedup vs bulk_sync
     if bulk_sync_min and bulk_sync_min > 0:
@@ -203,6 +212,7 @@ def benchmark_size(
                 r.overlap_efficiency = 1.0 - (r.min_ms / bulk_sync_min)
 
     metadata = {
+        "plan": reference_plan.to_dict(),
         "spec": execution.to_dict(),
         "dtype": str(A.dtype).replace("torch.", ""),
         "device": str(A.device),

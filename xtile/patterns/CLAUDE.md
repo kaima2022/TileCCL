@@ -32,8 +32,11 @@ Pattern 通过 ctx 对象接收分布式上下文：
 - 多 GPU：不要再靠 `B.shape[1]` / `C.shape[1]` 猜 full-vs-shard 语义
 - 推荐：
   - 高层入口：`xtile.ops.gemm_allscatter(...)`
+  - 显式计划：`xtile.ops.build_gemm_allscatter_plan(...)`
+  - shard/shard expert 入口：`xtile.ops.gemm_allscatter_sharded(...)`
   - 低层入口：`pattern.execute(A, B, C, spec=...)`
   - 或显式 `full_N=...`, `b_layout="full|shard"`, `c_layout="full|shard"`
+- 当前 API 收口方向：外部单一契约，内部计划执行；`pattern.execute(...)` 继续保留，但定位为 expert/internal surface
 - 当前正式支持两种 multi-rank 合同：
   - `B(K, N)` + `C(M, N)` with `full/full`
   - `B(K, N_per_rank)` + `C(M, N_per_rank)` with `shard/shard`

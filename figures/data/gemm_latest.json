@@ -1,0 +1,127 @@
+{
+  "benchmark": "gemm_comparison",
+  "command": "tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json",
+  "environment": {
+    "aggregation": "median_of_full_runs",
+    "device": "cuda:0",
+    "gpu_name": "NVIDIA H100 PCIe",
+    "iters": 20,
+    "repeats": 3,
+    "visible_gpus": 2,
+    "warmup": 10
+  },
+  "generated_at_utc": "2026-03-21T17:28:27.078442+00:00",
+  "results": [
+    {
+      "K": 1024,
+      "M": 1024,
+      "N": 1024,
+      "correct": true,
+      "dtype": "fp16",
+      "ratio": 0.5268,
+      "ratio_pct": 52.7,
+      "torch_ms": 0.03,
+      "torch_tflops": 72.21,
+      "xtile_ms": 0.056,
+      "xtile_tflops": 38.34
+    },
+    {
+      "K": 1024,
+      "M": 1024,
+      "N": 1024,
+      "correct": true,
+      "dtype": "bf16",
+      "ratio": 0.5209,
+      "ratio_pct": 52.1,
+      "torch_ms": 0.03,
+      "torch_tflops": 72.07,
+      "xtile_ms": 0.057,
+      "xtile_tflops": 37.82
+    },
+    {
+      "K": 2048,
+      "M": 2048,
+      "N": 2048,
+      "correct": true,
+      "dtype": "fp16",
+      "ratio": 0.8952,
+      "ratio_pct": 89.5,
+      "torch_ms": 0.066,
+      "torch_tflops": 258.42,
+      "xtile_ms": 0.073,
+      "xtile_tflops": 235.15
+    },
+    {
+      "K": 2048,
+      "M": 2048,
+      "N": 2048,
+      "correct": true,
+      "dtype": "bf16",
+      "ratio": 0.8898,
+      "ratio_pct": 89.0,
+      "torch_ms": 0.067,
+      "torch_tflops": 257.78,
+      "xtile_ms": 0.072,
+      "xtile_tflops": 237.25
+    },
+    {
+      "K": 4096,
+      "M": 4096,
+      "N": 4096,
+      "correct": true,
+      "dtype": "fp16",
+      "ratio": 0.9779,
+      "ratio_pct": 97.8,
+      "torch_ms": 0.312,
+      "torch_tflops": 440.23,
+      "xtile_ms": 0.321,
+      "xtile_tflops": 428.27
+    },
+    {
+      "K": 4096,
+      "M": 4096,
+      "N": 4096,
+      "correct": true,
+      "dtype": "bf16",
+      "ratio": 0.9204,
+      "ratio_pct": 92.0,
+      "torch_ms": 0.312,
+      "torch_tflops": 440.26,
+      "xtile_ms": 0.339,
+      "xtile_tflops": 405.22
+    },
+    {
+      "K": 8192,
+      "M": 8192,
+      "N": 8192,
+      "correct": true,
+      "dtype": "fp16",
+      "ratio": 0.8336,
+      "ratio_pct": 83.4,
+      "torch_ms": 2.393,
+      "torch_tflops": 459.4,
+      "xtile_ms": 2.871,
+      "xtile_tflops": 382.96
+    },
+    {
+      "K": 8192,
+      "M": 8192,
+      "N": 8192,
+      "correct": true,
+      "dtype": "bf16",
+      "ratio": 0.8085,
+      "ratio_pct": 80.8,
+      "torch_ms": 2.282,
+      "torch_tflops": 481.79,
+      "xtile_ms": 2.758,
+      "xtile_tflops": 398.68
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "max_ratio": 0.9779,
+    "min_ratio": 0.5209,
+    "result_count": 8,
+    "target_ratio": 0.9
+  }
+}

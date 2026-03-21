@@ -234,21 +234,19 @@ def benchmark_all_patterns(
     from xtile.patterns.fused_sequential import FusedSequentialPattern
     from xtile.patterns.producer_consumer import ProducerConsumerPattern
     from xtile.patterns.wg_specialized import WGSpecializedPattern
-
-    from xtile.patterns.contracts import resolve_pattern_execution
+    from xtile.ops import build_gemm_allscatter_plan
 
     execution = spec
     if execution is None:
-        execution = resolve_pattern_execution(
+        execution = build_gemm_allscatter_plan(
             A,
             B,
             C,
-            rank=ctx.rank,
-            world_size=ctx.world_size,
+            ctx=ctx,
             full_N=full_N,
             b_layout=b_layout,
             c_layout=c_layout,
-        )
+        ).execution
 
     all_pattern_classes = [
         BulkSyncPattern,
@@ -259,22 +257,31 @@ def benchmark_all_patterns(
 
     results: List[Dict[str, Any]] = []
     for cls in all_pattern_classes:
-        pattern = cls(ctx)
+        plan = build_gemm_allscatter_plan(
+            A,
+            B,
+            C,
+            ctx=ctx,
+            full_N=execution.full_N,
+            b_layout=execution.rhs_layout,
+            c_layout=execution.output_layout,
+            pattern=cls,
+        )
         try:
-            result = pattern.benchmark(
+            result = plan.pattern_impl.benchmark(
                 A,
                 B,
                 C,
                 warmup=warmup,
                 iters=iters,
-                spec=execution,
+                spec=plan.execution,
             )
             results.append(result)
         except Exception as e:
             # Record the failure but continue with other patterns.
             # TODO: Log the exception via xtile.utils.logging when available.
             results.append({
-                "pattern": pattern.name,
+                "pattern": plan.pattern_name,
                 "mean_ms": float("inf"),
                 "min_ms": float("inf"),
                 "max_ms": float("inf"),

@@ -318,7 +318,17 @@ def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
             )
             print(f"Auto-selected pattern: {selected.name if hasattr(selected, 'name') else selected.__name__}")
 
-        results = benchmark_all_patterns(A, B, C, ctx, warmup=5, iters=20)
+        results = benchmark_all_patterns(
+            A,
+            B,
+            C,
+            ctx,
+            warmup=5,
+            iters=20,
+            full_N=N,
+            b_layout="shard",
+            c_layout="shard",
+        )
         print(f"\n{'Pattern':25s} | {'Mean (ms)':>10s} | {'Min (ms)':>10s} | {'Speedup':>8s}")
         print("-" * 65)
         bulk_min = None

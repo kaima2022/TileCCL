@@ -24,6 +24,16 @@ def default_pattern_benchmark_path() -> Path:
     return figures_data_dir() / "pattern_overlap_latest.json"
 
 
+def default_gemm_benchmark_path() -> Path:
+    """Return the canonical latest GEMM benchmark JSON path."""
+    return figures_data_dir() / "gemm_latest.json"
+
+
+def default_p2p_benchmark_path() -> Path:
+    """Return the canonical latest P2P benchmark JSON path."""
+    return figures_data_dir() / "p2p_latest.json"
+
+
 def write_json(path: str | Path, payload: dict[str, Any]) -> Path:
     """Write benchmark JSON with stable formatting."""
     output_path = Path(path)

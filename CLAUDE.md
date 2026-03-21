@@ -50,10 +50,11 @@ memory/symmetric_heap → backends/{hip,cuda}
 9. **Pattern 多 GPU 调用必须显式声明 contract**：
    - `pattern.execute(...)` 在多 GPU 下不应再靠 `B.shape[1]` / `C.shape[1]` 猜 full-vs-shard 语义
    - 推荐默认入口：`xtile.ops.gemm_allscatter(...)`
+   - API 收口方向：外部单一契约，内部计划执行（`build_*_plan(...)`）
    - 若直接调用 pattern，则显式传 `spec=...` 或 `full_N + b_layout + c_layout`
 10. **benchmark / figures 共享结构化数据源**：
-   - pattern benchmark 输出写入 `figures/data/pattern_overlap_latest.json`
-   - 图表脚本只在结果满足“可发布配置”时读取该 JSON；quick smoke run 不应污染正式 figures
+   - pattern / GEMM / P2P benchmark 分别输出到 `figures/data/pattern_overlap_latest.json`、`gemm_latest.json`、`p2p_latest.json`
+   - 图表脚本优先读取这些 JSON；quick smoke run 不应污染正式 figures
 
 ## 关键参考实现
 - **Iris** (github.com/ROCm/iris): 核心算法参考（Listing 1/3/4/5），本地副本 `/home/makai/iris`
@@ -139,7 +140,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] Block size 自动选择（_select_config: M/N/K → 最优 BM/BN/BK/warps/stages）
 - [x] 4 pattern GEMM 循环同步升级（EVEN_K + 分离式 loop + num_stages=4）
 - [x] GEMM 达到 ≥ 90% cuBLAS（4096³: 100.7%，launcher 开销消除后匹配 cuBLAS）
-- [x] Pattern overlap 重新评估（fused_sequential 1.067× vs bulk_sync）
+- [x] Pattern overlap 重新评估（历史阶段曾出现 fused_sequential 1.067× vs bulk_sync）
 
 ### Phase 5 交付物（2026-03-19）
 - [x] GEMM launcher 开销消除（SM count 缓存 + CUDA events + 预分配输出）
@@ -148,7 +149,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] Pattern overlap 重测（fused_sequential 首次达到正向 overlap）
 - [x] P2P 83% 天花板诊断（Iris 无法运行，translate_ptr 实现一致，确认硬件天花板）
 - [ ] GEMM 8192³ 达到 ≥90%（当前 79%，kernel 本身瓶颈，需 PTX-level 优化）
-- [x] Pattern overlap ≥1.3×（2026-03-21 显式 contract 修正后 full 6-size rerun best = 1.659×）
+- [x] Pattern overlap ≥1.3×（2026-03-21 显式 contract 修正后 full 6-size rerun best = 1.619×）
 
 ### Phase 6 交付物（2026-03-19）
 - [x] 6 幅科研绘图（`figures/` PDF + PNG，Nature/Science 风格）
@@ -179,10 +180,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] `PatternExecutionSpec` / `PatternTensorSpec`：统一 full/shard layout metadata
 - [x] 4 个 overlap pattern 改为消费显式 contract，不再在多 GPU 下隐式猜 `N`
 - [x] 新增 `xtile.ops.gemm_allscatter(...)` 高层入口
+- [x] 新增 `xtile.ops.GemmAllScatterPlan` / `build_gemm_allscatter_plan(...)`
+- [x] 新增 `xtile.ops.gemm_allscatter_sharded(...)` expert 入口，显式区分 shard/shard 合同
+- [x] 新增 `xtile.ops.AllGatherPlan` / `build_allgather_plan(...)` / `xtile.ops.allgather(...)`
+- [x] benchmark / helper 开始复用统一 plan-builder 主链
 - [x] Pattern benchmark 结构化 JSON 输出：`figures/data/pattern_overlap_latest.json`
+- [x] GEMM / P2P benchmark 结构化 JSON 输出：`figures/data/gemm_latest.json` / `figures/data/p2p_latest.json`
 - [x] `scripts/plot_figures.py` 改为优先读取结构化 benchmark 数据，并过滤 quick smoke run
 - [x] `SymmetricHeap.mode` / `transport_strategy` 元数据暴露给 benchmark 结果
-- [x] Pattern overlap full 6-size rerun 重跑：best speedup vs bulk_sync = **1.659×**
+- [x] Pattern overlap full 6-size rerun 重跑：best speedup vs bulk_sync = **1.619×**
 
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
@@ -207,14 +213,14 @@ memory/symmetric_heap → backends/{hip,cuda}
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |
 |------|--------|--------|------|
-| P2P read (134MB, f32) | 248.70 GB/s (82.9%) | ≥ 95% | ❌ 硬件天花板 |
-| P2P write (134MB, f32) | 248.14 GB/s (82.7%) | ≥ 95% | ❌ 硬件天花板 |
+| P2P read (134MB, f32) | 248.83 GB/s (82.9%) | ≥ 95% | ❌ 未达标 |
+| P2P write (134MB, f32) | 248.39 GB/s (82.8%) | ≥ 95% | ❌ 未达标 |
 | Collective 归一化带宽 | N/A (tile级原语) | ≥ 90% | ⚠️ 不适用 |
-| GEMM vs cuBLAS (4096³ fp16) | **100.2%** (official helper 3 次复测中位数) | ≥ 90% | ✅ |
-| GEMM vs cuBLAS (4096³ bf16) | **91.1%** (official helper 3 次复测中位数) | ≥ 90% | ✅ |
-| GEMM vs cuBLAS (8192³ fp16) | 84.2% (official helper 3 次复测中位数) | ≥ 90% | ⚠️ 未达标但优于 Phase 5 |
-| GEMM vs cuBLAS (8192³ bf16) | 86.1% (official helper 3 次复测中位数) | ≥ 90% | ⚠️ 未达标但优于 Phase 5 |
-| Pattern overlap (full 6-size rerun) | **1.659×** best speedup（`wg_specialized`, 8192×4608×36864） | ≥ 1.3× | ✅ contract 修正后已达标 |
+| GEMM vs cuBLAS (4096³ fp16) | **97.8%** (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ✅ |
+| GEMM vs cuBLAS (4096³ bf16) | **92.0%** (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ✅ |
+| GEMM vs cuBLAS (8192³ fp16) | 83.4% (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ⚠️ 未达标 |
+| GEMM vs cuBLAS (8192³ bf16) | 80.8% (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ⚠️ 未达标 |
+| Pattern overlap (full 6-size rerun) | **1.619×** best speedup（`wg_specialized`, 8192×8192×30720） | ≥ 1.3× | ✅ contract 修正后已达标 |
 
 ## 重要约束
 - **不** 包装 xSHMEM/NVSHMEM 为不透明字节码

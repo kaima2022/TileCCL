@@ -1,0 +1,4970 @@
+{
+  "benchmark": "p2p_translate",
+  "command": "tests/benchmarks/bench_p2p_translate.py --output-json /home/makai/XTile/figures/data/p2p_latest.json",
+  "environment": {
+    "gpu_name": "NVIDIA H100 PCIe",
+    "heap_mode": "single_process",
+    "link": "NV12",
+    "quick_mode": false,
+    "theoretical_peak_gbps": 300.0,
+    "transport_strategy": "peer_access",
+    "visible_gpus": 2,
+    "world_size": 2
+  },
+  "generated_at_utc": "2026-03-21T17:16:55.463401+00:00",
+  "results": [
+    {
+      "bandwidth_gbps": 27.935209632505302,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 41.137279719114304,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 26.859016911773978,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 42.17600032687187,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 28.00683892393791,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 41.27616003155708,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 28.946996341829113,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.56991992890835,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.769094228606566,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.560320004820824,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 28.895943050390994,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 40.72895996272564,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 27.329440075400615,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 40.57087995111942,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.054793411715927,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 39.84256029129028,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 28.7438609256199,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.808960020542145,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 27.722503377536945,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 40.41984014213085,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.574005753381083,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.54336000978947,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.467626720819613,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.642880007624626,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 28.895943050390994,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.80224005877972,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.1012443940909,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.73024009168148,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 29.075422329456817,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.923519998788834,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.816196910603836,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.62975999712944,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.518711479032422,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.412480145692825,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 30.284658785355212,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.97375984489918,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.04964604897494,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 39.864319786429405,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.547341380511103,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.80607968568802,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 29.7890910705062,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.856640070676804,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 30.007324646034647,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.30175994336605,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 31.968780330950693,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 35.446399822831154,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 30.397033148957515,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.40128009021282,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.897811212437578,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.62048006057739,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.368861447381942,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.09471994638443,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 30.007324646034647,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.537920102477074,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 30.825965843179464,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.27488003671169,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.547341380511103,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.38463991880417,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.7890910705062,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.359039947390556,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.62748537342118,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.078720197081566,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.574005753381083,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.062720000743866,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 30.256694898080266,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.07711987197399,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 31.23737026440218,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.58560000360012,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.897811212437578,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.42016017436981,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 31.267177143878346,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.433280035853386,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 13.653332684834828,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 82.52480044960976,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.453530349738877,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.86048002541065,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 28.972590697999507,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.317439928650856,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 30.88407028222606,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.65856006741524,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.7620344693667,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.44159997999668,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.283288067019434,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.74880000948906,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.547341380511103,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.2124800235033,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.02391543098582,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.50912010669708,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 30.34074191602337,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.53279983997345,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 31.000945608565875,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.03840008378029,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.87048387649432,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 39.03039999306202,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.95246942136006,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.32160001993179,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 99.67452461317569,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.4710398465395,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.69620562875687,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.30047994852066,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.96307685071997,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.6172803491354,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 102.80156491794035,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.657599836587906,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 105.70322475532588,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.73216009140015,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 105.53300893038823,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.69439995288849,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 103.12509708612947,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 42.86143980920315,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.04402328074148,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.58655981719494,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 104.43983979420962,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 42.75904007256031,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 105.70322475532588,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.01567994058132,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.36908576812803,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.22943978011608,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 104.35668642352894,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 42.77952000498772,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 105.78853874179035,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.51903980970383,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.08099703400451,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.340159729123116,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 103.77830934922211,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.6521597802639,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 102.40000258684164,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.5334400087595,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.45067209337483,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.70528011023998,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 103.36908576812803,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.080320209264755,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 102.72099881811302,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.211520165205,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 104.60654471915049,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 49.69024017453194,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.96307685071997,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.344000056385994,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 103.36908576812803,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 42.88511984050274,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 106.30332875533358,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 42.309119924902916,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 103.94289785720336,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.120000064373016,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 105.27871059728388,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.79744006693363,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 104.60654471915049,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.73216001689434,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 104.02539284557876,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.146240040659904,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 100.36140509924263,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.890560269355774,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 106.13117630121687,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.43583992123604,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 102.32006442580564,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.4054397046566,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 102.80156491794035,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.671039789915085,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.36908576812803,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.47775973379612,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.88225749612069,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.146880120038986,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 101.68502429753191,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.497280195355415,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.56025420831602,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.313919976353645,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 100.20795505110117,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.259200021624565,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 100.97997009279808,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.13568027317524,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 101.13580456980665,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.75551983714104,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 103.04402328074148,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.3228799700737,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 100.90223280309759,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.11520004272461,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 101.9222384441612,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.03295999765396,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 102.0015559648424,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.73631991446018,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 105.70322475532588,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.704959973692894,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.0015559648424,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.1312000900507,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.08099703400451,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.623039945960045,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 103.20629856777292,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.834240064024925,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.64056825654183,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.92767980694771,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 101.37046020451679,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.94176006317139,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 225.98620977050206,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 75.41247978806496,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 225.59724603479074,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 75.44000014662743,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 226.08366036737925,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 75.26592120528221,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.19132344788656,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.32864046096802,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 231.9858428340855,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.38944092392921,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.50022779048547,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.26464086771011,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 228.4479289927663,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.582399725914,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 228.2490176599809,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.45759996771812,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 228.54751472422893,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.43904012441635,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.29420031804523,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.10912102460861,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 231.9858428340855,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.28256160020828,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.60337863565454,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.10272067785263,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 229.04674857801893,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.09536078572273,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 230.05178808479653,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.00768041610718,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 229.9508874049592,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.08064067363739,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 233.53584727692368,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.05600002408028,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.29420031804523,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.1379209458828,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.60337863565454,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.04960057139397,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 230.55759903137215,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.64223822951317,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 230.55759903137215,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.70111882686615,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 230.86216884406693,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.69087815284729,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.60337863565454,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.26336070895195,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.70662104907393,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.08032035827637,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.60337863565454,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.12192067503929,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 230.35499855301777,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.730558604002,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 230.15275382885252,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.71519833803177,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 230.15275382885252,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.71071830391884,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.60337863565454,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.00160005688667,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.29420031804523,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.28128144145012,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.70662104907393,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.19552063941956,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 229.54816823597122,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.03136044740677,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 229.54816823597122,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.00512009859085,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 229.85007519636454,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.06144008040428,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.08853766020226,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.18592086434364,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.8099551527272,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.08928072452545,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.50022779048547,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.1136006116867,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 228.94672740109124,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.1145607829094,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 229.74935134270416,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.91167968511581,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 228.4479289927663,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.44544017314911,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.91338106881454,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 72.95871987938881,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 233.01689891975354,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.02400022745132,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.70662104907393,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 72.96511977910995,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 228.64718731699978,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.28096070885658,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 227.45682417855213,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.8377600312233,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 228.94672740109124,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.22784090042114,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 231.5759707346329,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.42336103320122,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 231.78072558399606,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.40224117040634,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 231.9858428340855,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.29216122627258,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 242.9790207684871,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 278.28095972537994,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 243.03535115419118,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 278.40575993061066,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 243.68487464212345,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.14175820350647,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 242.10943520322311,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 280.4095995426178,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 242.89460033385316,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 280.2540808916092,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 243.2608815647654,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.93343901634216,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 243.4585577328369,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 277.1980810165405,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 242.58554256464672,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 278.3782374858856,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 244.25251204750805,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 276.8179178237915,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.02302394923956,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.71583926677704,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 244.73706725512196,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.8873599767685,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 244.59436562692304,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.74143946170807,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 243.76984540188826,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.6489601135254,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 243.54337070901843,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.9472008943558,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 244.13877310501306,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.15936160087585,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 244.4803081600003,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.71743988990784,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 244.85136447563363,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.71103835105896,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 244.53731031581435,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.4038419723511,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.71202191671628,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.41023886203766,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.79841250378612,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.44607973098755,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.71202191671628,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.27392065525055,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.16622633916512,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.3452795743942,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.53939602245862,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.36831974983215,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.02302394923956,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.4150390625,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.88486386084566,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.0793591737747,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.88486386084566,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.21696066856384,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.5681546219335,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.2675197124481,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 246.2023910744845,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.1414415836334,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.79841250378612,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.55231964588165,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.6544440554356,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.3417602777481,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.42445570057126,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.07071912288666,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.42445570057126,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.7231984138489,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.79841250378612,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.30080235004425,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.97137605203872,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.3084806203842,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.76959995097795,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.5407974720001,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.62566524280356,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.550399184227,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.68322961261603,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.41151916980743,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.76959995097795,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.41983819007874,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.7407941522076,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.35391783714294,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 246.347002688752,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 273.79455983638763,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.0868293466981,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.22591984272003,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 246.2023910744845,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 273.68320167064667,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.62566524280356,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.53823924064636,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.39573074657366,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.71167981624603,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.91370344727488,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.1305595636368,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.59691995885208,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.72640097141266,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.51064415806056,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.6368008852005,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.68322961261603,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.5958387851715,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 246.43384044105161,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 547.1807968616486,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.46280895663824,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 546.974081993103,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 247.2473514276123,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 545.4681646823883,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.36703925221866,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 552.2860825061798,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.36703925221866,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 551.0700798034668,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 246.6512164080631,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 548.088960647583,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 246.73826880242606,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.9519994258881,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.9416663250901,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.944322347641,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 247.5391806456013,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.0339207649231,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.13080688964132,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.5321598052979,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.08712084174746,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.5481588840485,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.7146308828652,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.0985608100891,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 247.27651152806837,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 545.7177662849426,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.29106700044937,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 544.8864078521729,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 247.5684096268309,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 544.6272003650665,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 246.9416663250901,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 546.5132796764374,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.78183156949532,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 547.8982377052307,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.14537233864294,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 545.6729638576508,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.4777249693263,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.6460812091827,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.5808067832438,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.6076803207397,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.59554365958198,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.3561594486237,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.26193061811293,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.1545572280884,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.69999826036306,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.5062386989594,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.6268610708777,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.4889616966248,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.68397416032684,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 541.049599647522,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.72822674424552,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 540.8889627456665,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.7429811055894,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 540.8646368980408,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.64148505339205,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 543.3395218849182,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.05157702843127,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 542.7404808998108,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.77315140178106,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 542.9849648475647,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.61028228334703,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.0067212581635,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.63976477440153,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.1219203472137,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.69872327192567,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 540.907518863678,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.15993950466896,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.7449624538422,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.5391806456013,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 543.6505627632141,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.80243566608362,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 543.2025623321533,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.83151654912578,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 541.0080015659332,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.61028228334703,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 541.0905587673187,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.66922679802045,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 540.9862399101257,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.86099768355373,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 542.7776002883911,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.05157702843127,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 542.7206408977509,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 248.38944106362135,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 541.7433607578278,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.61028228334703,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.1398410797119,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.80198856925566,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.0387217998505,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.80198856925566,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 540.8211183547974,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.94893358003227,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 542.9945623874664,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.22772726268315,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 542.6278364658356,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 248.1396208840229,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float32",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 542.7123236656189,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 28.693521029496402,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.07071992754936,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.06238437482742,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.8675202280283,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 28.946996341829113,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.90431992709637,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.283288067019434,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.634880036115646,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.453530349738877,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.189120054244995,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.9251153586215,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.07551994919777,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.600721408014966,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.34080009162426,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.397033148957515,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.135360315442085,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 29.654297780761194,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.93727986514568,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 30.567163789476794,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.66880004107952,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.34074191602337,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.815999895334244,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 30.14535386783809,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.85599999129772,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.62748537342118,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.22592005133629,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.248276221312757,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 40.11583976447582,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 28.79437481912722,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.561279848217964,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.574005753381083,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.142079934477806,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.25714207571382,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.356480076909065,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.1012443940909,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.6230398863554,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.231042732382367,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.17983992397785,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.075422329456817,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.96223998069763,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 29.36200718276861,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.51743987202644,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.84335212419331,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.20576010644436,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.481859429928374,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.63871988654137,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 31.000945608565875,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.23808033764362,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.388341022207555,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.00480002164841,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.346021869833166,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.21023964881897,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 30.03482927663363,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.27392019331455,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.520721950241573,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.23551960289478,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.95246942136006,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.53983989357948,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 30.284658785355212,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 37.87200018763542,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 30.03482927663363,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.484799921512604,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.71866891783802,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.963199853897095,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 28.7438609256199,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.752640038728714,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.127112364969193,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 38.75328004360199,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.14535386783809,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 55.3516798466444,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 14.460723582900654,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 78.14591988921165,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.02391543098582,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.62847976386547,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 29.49415044010505,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.06848004460335,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 30.34074191602337,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.01440009474754,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 29.870556846298875,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.03584009408951,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.7438609256199,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 39.104000106453896,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 29.84335212419331,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 1048576,
+      "time_us": 38.44287998974323,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 29.897811212437578,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.89055988192558,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 28.321522095735055,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 39.43872012197971,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 29.68115876167169,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 37.52000004053116,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 31.267177143878346,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.52672000229359,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 30.88407028222606,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.522880271077156,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 30.942397580700163,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 1048576,
+      "time_us": 36.5267201513052,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 100.82461511013776,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.83487991988659,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 104.10801888338051,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.592960238456726,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 103.12509708612947,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.385599702596664,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 105.44810642875959,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.97760011255741,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 100.36140509924263,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.27456006407738,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 103.77830934922211,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.44896025955677,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 101.84304418396695,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.13952015340328,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 96.73210641397101,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 46.32576011121273,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 101.68502429753191,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.19520013034344,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 97.96114015001254,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 45.00543996691704,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 99.82635292184052,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.44352023303509,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 102.0015559648424,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.091520085930824,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 99.82635292184052,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.677119851112366,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 100.51533480274558,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.04415972530842,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 103.04402328074148,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.14112015068531,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 101.68502429753191,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.13088037073612,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.16056194053944,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.92127983272076,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 102.0015559648424,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.698559924960136,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 103.61423171753685,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 42.417920008301735,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.08099703400451,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.40544007718563,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 101.84304418396695,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.549439907073975,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 101.9222384441612,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.62176023423672,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.16056194053944,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.813119903206825,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 101.84304418396695,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.00576002895832,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 102.48006574986707,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.66399981081486,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.12509708612947,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.19232016801834,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 101.37046020451679,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.33695985376835,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 103.20629856777292,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.400959968566895,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.96307685071997,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.178240209817886,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 102.0015559648424,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.34335967898369,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 100.90223280309759,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.12287995219231,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 100.66973741215753,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 44.3104001134634,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.96307685071997,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.56095992028713,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 101.9222384441612,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.551360070705414,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.16056194053944,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.57439994812012,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 102.40000258684164,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.46752002835274,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 103.94289785720336,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.00992026925087,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.96307685071997,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.53344030678272,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.16056194053944,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.56031991541386,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 99.90244066169193,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 44.28543999791145,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 103.20629856777292,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 42.964480221271515,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 103.77830934922211,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 4194304,
+      "time_us": 43.251840099692345,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 101.44892091395259,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.767679929733276,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 105.19421661065532,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.20832021534443,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 102.56025420831602,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.7254399061203,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 101.21390231294544,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.99423994123936,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 102.80156491794035,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.255039900541306,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 104.85760234375006,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 4194304,
+      "time_us": 43.48031975328922,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 223.67236254327435,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 76.08384042978287,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 224.53446722868907,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 76.09536036849022,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 224.7269543013487,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 76.01535990834236,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 229.6487157278735,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.53119963407516,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 229.34733715836077,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.51135978102684,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 230.55759903137215,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.23040002584457,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 222.91156639541512,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 76.23680084943771,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 223.10127981411276,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 76.20224073529243,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 222.91156639541512,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 76.22400104999542,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 231.9858428340855,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.65247949957848,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 231.78072558399606,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.69087964296341,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 229.9508874049592,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.01983976364136,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 226.4743046671279,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 75.21280035376549,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 226.1811950465177,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 75.39840027689934,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 225.59724603479074,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 75.25248110294342,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.29420031804523,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.2908807694912,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.19132344788656,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.25824096798897,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.08853766020226,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.27296108007431,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 228.54751472422893,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.43520039319992,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 228.34843000911627,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.46975991129875,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 228.34843000911627,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.58879962563515,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.50022779048547,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.08992087841034,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.8099551527272,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.0585603415966,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.8099551527272,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.08992058038712,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 229.44770875129896,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.13312062621117,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 229.74935134270416,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.0147203207016,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 229.2470533418628,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 74.06656086444855,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 231.88323884884326,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.3964803814888,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 233.01689891975354,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.0400002002716,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 232.29420031804523,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.24672088027,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 230.05178808479653,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.64095762372017,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 230.35499855301777,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.66463825106621,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 230.76055620341444,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.61407816410065,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.8099551527272,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.11360076069832,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.19132344788656,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.26016142964363,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 231.67830291927731,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.26784133911133,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 230.35499855301777,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.6959981918335,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 230.15275382885252,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.71583819389343,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 230.55759903137215,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.72415825724602,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.50022779048547,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.21984127163887,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 232.08853766020226,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.05984064936638,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 233.1205088281794,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 16777216,
+      "time_us": 73.02336022257805,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 229.9508874049592,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 74.00704026222229,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 229.85007519636454,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.92575994133949,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 230.05178808479653,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.94047975540161,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 232.08853766020226,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.32352057099342,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 231.5759707346329,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.38752120733261,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 231.9858428340855,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 16777216,
+      "time_us": 73.2915210723877,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 229.87525236056507,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 294.9663972854614,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 229.52303926989364,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 295.04959881305695,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 233.82228691519742,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 289.22560036182404,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 233.50986191778708,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 290.8223992586136,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 234.92237677922293,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 290.5804806947708,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 239.56499700466577,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 283.5494405031204,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 240.9411722450521,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 280.4262411594391,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 240.83049562501367,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 281.0508805513382,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 241.83026084069348,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 279.5712000131607,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 241.16283094270472,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 281.17120027542114,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 240.33371934074486,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 282.21568167209625,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 242.33324964472723,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 279.1455978155136,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 242.78212223864674,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 278.2035231590271,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 242.95089157905554,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 278.2758402824402,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 243.854875439427,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.4835205078125,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 241.88603380187857,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 280.13119876384735,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 242.02561783930886,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 279.6550387144089,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 243.65655542935494,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.5814414024353,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 243.2608815647654,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 277.31455981731415,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 243.88324077350006,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 277.2729605436325,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 243.48683093669752,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 277.28064000606537,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 244.87996212127618,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.97440123558044,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 244.82280012651546,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 276.18303775787354,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.16622633916512,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.27808010578156,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 243.8265431044767,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.7462384700775,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 243.5150843738254,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.4329596757889,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 244.25251204750805,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 276.1113578081131,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 244.6514209878134,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.2051203250885,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 243.88324077350006,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 277.1935987472534,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 244.67997194462652,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 275.9891200065613,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.5681546219335,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.4460791349411,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.68322961261603,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.4095993041992,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.6544440554356,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.3788808584213,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 244.93717745777724,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.53279995918274,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 244.79421582955413,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.92895925045013,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.223575538761,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.98368084430695,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.97137605203872,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.17600095272064,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.97137605203872,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.3212801218033,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.97137605203872,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.04800176620483,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.79841250378612,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.7667181491852,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.1157163320217,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.1113603115082,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.62566524280356,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 67108864,
+      "time_us": 274.6764808893204,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.59691995885208,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.5017582178116,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.33832773612758,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.89023864269257,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.79841250378612,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.8505586385727,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.6544440554356,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.63935911655426,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.71202191671628,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 274.48767840862274,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 244.90856644787686,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 67108864,
+      "time_us": 275.17567813396454,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 231.39711271348824,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 582.4127995967865,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 231.71670975058893,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 582.362242937088,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 234.5938819607883,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 574.5676815509796,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 237.7049649903192,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 570.5420792102814,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 237.67801852694376,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 570.518399477005,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 241.3710034578771,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 561.5008020401001,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 245.13758848356704,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 550.4646384716034,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 244.63714800790385,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 551.5852808952332,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 245.72639378484456,
+      "block_size": 1024,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 548.4576046466827,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 243.23266080709524,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 556.8889617919922,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 243.44442359303457,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 555.7945609092712,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 245.09460422684805,
+      "block_size": 1024,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 551.057276725769,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 246.28912688706268,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 547.1635210514069,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.41935873676394,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 547.0092821121216,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 247.30565134702383,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 545.6659245491028,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 245.3239744976837,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 551.2755167484283,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 245.48192578779754,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 551.1814439296722,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 246.69474843884848,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 548.7724769115448,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 246.78183156949532,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 546.1491215229034,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.4917842835748,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 547.2390401363373,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 247.64148505339205,
+      "block_size": 2048,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.0217590332031,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.21819820375927,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.3376019001007,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.27651152806837,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.4943978786469,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.61226604336372,
+      "block_size": 2048,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.0614414215088,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 246.95618240292268,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 545.8879995346069,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.3785988914924,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 544.6790421009064,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 247.3931935648373,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 544.8441636562347,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 246.83991213441647,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 546.8671977519989,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.01437217068238,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 546.7807960510254,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.4077627774065,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 545.0323188304901,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.49244962562233,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.5065598487854,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.59554365958198,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.306881904602,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.55133827160532,
+      "block_size": 4096,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.20192527771,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.4077627774065,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.4643225669861,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 246.7237512975786,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 546.1209630966187,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.15993950466896,
+      "block_size": 4096,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 545.4092788696289,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.61028228334703,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 541.0899174213409,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.65448118469524,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 541.1520004272461,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.78722720715245,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 540.7366406917572,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 248.09557747784325,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 542.8223955631256,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.90495783372225,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 542.8832030296326,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.8903027178379,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 114,
+      "size_bytes": 134217728,
+      "time_us": 543.2544004917145,
+      "variant": "wt+evict"
+    },
+    {
+      "bandwidth_gbps": 248.59554365958198,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 541.159679889679,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 248.86105153862718,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 540.8467185497284,
+      "variant": "cg"
+    },
+    {
+      "bandwidth_gbps": 248.8758216627696,
+      "block_size": 8192,
+      "direction": "read",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 540.712319612503,
+      "variant": "evict_first"
+    },
+    {
+      "bandwidth_gbps": 247.7292652342837,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 543.5648012161255,
+      "variant": "baseline"
+    },
+    {
+      "bandwidth_gbps": 247.8903027178379,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 543.3875226974487,
+      "variant": "wt"
+    },
+    {
+      "bandwidth_gbps": 247.32023741396543,
+      "block_size": 8192,
+      "direction": "write",
+      "dtype": "float16",
+      "num_sms": 228,
+      "size_bytes": 134217728,
+      "time_us": 544.4377636909485,
+      "variant": "wt+evict"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "best_read": {
+      "bandwidth_gbps": 248.8758216627696,
+      "block_size": 8192,
+      "dtype": "float16",
+      "grid": 228,
+      "size_bytes": 134217728,
+      "variant": "evict_first"
+    },
+    "best_write": {
+      "bandwidth_gbps": 248.38944106362135,
+      "block_size": 8192,
+      "dtype": "float32",
+      "grid": 114,
+      "size_bytes": 134217728,
+      "variant": "wt+evict"
+    },
+    "float16_by_size": [
+      {
+        "best_read_block_size": 1024,
+        "best_read_gbps": 30.397,
+        "best_read_grid": 228,
+        "best_read_variant": "cg",
+        "best_write_block_size": 8192,
+        "best_write_gbps": 31.267,
+        "best_write_grid": 228,
+        "best_write_variant": "baseline",
+        "dtype": "float16",
+        "size_bytes": 1048576,
+        "size_mb": 1.0
+      },
+      {
+        "best_read_block_size": 8192,
+        "best_read_gbps": 105.194,
+        "best_read_grid": 228,
+        "best_read_variant": "cg",
+        "best_write_block_size": 1024,
+        "best_write_gbps": 105.448,
+        "best_write_grid": 114,
+        "best_write_variant": "baseline",
+        "dtype": "float16",
+        "size_bytes": 4194304,
+        "size_mb": 4.2
+      },
+      {
+        "best_read_block_size": 4096,
+        "best_read_gbps": 230.761,
+        "best_read_grid": 228,
+        "best_read_variant": "evict_first",
+        "best_write_block_size": 8192,
+        "best_write_gbps": 233.121,
+        "best_write_grid": 114,
+        "best_write_variant": "wt+evict",
+        "dtype": "float16",
+        "size_bytes": 16777216,
+        "size_mb": 16.8
+      },
+      {
+        "best_read_block_size": 8192,
+        "best_read_gbps": 245.971,
+        "best_read_grid": 114,
+        "best_read_variant": "baseline",
+        "best_write_block_size": 8192,
+        "best_write_gbps": 246.116,
+        "best_write_grid": 114,
+        "best_write_variant": "wt",
+        "dtype": "float16",
+        "size_bytes": 67108864,
+        "size_mb": 67.1
+      },
+      {
+        "best_read_block_size": 8192,
+        "best_read_gbps": 248.876,
+        "best_read_grid": 228,
+        "best_read_variant": "evict_first",
+        "best_write_block_size": 8192,
+        "best_write_gbps": 248.096,
+        "best_write_grid": 114,
+        "best_write_variant": "baseline",
+        "dtype": "float16",
+        "size_bytes": 134217728,
+        "size_mb": 134.2
+      }
+    ],
+    "float32_by_size": [
+      {
+        "best_read_block_size": 8192,
+        "best_read_gbps": 30.454,
+        "best_read_grid": 114,
+        "best_read_variant": "cg",
+        "best_write_block_size": 2048,
+        "best_write_gbps": 31.969,
+        "best_write_grid": 228,
+        "best_write_variant": "wt",
+        "dtype": "float32",
+        "size_bytes": 1048576,
+        "size_mb": 1.0
+      },
+      {
+        "best_read_block_size": 2048,
+        "best_read_gbps": 105.789,
+        "best_read_grid": 114,
+        "best_read_variant": "baseline",
+        "best_write_block_size": 2048,
+        "best_write_gbps": 106.303,
+        "best_write_grid": 228,
+        "best_write_variant": "wt",
+        "dtype": "float32",
+        "size_bytes": 4194304,
+        "size_mb": 4.2
+      },
+      {
+        "best_read_block_size": 2048,
+        "best_read_gbps": 230.862,
+        "best_read_grid": 228,
+        "best_read_variant": "evict_first",
+        "best_write_block_size": 2048,
+        "best_write_gbps": 233.536,
+        "best_write_grid": 114,
+        "best_write_variant": "baseline",
+        "dtype": "float32",
+        "size_bytes": 16777216,
+        "size_mb": 16.8
+      },
+      {
+        "best_read_block_size": 8192,
+        "best_read_gbps": 245.914,
+        "best_read_grid": 228,
+        "best_read_variant": "evict_first",
+        "best_write_block_size": 8192,
+        "best_write_gbps": 246.347,
+        "best_write_grid": 114,
+        "best_write_variant": "baseline",
+        "dtype": "float32",
+        "size_bytes": 67108864,
+        "size_mb": 67.1
+      },
+      {
+        "best_read_block_size": 8192,
+        "best_read_gbps": 248.832,
+        "best_read_grid": 114,
+        "best_read_variant": "baseline",
+        "best_write_block_size": 8192,
+        "best_write_gbps": 248.389,
+        "best_write_grid": 114,
+        "best_write_variant": "wt+evict",
+        "dtype": "float32",
+        "size_bytes": 134217728,
+        "size_mb": 134.2
+      }
+    ]
+  }
+}

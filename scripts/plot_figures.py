@@ -54,6 +54,8 @@ plt.rcParams.update({
 OUTDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 os.makedirs(OUTDIR, exist_ok=True)
 REPO_ROOT = Path(__file__).resolve().parents[1]
+GEMM_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "gemm_latest.json"
+P2P_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "p2p_latest.json"
 PATTERN_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "pattern_overlap_latest.json"
 
 
@@ -61,9 +63,10 @@ PATTERN_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "pattern_overlap_lates
 # Data sources
 # ---------------------------------------------------------------------------
 
-# GEMM data: `tests/benchmarks/bench_gemm.py::_run_gemm_comparison`
-# rerun 3 times on 2026-03-21, then median aggregated per size/dtype.
-GEMM_BARS = {
+# Fig 1 fallback provenance:
+# manually curated experiment-backed values retained as a safe fallback
+# when no structured GEMM benchmark JSON is present.
+_FALLBACK_GEMM_BARS = {
     "sizes": [
         "1024³\nfp16",
         "1024³\nbf16",
@@ -74,12 +77,28 @@ GEMM_BARS = {
         "8192³\nfp16",
         "8192³\nbf16",
     ],
-    "cublas_tflops": [60.93, 81.33, 284.14, 363.06, 409.47, 470.00, 484.07, 487.90],
-    "xtile_tflops": [27.92, 40.48, 157.26, 288.63, 408.75, 435.42, 381.98, 408.97],
-    "ratio_pct": [45.8, 49.8, 55.0, 79.6, 99.8, 92.1, 78.3, 84.9],
+    "cublas_tflops": [72.21, 72.07, 258.42, 257.78, 440.23, 440.26, 459.40, 481.79],
+    "xtile_tflops": [38.34, 37.82, 235.15, 237.25, 428.27, 405.22, 382.96, 398.68],
 }
 
-# Pattern data fallback: `PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10`
+_FALLBACK_GEMM_ROOFLINE = {
+    "sizes": [1024, 2048, 4096, 8192],
+    "cublas_tflops": [72.21, 258.42, 440.23, 459.40],
+    "xtile_tflops": [38.34, 235.15, 428.27, 382.96],
+}
+
+# Fig 2 fallback provenance:
+# manually curated experiment-backed values retained as a safe fallback
+# when no structured P2P benchmark JSON is present.
+_FALLBACK_P2P_CURVE = {
+    "sizes_mb": [1.0, 4.2, 16.8, 67.1, 134.2],
+    "read_bw": [30.454, 105.789, 230.862, 245.914, 248.832],
+    "write_bw": [31.969, 106.303, 233.536, 246.347, 248.389],
+    "best_read_gbps": 248.832,
+}
+
+# Fig 3 fallback provenance:
+# latest validated full 6-size rerun from the local H100 machine.
 # Used only when no structured benchmark JSON exists yet.
 _FALLBACK_PATTERN_SPEEDUPS = {
     "sizes": [
@@ -91,9 +110,9 @@ _FALLBACK_PATTERN_SPEEDUPS = {
         "2048×16384\n×8192",
     ],
     "bulk_sync": [1.000, 1.000, 1.000, 1.000, 1.000, 1.000],
-    "fused_sequential": [1.004, 0.876, 0.890, 0.779, 0.844, 0.959],
-    "producer_consumer": [0.239, 0.856, 0.485, 0.763, 0.339, 0.360],
-    "wg_specialized": [0.562, 0.817, 0.827, 0.849, 0.905, 0.854],
+    "fused_sequential": [1.082, 1.151, 1.216, 1.202, 1.157, 1.186],
+    "producer_consumer": [0.877, 1.461, 1.080, 1.488, 1.031, 1.045],
+    "wg_specialized": [0.997, 1.616, 1.180, 1.619, 1.114, 1.126],
 }
 
 
@@ -103,16 +122,87 @@ def _format_size_label(M, N, K):
     return f"{M}×{N}\n×{K}"
 
 
+def _load_gemm_bars():
+    if not GEMM_BENCHMARK_JSON.exists():
+        return _FALLBACK_GEMM_BARS, {}
+
+    with GEMM_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    results = payload.get("results", [])
+    if len(results) < 8:
+        return _FALLBACK_GEMM_BARS, {}
+
+    ordered = sorted(
+        results,
+        key=lambda item: (int(item["M"]), 0 if item["dtype"] == "fp16" else 1),
+    )
+    return {
+        "sizes": [
+            f"{item['M']}³\n{item['dtype']}"
+            for item in ordered
+        ],
+        "cublas_tflops": [float(item["torch_tflops"]) for item in ordered],
+        "xtile_tflops": [float(item["xtile_tflops"]) for item in ordered],
+    }, payload.get("environment", {})
+
+
+def _load_gemm_roofline_points():
+    if not GEMM_BENCHMARK_JSON.exists():
+        return _FALLBACK_GEMM_ROOFLINE
+
+    with GEMM_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    results = [
+        item for item in payload.get("results", [])
+        if item.get("dtype") == "fp16"
+    ]
+    if len(results) < 4:
+        return _FALLBACK_GEMM_ROOFLINE
+
+    ordered = sorted(results, key=lambda item: int(item["M"]))
+    return {
+        "sizes": [int(item["M"]) for item in ordered],
+        "cublas_tflops": [float(item["torch_tflops"]) for item in ordered],
+        "xtile_tflops": [float(item["xtile_tflops"]) for item in ordered],
+    }
+
+
+def _load_p2p_curve():
+    if not P2P_BENCHMARK_JSON.exists():
+        return _FALLBACK_P2P_CURVE, {}
+
+    with P2P_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    environment = payload.get("environment", {})
+    if environment.get("quick_mode"):
+        return _FALLBACK_P2P_CURVE, environment
+
+    points = payload.get("summary", {}).get("float32_by_size", [])
+    if len(points) < 5:
+        return _FALLBACK_P2P_CURVE, environment
+
+    ordered = sorted(points, key=lambda item: float(item["size_mb"]))
+    return {
+        "sizes_mb": [float(item["size_mb"]) for item in ordered],
+        "read_bw": [float(item["best_read_gbps"]) for item in ordered],
+        "write_bw": [float(item["best_write_gbps"]) for item in ordered],
+        "best_read_gbps": max(float(item["best_read_gbps"]) for item in ordered),
+    }, environment
+
+
 def _load_pattern_speedups():
     if not PATTERN_BENCHMARK_JSON.exists():
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.004}
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
 
     with PATTERN_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
 
     environment = payload.get("environment", {})
     if environment.get("quick_mode") or len(payload.get("sizes", [])) < 6:
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.004}
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
 
     sizes = []
     series = {
@@ -131,7 +221,7 @@ def _load_pattern_speedups():
             series[pattern_name].append(float(result_map.get(pattern_name, 0.0)))
 
     if not sizes:
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.004}
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
 
     return {
         "sizes": sizes,
@@ -139,7 +229,20 @@ def _load_pattern_speedups():
     }, payload.get("summary", {})
 
 
+GEMM_BARS, GEMM_ENV = _load_gemm_bars()
+GEMM_ROOFLINE = _load_gemm_roofline_points()
+P2P_CURVE, P2P_ENV = _load_p2p_curve()
 PATTERN_SPEEDUPS, PATTERN_SUMMARY = _load_pattern_speedups()
+
+
+def _gemm_aggregation_label() -> str:
+    repeats = GEMM_ENV.get("repeats")
+    aggregation = GEMM_ENV.get("aggregation")
+    if isinstance(repeats, int) and repeats > 0:
+        if aggregation == "median_of_full_runs":
+            return f"median of {repeats} full runs"
+        return f"{repeats} runs"
+    return "latest benchmark"
 
 
 def _save(fig, name):
@@ -156,7 +259,7 @@ def fig1_gemm_performance():
     sizes = GEMM_BARS["sizes"]
     cublas = GEMM_BARS["cublas_tflops"]
     xtile = GEMM_BARS["xtile_tflops"]
-    ratio = GEMM_BARS["ratio_pct"]
+    ratio = [(x / c * 100.0) if c > 0 else 0.0 for c, x in zip(cublas, xtile)]
 
     x = np.arange(len(sizes))
     w = 0.35
@@ -176,7 +279,7 @@ def fig1_gemm_performance():
                 ha="center", va="bottom", fontsize=7, color=color, fontweight=weight)
 
     ax.set_ylabel("TFLOPS")
-    ax.set_title("GEMM Performance: XTile vs cuBLAS (median of 3 runs)")
+    ax.set_title(f"GEMM Performance: XTile vs cuBLAS ({_gemm_aggregation_label()})")
     ax.set_xticks(x)
     ax.set_xticklabels(sizes, fontsize=8)
     ax.set_ylim(0, 580)
@@ -190,9 +293,10 @@ def fig1_gemm_performance():
 # Figure 2: P2P Bandwidth vs Transfer Size
 # ===================================================================
 def fig2_p2p_bandwidth():
-    sizes_mb = [1.0, 4.2, 16.8, 67.1, 134.2]
-    read_bw  = [31.8, 111.7, 233.4, 245.9, 248.8]
-    write_bw = [31.8, 109.6, 233.4, 245.1, 248.4]
+    sizes_mb = P2P_CURVE["sizes_mb"]
+    read_bw = P2P_CURVE["read_bw"]
+    write_bw = P2P_CURVE["write_bw"]
+    ceiling_pct = P2P_CURVE["best_read_gbps"] / 300.0 * 100.0
 
     fig, ax = plt.subplots(figsize=(3.5, 2.8))
 
@@ -204,8 +308,8 @@ def fig2_p2p_bandwidth():
     ax.axhline(300, color="red", linestyle="--", linewidth=0.8, alpha=0.6)
     ax.text(1.1, 305, "NV12 Peak (300 GB/s)", fontsize=7, color="red", va="bottom")
 
-    ax.axhline(248.7, color=COLORS[0], linestyle=":", linewidth=0.8, alpha=0.5)
-    ax.text(50, 240, "XTile ceiling\n(82.9%)", fontsize=7, color=COLORS[0], ha="center")
+    ax.axhline(P2P_CURVE["best_read_gbps"], color=COLORS[0], linestyle=":", linewidth=0.8, alpha=0.5)
+    ax.text(50, 240, f"XTile ceiling\n({ceiling_pct:.1f}%)", fontsize=7, color=COLORS[0], ha="center")
 
     ax.annotate(
         "Launch latency\ndominated",
@@ -250,15 +354,45 @@ def fig3_pattern_overlap():
 
     ax.axhline(1.0, color="gray", linestyle="-", linewidth=0.8, alpha=0.5)
 
+    pattern_series = [
+        ("fused_sequential", fused, -0.5 * w, COLORS[1]),
+        ("producer_consumer", prod_cons, 0.5 * w, COLORS[2]),
+        ("wg_specialized", wg_spec, 1.5 * w, COLORS[3]),
+    ]
+    best_name = "fused_sequential"
+    best_idx = 0
+    best_offset = -0.5 * w
+    best_color = COLORS[1]
+    best_value = fused[0] if fused else 1.0
+    for pattern_name, values, offset, color in pattern_series:
+        for idx, value in enumerate(values):
+            if value > best_value:
+                best_name = pattern_name
+                best_idx = idx
+                best_offset = offset
+                best_color = color
+                best_value = value
+
+    ymax = max(max(bulk), max(fused), max(prod_cons), max(wg_spec), best_value) * 1.22
+    ymax = max(ymax, 1.30)
+    best_on_right = best_idx >= (len(sizes) // 2)
+    label_y = min(best_value + 0.12, ymax - 0.18)
+    label_dx = -0.58 if best_on_right else 0.58
+    label_x = x[best_idx] + best_offset + label_dx
+    label_ha = "right" if best_on_right else "left"
+    legend_loc = "upper left" if best_on_right else "upper right"
+    legend_anchor = (0.01, 0.99) if best_on_right else (0.99, 0.99)
+
     ax.annotate(
-        f"best stable\n{PATTERN_SUMMARY.get('best_speedup_vs_bulk', 1.004):.3f}×",
-        xy=(0 - 0.5 * w, fused[0]),
-        xytext=(0.15, 1.06),
+        f"best stable\n{PATTERN_SUMMARY.get('best_speedup_vs_bulk', 1.619):.3f}×",
+        xy=(x[best_idx] + best_offset, best_value),
+        xytext=(label_x, label_y),
         fontsize=8,
         fontweight="bold",
-        color=COLORS[1],
-        arrowprops=dict(arrowstyle="-", color=COLORS[1], lw=0.8),
-        ha="center",
+        color=best_color,
+        arrowprops=dict(arrowstyle="-", color=best_color, lw=0.8),
+        ha=label_ha,
+        bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.9),
     )
 
     ax.set_xlabel("Problem Size (M × N × K)")
@@ -266,9 +400,9 @@ def fig3_pattern_overlap():
     ax.set_title("Pattern Speedup vs bulk_sync (full 6-size rerun)")
     ax.set_xticks(x)
     ax.set_xticklabels(sizes, fontsize=7.5)
-    ax.set_ylim(0, 1.1)
+    ax.set_ylim(0, ymax)
     ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
-    ax.legend(loc="upper right", ncol=2, fontsize=8)
+    ax.legend(loc=legend_loc, bbox_to_anchor=legend_anchor, ncol=2, fontsize=8, borderaxespad=0.3)
 
     fig.tight_layout()
     _save(fig, "fig3_pattern_overlap")
@@ -278,6 +412,7 @@ def fig3_pattern_overlap():
 # Figure 4: 6-Layer Architecture Diagram
 # ===================================================================
 def fig4_architecture():
+    # Fig 4 is a schematic architecture diagram, not a benchmark plot.
     layers = [
         ("User API",        "init(), XTileContext, SymmetricHeap"),
         ("Pattern Library", "BulkSync / FusedSeq / PC / WGSpec"),
@@ -336,19 +471,21 @@ def fig4_architecture():
 # Figure 5: Roofline Model
 # ===================================================================
 def fig5_roofline():
+    # Fig 5 is a derived view: theoretical roofline + fp16 GEMM experiment
+    # points from the same benchmark JSON consumed by Fig 1.
     peak_flops = 756e12
     peak_bw = 2.04e12
     ridge_point = peak_flops / peak_bw
 
-    sizes = [1024, 2048, 4096, 8192]
+    sizes = GEMM_ROOFLINE["sizes"]
     intensity = []
     for n in sizes:
         flops = 2 * n * n * n
         bytes_moved = 2 * (n * n + n * n + n * n)
         intensity.append(flops / bytes_moved)
 
-    cublas_tflops = [60.93, 284.14, 409.47, 484.07]
-    xtile_tflops  = [27.92, 157.26, 408.75, 381.98]
+    cublas_tflops = GEMM_ROOFLINE["cublas_tflops"]
+    xtile_tflops = GEMM_ROOFLINE["xtile_tflops"]
 
     fig, ax = plt.subplots(figsize=(3.5, 3))
 
@@ -375,7 +512,7 @@ def fig5_roofline():
     ax.set_yscale("log")
     ax.set_xlabel("Arithmetic Intensity (FLOP/byte)")
     ax.set_ylabel("Performance (TFLOPS)")
-    ax.set_title("Roofline: GEMM (fp16)")
+    ax.set_title(f"Roofline: GEMM fp16 ({_gemm_aggregation_label()})")
     ax.set_xlim(50, 5000)
     ax.set_ylim(10, 1000)
     ax.legend(loc="lower right", fontsize=7)

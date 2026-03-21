@@ -142,17 +142,18 @@ PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10
 
 | M | N | K | Best Pattern | Best Speedup |
 |------|------|-------|--------------|--------------|
-| 4096 | 4096 | 4096 | fused_sequential | **1.004×** |
-| 8192 | 4608 | 36864 | bulk_sync | 1.000× |
-| 8192 | 3584 | 14336 | bulk_sync | 1.000× |
-| 8192 | 8192 | 30720 | bulk_sync | 1.000× |
-| 4096 | 8192 | 8192 | bulk_sync | 1.000× |
-| 2048 | 16384 | 8192 | bulk_sync | 1.000× |
+| 4096 | 4096 | 4096 | fused_sequential | **1.084×** |
+| 8192 | 4608 | 36864 | wg_specialized | **1.616×** |
+| 8192 | 3584 | 14336 | fused_sequential | **1.209×** |
+| 8192 | 8192 | 30720 | wg_specialized | **1.619×** |
+| 4096 | 8192 | 8192 | fused_sequential | **1.155×** |
+| 2048 | 16384 | 8192 | fused_sequential | **1.190×** |
 
 **更新结论**：
-- 旧的 `1.067×` 结果来自单尺寸单轮次，不应再作为项目 headline 指标
-- 在统一 runtime、完整 6 尺寸复测下，当前最好的**稳定** speedup 只有 `1.004×`
-- 因此 XTile 当前真正已站稳的是 runtime/context 一致性与 benchmark 可复现性，而不是 overlap pattern 已经压倒性领先
+- 旧的 `1.067×` 结果是更早阶段的单尺寸历史结果，不能再充当当前 headline
+- 更早一轮统一 runtime 复测里出现过 `1.004×` 的保守结论，但在显式 contract + plan-builder 主链稳定后，最新 full 6-size rerun headline 已更新为 `1.619×`
+- 当前最好的稳定点是 `wg_specialized` 在 `8192×8192×30720` 上达到 `1.619×`
+- 因此 XTile 当前已经证明 overlap pattern 可以显著超过 baseline，但优势仍然依赖尺寸与 pattern 选择，不应夸大成“全尺寸统一大幅领先”
 
 ---
 
@@ -736,6 +737,8 @@ tl.assume(stride_bn > 0)
 | GEMM 8192³ bf16 | 79.2% | 79.0% | ≥ 90% | ❌ kernel 瓶颈 |
 | Pattern overlap (best) | 1.000× | **1.067×** | ≥ 1.05× | ✅ 达标 |
 | P2P read (128MB) | 248.85 GB/s | 248.70 GB/s | ≥ 285 GB/s | ❌ 硬件天花板 |
+
+【新增状态更新 2026-03-21】以上表格是 **Phase 5 历史结果**，不是当前 headline。当前显式 contract + plan-builder 主链下的最新 full 6-size rerun，best speedup 已更新为 `1.619×`，见本文开头的最新汇总。
 
 ### 已知问题
 
