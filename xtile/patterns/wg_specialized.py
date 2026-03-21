@@ -76,6 +76,9 @@ class WGSpecializedPattern(Pattern):
         self.BLOCK_K = BLOCK_K
         self.COMPUTE_SMS = COMPUTE_SMS
         self.COMM_SMS = COMM_SMS
+        self._lock_buffer: Any = None
+        self._lock_capacity: int = 0
+        self._lock_device_index: int | None = None
 
     def _resolve_sm_split(self) -> tuple[int, int]:
         """Determine the compute/comm SM split.
@@ -94,6 +97,28 @@ class WGSpecializedPattern(Pattern):
         comm = max(1, int(total_sms * self._COMM_SM_FRACTION))
         compute = total_sms - comm
         return compute, comm
+
+    def _get_locks(self, total_tiles: int, device: "torch.device") -> "torch.Tensor":
+        """Return a zeroed lock buffer, reusing storage across launches."""
+        import torch
+
+        device_index = device.index if device.index is not None else torch.cuda.current_device()
+        if (
+            self._lock_buffer is None
+            or self._lock_capacity < total_tiles
+            or self._lock_device_index != device_index
+        ):
+            self._lock_buffer = torch.empty(
+                total_tiles,
+                dtype=torch.int32,
+                device=device,
+            )
+            self._lock_capacity = total_tiles
+            self._lock_device_index = device_index
+
+        locks = self._lock_buffer[:total_tiles]
+        locks.zero_()
+        return locks
 
     # ------------------------------------------------------------------
     # Public API
@@ -131,7 +156,7 @@ class WGSpecializedPattern(Pattern):
 
         # Lock tensor for tile-level synchronization between compute and
         # comm workers within the same kernel.
-        locks = torch.zeros(total_tiles, dtype=torch.int32, device=A.device)
+        locks = self._get_locks(total_tiles, A.device)
 
         # Single kernel launch -- grid size = COMPUTE_SMS + COMM_SMS
         grid = (total_sms,)

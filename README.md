@@ -30,18 +30,36 @@ pip install -e ".[dev]"
 ```
 
 ```python
+import torch
 import xtile
 
-# Initialize
-ctx = xtile.init(backend="auto")
+# Single GPU / distributed rank-local initialization
+ctx = xtile.init(backend="auto", heap_size=1 << 30)
 
-# Create symmetric heap for multi-GPU communication
-heap = xtile.SymmetricHeap(size=1 << 30, rank=ctx.rank, world_size=ctx.world_size)
+# Tensors now come directly from the attached symmetric heap
+A = ctx.randn(8192, 8192, dtype=torch.float16)
+B = ctx.randn(8192, 8192, dtype=torch.float16)
+C = ctx.zeros(8192, 8192, dtype=torch.float16)
 
 # Use patterns for fused compute-communication
 from xtile.patterns import auto_select
-pattern = auto_select("gemm_allscatter", M=8192, N=8192, K=8192, world_size=ctx.world_size)
+pattern = auto_select("gemm_allscatter", M=8192, N=8192, K=8192, world_size=ctx.world_size, ctx=ctx)
 pattern.execute(A, B, C)
+```
+
+For single-process multi-GPU experiments, use:
+
+```python
+contexts = xtile.init_local(world_size=2, heap_size=1 << 30)
+ctx0 = contexts[0]
+ctx1 = contexts[1]
+```
+
+Pattern benchmark now auto-sizes the symmetric heap from the tested shape:
+
+```bash
+xtile bench pattern --quick --warmup 2 --iters 5
+xtile bench pattern --heap-size-mb 1024
 ```
 
 ## Development
@@ -55,7 +73,8 @@ make bench         # Run benchmarks
 
 ## Status
 
-**Phase 0** -- Infrastructure setup. See [development plan](XTile_开发计划.md) for the full roadmap.
+**Phase 7** -- Unified runtime context, benchmark hardening, and full-size pattern reruns.
+See [CLAUDE.md](CLAUDE.md) for the current engineering status and measured baselines.
 
 ## License
 

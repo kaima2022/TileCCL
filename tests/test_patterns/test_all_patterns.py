@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from xtile.backends import get_backend
+import xtile
 from xtile.memory.symmetric_heap import SymmetricHeap
 from xtile.patterns import (
     BulkSyncPattern,
@@ -18,21 +18,6 @@ from xtile.patterns import (
     ProducerConsumerPattern,
     WGSpecializedPattern,
 )
-
-
-def _make_ctx(rank, world_size, device, backend_name, heap_bases):
-    """Build a minimal context object for pattern testing."""
-
-    class _Ctx:
-        pass
-
-    ctx = _Ctx()
-    ctx.rank = rank
-    ctx.world_size = world_size
-    ctx.device = device
-    ctx.backend = get_backend(backend_name)
-    ctx.heap_bases = heap_bases
-    return ctx
 
 
 # -----------------------------------------------------------------------
@@ -54,8 +39,13 @@ class TestPatternGEMMCorrectness:
         """Create a single-GPU ctx with SymmetricHeap."""
         heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
         torch.cuda.set_device(0)
-        ctx = _make_ctx(0, 1, "cuda:0", self.backend_name,
-                        heaps[0].get_heap_bases())
+        ctx = xtile.init(
+            backend=self.backend_name,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
         yield ctx
         for h in heaps:
             h.cleanup()
@@ -131,8 +121,13 @@ class TestPatternScatterCorrectness:
         A = torch.randn(M, K, device="cuda:0", dtype=torch.float16)
         B = torch.randn(K, N, device="cuda:0", dtype=torch.float16)
 
-        ctx = _make_ctx(0, world_size, "cuda:0", self.backend_name,
-                        heaps[0].get_heap_bases())
+        ctx = xtile.init(
+            backend=self.backend_name,
+            rank=0,
+            world_size=world_size,
+            heap=heaps[0],
+            force_backend=True,
+        )
 
         pattern = pattern_cls(ctx, BLOCK_M=128, BLOCK_N=128, BLOCK_K=64)
         pattern.execute(A, B, C0)

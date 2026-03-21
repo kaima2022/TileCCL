@@ -13,28 +13,14 @@ Requires >= 2 GPUs with peer access.
 
 from __future__ import annotations
 
+import argparse
+import math
 import sys
 import time
 from dataclasses import dataclass
 
 import torch
-
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.backends import get_backend, detect_hardware
-
-
-# ---------------------------------------------------------------------------
-# Distributed context (matches pattern API expectations)
-# ---------------------------------------------------------------------------
-
-class DistCtx:
-    """Minimal distributed context for pattern execution."""
-
-    def __init__(self, rank: int, world_size: int, heap_bases, backend):
-        self.rank = rank
-        self.world_size = world_size
-        self.heap_bases = heap_bases
-        self.backend = backend
+import xtile
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +42,10 @@ QUICK_SIZES = [
     (8192, 4608, 14336),
 ]
 
+_HEAP_ALIGNMENT = 256
+_HEAP_GRANULARITY = 64 * 1024 * 1024
+_HEAP_SAFETY_MARGIN = 64 * 1024 * 1024
+
 
 @dataclass
 class PatternResult:
@@ -70,9 +60,44 @@ class PatternResult:
     overlap_efficiency: float
 
 
+def _round_up(value: int, alignment: int) -> int:
+    """Round *value* up to the next multiple of *alignment*."""
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
+def _tensor_nbytes(shape: tuple[int, ...], dtype: torch.dtype) -> int:
+    """Return aligned bytes required for one heap-backed tensor."""
+    element_size = torch.tensor([], dtype=dtype).element_size()
+    return _round_up(math.prod(shape) * element_size, _HEAP_ALIGNMENT)
+
+
+def _required_heap_size(
+    M: int,
+    N: int,
+    K: int,
+    world_size: int,
+    dtype: torch.dtype,
+) -> int:
+    """Estimate per-rank heap bytes required for one pattern benchmark."""
+    n_per_rank = N // world_size
+    required = 0
+    required += _tensor_nbytes((M, K), dtype)
+    required += _tensor_nbytes((K, n_per_rank), dtype)
+    required += _tensor_nbytes((M, n_per_rank), dtype)
+    required += _HEAP_SAFETY_MARGIN
+    return _round_up(required, _HEAP_GRANULARITY)
+
+
+def _cleanup_contexts(contexts: list[xtile.XTileContext]) -> None:
+    """Release heaps attached to benchmark contexts."""
+    for ctx in contexts:
+        if ctx.heap is not None:
+            ctx.heap.cleanup()
+
+
 def benchmark_size(
     M: int, N: int, K: int,
-    heaps: list[SymmetricHeap],
+    ctx: xtile.XTileContext,
     warmup: int = 5,
     iters: int = 20,
 ) -> list[PatternResult]:
@@ -82,27 +107,16 @@ def benchmark_size(
     from xtile.patterns.producer_consumer import ProducerConsumerPattern
     from xtile.patterns.wg_specialized import WGSpecializedPattern
 
-    world_size = len(heaps)
-    rank = 0
+    world_size = ctx.world_size
+    rank = ctx.rank
     torch.cuda.set_device(rank)
-
-    # Resolve backend
-    hw = detect_hardware()
-    backend = get_backend(hw)
-
-    bases = heaps[rank].get_heap_bases()
-    ctx = DistCtx(rank=rank, world_size=world_size, heap_bases=bases, backend=backend)
 
     # Allocate matrices
     N_per_rank = N // world_size
-    A = heaps[rank].allocate_tensor((M, K), torch.float16)
-    B = heaps[rank].allocate_tensor((K, N_per_rank), torch.float16)
-    C = heaps[rank].allocate_tensor((M, N_per_rank), torch.float16)
-
-    A.normal_()
-    B.normal_()
-    C.zero_()
-    torch.cuda.synchronize(rank)
+    A = ctx.randn(M, K, dtype=torch.float16)
+    B = ctx.randn(K, N_per_rank, dtype=torch.float16)
+    C = ctx.zeros(M, N_per_rank, dtype=torch.float16)
+    ctx.barrier()
 
     pattern_classes = [
         BulkSyncPattern,
@@ -121,7 +135,7 @@ def benchmark_size(
             for _ in range(warmup):
                 C.zero_()
                 pattern.execute(A, B, C)
-            torch.cuda.synchronize(rank)
+            ctx.barrier()
 
             # Timed iterations
             times: list[float] = []
@@ -129,7 +143,7 @@ def benchmark_size(
                 C.zero_()
                 start = time.perf_counter()
                 pattern.execute(A, B, C)
-                torch.cuda.synchronize(rank)
+                ctx.barrier()
                 end = time.perf_counter()
                 times.append((end - start) * 1e3)
 
@@ -177,28 +191,64 @@ def benchmark_size(
     return results
 
 
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse benchmark CLI arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--quick", action="store_true", help="Benchmark only 2 representative sizes")
+    parser.add_argument("--warmup", type=int, default=3, help="Warmup iterations per pattern")
+    parser.add_argument("--iters", type=int, default=10, help="Timed iterations per pattern")
+    parser.add_argument(
+        "--heap-size-mb",
+        type=int,
+        default=None,
+        help="Per-rank symmetric heap size override in MiB. Must cover the estimated requirement.",
+    )
+    return parser.parse_args(argv)
+
+
 def main():
     assert torch.cuda.device_count() >= 2, "Need >= 2 GPUs"
 
-    quick = "--quick" in sys.argv
-    sizes = QUICK_SIZES if quick else IRIS_SIZES
+    args = _parse_args(sys.argv[1:])
+    sizes = QUICK_SIZES if args.quick else IRIS_SIZES
 
     print("=== XTile Pattern Overlap Efficiency Benchmark ===")
     print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
     print(f"Sizes: {len(sizes)} configurations")
     print()
 
-    # Create heaps large enough for all sizes
-    heap_size = 512 * 1024 * 1024  # 512 MB
     world_size = 2
 
     all_results: list[PatternResult] = []
 
     for M, N, K in sizes:
-        heaps = SymmetricHeap.create_all(size=heap_size, world_size=world_size)
+        required_heap = _required_heap_size(M, N, K, world_size, torch.float16)
+        heap_size = required_heap
+        if args.heap_size_mb is not None:
+            heap_size = args.heap_size_mb * 1024 * 1024
+            if heap_size < required_heap:
+                raise ValueError(
+                    "Requested --heap-size-mb is too small for this problem: "
+                    f"need at least {required_heap / 1024 / 1024:.0f} MiB, "
+                    f"got {args.heap_size_mb} MiB"
+                )
+
+        contexts = xtile.init_local(world_size=world_size, heap_size=heap_size)
         try:
             print(f"--- M={M}, N={N}, K={K} ---")
-            results = benchmark_size(M, N, K, heaps, warmup=3, iters=10)
+            print(
+                "  heap per rank: "
+                f"{heap_size / 1024 / 1024:.0f} MiB "
+                f"(required {required_heap / 1024 / 1024:.0f} MiB)"
+            )
+            results = benchmark_size(
+                M,
+                N,
+                K,
+                contexts[0],
+                warmup=args.warmup,
+                iters=args.iters,
+            )
             all_results.extend(results)
 
             for r in results:
@@ -214,8 +264,7 @@ def main():
         except Exception as e:
             print(f"  ERROR: {e}")
         finally:
-            for h in heaps:
-                h.cleanup()
+            _cleanup_contexts(contexts)
 
     # Summary table
     print()

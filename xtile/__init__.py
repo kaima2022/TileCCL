@@ -20,7 +20,10 @@ from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from xtile.backends.base import TopologyInfo
+    import torch
+
+    from xtile.backends.base import BackendInterface, TopologyInfo
+    from xtile.memory.symmetric_heap import SymmetricHeap
 
 
 # ---------------------------------------------------------------------------
@@ -45,11 +48,115 @@ class XTileContext:
     device: str
     """Torch device string, e.g. ``"cuda:0"`` or ``"hip:0"``."""
 
-    backend: str
+    backend_name: str
     """Backend identifier: ``"cuda"`` or ``"hip"``."""
+
+    backend: "BackendInterface" = field(repr=False)
+    """Concrete backend implementation used by patterns and utilities."""
 
     topology: Optional["TopologyInfo"] = field(default=None, repr=False)
     """Hardware topology information (populated lazily on first access)."""
+
+    heap: Optional["SymmetricHeap"] = field(default=None, repr=False)
+    """Optional symmetric heap attached to this context."""
+
+    @property
+    def has_heap(self) -> bool:
+        """Whether a symmetric heap is attached to this context."""
+        return self.heap is not None
+
+    @property
+    def heap_bases(self) -> "torch.Tensor":
+        """Return the attached heap's ``heap_bases`` tensor.
+
+        Raises:
+            RuntimeError: If no symmetric heap is attached.
+        """
+        return self.require_heap().get_heap_bases()
+
+    def require_heap(self) -> "SymmetricHeap":
+        """Return the attached heap or raise with an actionable error."""
+        if self.heap is None:
+            raise RuntimeError(
+                "No SymmetricHeap is attached to this XTileContext. "
+                "Pass heap=... or heap_size=... to xtile.init(), call "
+                "xtile.init_local(...), or attach an existing heap via "
+                "ctx.attach_heap(heap)."
+            )
+        return self.heap
+
+    def attach_heap(self, heap: "SymmetricHeap") -> "XTileContext":
+        """Attach an existing :class:`~xtile.memory.symmetric_heap.SymmetricHeap`.
+
+        The heap must match this context's rank and world size.
+        Returns ``self`` for fluent usage.
+        """
+        if heap.rank != self.rank:
+            raise ValueError(
+                f"Heap rank {heap.rank} does not match context rank {self.rank}"
+            )
+        if heap.world_size != self.world_size:
+            raise ValueError(
+                "Heap world_size does not match context world_size: "
+                f"{heap.world_size} != {self.world_size}"
+            )
+        heap_backend = getattr(heap, "_backend_name", self.backend_name)
+        if heap_backend != self.backend_name:
+            raise ValueError(
+                "Heap backend does not match context backend: "
+                f"{heap_backend!r} != {self.backend_name!r}"
+            )
+        self.heap = heap
+        return self
+
+    def barrier(self) -> None:
+        """Synchronize pending work associated with this context."""
+        if self.heap is not None:
+            self.heap.barrier()
+        else:
+            self.backend.synchronize()
+
+    def allocate_tensor(self, shape: tuple[int, ...], dtype: "torch.dtype") -> "torch.Tensor":
+        """Allocate a tensor from the attached symmetric heap."""
+        return self.require_heap().allocate_tensor(shape, dtype)
+
+    def empty(self, *size: int, dtype: "torch.dtype") -> "torch.Tensor":
+        """Allocate an uninitialised tensor from the attached symmetric heap."""
+        return self.allocate_tensor(_normalize_shape(size), dtype)
+
+    def zeros(self, *size: int, dtype: "torch.dtype") -> "torch.Tensor":
+        """Allocate a zero-filled tensor from the attached symmetric heap."""
+        tensor = self.allocate_tensor(_normalize_shape(size), dtype)
+        tensor.zero_()
+        return tensor
+
+    def randn(self, *size: int, dtype: "torch.dtype") -> "torch.Tensor":
+        """Allocate a tensor from the heap and fill it with normal samples."""
+        tensor = self.allocate_tensor(_normalize_shape(size), dtype)
+        tensor.normal_()
+        return tensor
+
+    def auto_select_pattern(
+        self,
+        op: str,
+        M: int,
+        N: int,
+        K: int,
+        *,
+        hw_info: object | None = None,
+    ):
+        """Return the auto-selected pattern bound to this context."""
+        from xtile.patterns.auto_select import auto_select
+
+        return auto_select(
+            op,
+            M=M,
+            N=N,
+            K=K,
+            world_size=self.world_size,
+            hw_info=hw_info,
+            ctx=self,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +183,10 @@ def init(
     backend: str = "auto",
     rank: int | None = None,
     world_size: int | None = None,
+    *,
+    heap: "SymmetricHeap | None" = None,
+    heap_size: int | None = None,
+    force_backend: bool = False,
 ) -> XTileContext:
     """Initialize the XTile runtime.
 
@@ -91,6 +202,15 @@ def init(
         world_size: Total number of GPUs.  Defaults to the ``WORLD_SIZE``
             environment variable, or ``torch.distributed.get_world_size()``
             if distributed is initialised, or ``1``.
+        heap: Existing symmetric heap to attach to the returned context.
+            Useful when heaps are created externally via
+            :meth:`xtile.memory.symmetric_heap.SymmetricHeap.create_all`.
+        heap_size: When provided, create and attach a symmetric heap
+            automatically. For ``world_size > 1`` this requires
+            ``torch.distributed`` to be initialised; otherwise use
+            :func:`init_local` or create/attach heaps manually.
+        force_backend: When ``True``, bypass the cached backend instance and
+            create a fresh backend object.
 
     Returns:
         An :class:`XTileContext` carrying rank, world_size, device, backend,
@@ -100,8 +220,6 @@ def init(
         RuntimeError: If the requested backend is unavailable.
     """
     global _ctx  # noqa: PLW0603
-
-    import torch
 
     # -- backend detection --------------------------------------------------
     if backend == "auto":
@@ -115,26 +233,58 @@ def init(
     if world_size is None:
         world_size = _resolve_world_size()
 
-    # -- device string ------------------------------------------------------
-    device = f"cuda:{rank}" if backend == "cuda" else f"cuda:{rank}"
-    # Note: PyTorch ROCm builds still use "cuda" device strings.
+    if heap is not None and heap_size is not None:
+        raise ValueError("Pass at most one of heap=... and heap_size=...")
 
-    # -- topology (lazy -- may fail on CPU-only machines) -------------------
-    topology: Optional[TopologyInfo] = None
-    try:
-        from xtile.utils.topology import detect_topology
-        topology = detect_topology(backend)
-    except Exception:
-        pass  # topology is optional; patterns fall back to defaults
-
-    _ctx = XTileContext(
+    _ctx = _build_context(
+        backend_name=backend,
         rank=rank,
         world_size=world_size,
-        device=device,
-        backend=backend,
-        topology=topology,
+        force_backend=force_backend,
     )
+    if heap is not None:
+        _ctx.attach_heap(heap)
+    elif heap_size is not None:
+        _ctx.attach_heap(_create_heap_for_context(_ctx, heap_size))
     return _ctx
+
+
+def init_local(
+    world_size: int,
+    heap_size: int,
+    *,
+    backend: str = "auto",
+    force_backend: bool = False,
+) -> list[XTileContext]:
+    """Initialise one attached context per GPU in a single process.
+
+    This is the recommended entry point for single-node, single-process
+    multi-GPU experiments and benchmarks.
+    """
+    if world_size < 1:
+        raise ValueError(f"world_size must be >= 1, got {world_size}")
+    if heap_size <= 0:
+        raise ValueError(f"heap_size must be positive, got {heap_size}")
+
+    if backend == "auto":
+        backend = _detect_backend()
+    if backend not in ("cuda", "hip"):
+        raise ValueError(f"Unsupported backend: {backend!r}. Use 'cuda', 'hip', or 'auto'.")
+
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    heaps = SymmetricHeap.create_all(size=heap_size, world_size=world_size, backend=backend)
+    contexts: list[XTileContext] = []
+    for rank, heap in enumerate(heaps):
+        ctx = _build_context(
+            backend_name=backend,
+            rank=rank,
+            world_size=world_size,
+            force_backend=force_backend and rank == 0,
+        )
+        ctx.attach_heap(heap)
+        contexts.append(ctx)
+    return contexts
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +299,11 @@ def get_rank() -> int:
 def get_world_size() -> int:
     """Return the world size (requires prior :func:`init` call)."""
     return _get_ctx().world_size
+
+
+def current_context() -> XTileContext:
+    """Return the process-global context set by :func:`init`."""
+    return _get_ctx()
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +324,89 @@ def _detect_backend() -> str:
     raise RuntimeError(
         "Cannot auto-detect GPU backend. "
         "Install PyTorch with CUDA or ROCm support, or pass backend='cuda'/'hip' explicitly."
+    )
+
+
+def _build_context(
+    *,
+    backend_name: str,
+    rank: int,
+    world_size: int,
+    force_backend: bool = False,
+) -> XTileContext:
+    """Create a context object without mutating global state."""
+    from xtile.backends import get_backend
+
+    backend_impl = get_backend(backend_name, force=force_backend)
+    topology = _detect_topology_safe(backend_name)
+    device = f"cuda:{rank}"  # PyTorch ROCm builds still use CUDA device strings.
+    return XTileContext(
+        rank=rank,
+        world_size=world_size,
+        device=device,
+        backend_name=backend_name,
+        backend=backend_impl,
+        topology=topology,
+    )
+
+
+def _detect_topology_safe(backend: str) -> Optional["TopologyInfo"]:
+    """Best-effort topology detection used by context construction."""
+    try:
+        from xtile.utils.topology import detect_topology
+
+        return detect_topology(backend)
+    except Exception:
+        return None
+
+
+def _normalize_shape(size: tuple[object, ...]) -> tuple[int, ...]:
+    """Normalise ``torch``-style ``*size`` arguments to a shape tuple."""
+    if len(size) == 1 and isinstance(size[0], (tuple, list)):
+        shape = size[0]
+    else:
+        shape = size
+    try:
+        normalized = tuple(int(dim) for dim in shape)
+    except TypeError as exc:
+        raise TypeError(f"Invalid shape specification: {size!r}") from exc
+    if any(dim < 0 for dim in normalized):
+        raise ValueError(f"Shape dimensions must be non-negative, got {normalized}")
+    return normalized
+
+
+def _create_heap_for_context(ctx: XTileContext, heap_size: int) -> "SymmetricHeap":
+    """Create a heap for ``ctx`` using the safest supported mode."""
+    if heap_size <= 0:
+        raise ValueError(f"heap_size must be positive, got {heap_size}")
+
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    if ctx.world_size == 1:
+        return SymmetricHeap(
+            size=heap_size,
+            rank=ctx.rank,
+            world_size=ctx.world_size,
+            backend=ctx.backend_name,
+        )
+
+    try:
+        import torch.distributed as dist
+
+        if dist.is_initialized():
+            return SymmetricHeap(
+                size=heap_size,
+                rank=ctx.rank,
+                world_size=ctx.world_size,
+                backend=ctx.backend_name,
+            )
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        "Automatic heap creation for world_size > 1 requires torch.distributed "
+        "to be initialised. For single-process multi-GPU, use xtile.init_local(...); "
+        "otherwise create a SymmetricHeap explicitly and attach it via heap=..."
     )
 
 
@@ -225,8 +463,10 @@ def __getattr__(name: str):
 __all__ = [
     "__version__",
     "init",
+    "init_local",
     "get_rank",
     "get_world_size",
+    "current_context",
     "XTileContext",
     "Tile",
     "SymmetricHeap",

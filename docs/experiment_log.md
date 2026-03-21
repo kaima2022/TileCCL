@@ -46,6 +46,114 @@
 | test_identity_translation | from_rank == to_rank 恒等变换 |
 | test_bidirectional_exchange | 双向同时交换（GPU0↔GPU1） |
 
+### Runtime Context 回归 (2026-03-20)
+
+| 测试文件 | 数量 | 状态 | 备注 |
+|----------|------|------|------|
+| test_context.py | 2 | ✅ 全通过 | `xtile.init(..., heap_size=...)` + `xtile.init_local(...)` |
+| test_patterns/test_bulk_sync.py | 2 | ✅ 全通过 | 改为真实 `XTileContext`，不再手工 `_Ctx` |
+| test_patterns/test_all_patterns.py | 8 | ✅ 全通过 | 4 pattern × (GEMM + scatter)，走真实 runtime 入口 |
+
+**pytest 命令**：
+```bash
+pytest -q tests/test_context.py \
+  tests/test_patterns/test_bulk_sync.py \
+  tests/test_patterns/test_all_patterns.py
+```
+
+**结果**：
+```text
+collected 12 items
+tests/test_context.py ..                                                 [ 16%]
+tests/test_patterns/test_bulk_sync.py ..                                 [ 33%]
+tests/test_patterns/test_all_patterns.py ........                        [100%]
+12 passed in 7.95s
+```
+
+**本轮结论**：
+- `xtile.init()` 现在能返回可直接用于 pattern 的真实上下文，不再只有 `rank/world_size/device` 的“半成品 ctx”
+- 单 GPU / rank-local 自动建堆路径已打通：`heap_size=...`
+- 单进程多 GPU 路径已统一为 `xtile.init_local(...)`
+- CLI 与 pattern tests 已移除手工 `_Ctx` / `DistCtx` 绕行
+
+### Benchmark 硬化与复测 (2026-03-20)
+
+#### DC-023: GEMM benchmark 覆盖参数显式化
+
+**变更**：
+- `xtile.kernels.gemm.gemm(...)` 新增 `num_warps` / `num_stages` 可选覆盖参数
+- 保留默认 heuristic 为 `num_stages=4`
+
+**原因**：
+- 之前对 wrapper `gemm()` 做 sweep 时，`num_warps` / `num_stages` 并未真正暴露给 host launcher，容易把“看起来变了配置”误当成真实 kernel 变化
+- 公开覆盖参数后，benchmark 可以直接测 wrapper 行为，而不是绕过 public API 只测底层 kernel
+
+**A/B 结论**：
+- 按 `bench_gemm.py` 同口径复测，`8192³` 下 `num_stages=4` 仍是更稳定的默认值
+- 因此默认 heuristic 不改动，后续若继续追 90%+ 目标，需要更底层的 kernel 优化而非盲目调 stage
+
+#### DC-024: Pattern benchmark 改为动态 heap sizing + 统一 runtime 入口
+
+**变更**：
+- `tests/benchmarks/bench_patterns.py` 不再固定 `heap_size = 512 MiB`
+- 新增 `_required_heap_size(M, N, K, world_size, dtype)`，按 `A/B/C` 实际占用估算每 rank 对称堆需求，并补 64 MiB safety margin
+- benchmark 创建路径切换为 `xtile.init_local(world_size, heap_size)`，不再在脚本中手拼 heap + ctx
+- CLI `xtile bench pattern` 新增 `--warmup` / `--iters` / `--heap-size-mb`
+
+**结果**：
+- 全部 6 组 Iris-style 尺寸均可完整跑通
+- `P5-003` 从“已知限制”转为“已修复”
+
+#### DC-025: Producer / Consumer 辅助资源缓存
+
+**变更**：
+- `ProducerConsumerPattern` 复用 lock buffer 与 compute/comm streams
+- `WGSpecializedPattern` 复用 lock buffer
+
+**目的**：
+- 去掉 benchmark 循环中每次 `execute()` 都重新分配锁张量 / 创建 stream 的主机端噪声
+
+**复测结论**：
+- 这能减少辅助开销，但**没有**改变核心结论：在当前 2×H100、当前 kernel 结构下，`producer_consumer` / `wg_specialized` 仍未稳定优于 `bulk_sync`
+
+#### GEMM 复测结果（official helper，3 次重复取中位数）
+
+命令口径：复用 `tests/benchmarks/bench_gemm.py::_run_gemm_comparison`
+
+| Size | dtype | 中位数比值 |
+|------|-------|------------|
+| 4096³ | fp16 | **100.2%** |
+| 4096³ | bf16 | **91.1%** |
+| 8192³ | fp16 | **84.2%** |
+| 8192³ | bf16 | **86.1%** |
+
+**解释**：
+- 8192³ 相比 Phase 5 的 ~79% 有提升，但仍未达到 90% 目标
+- 这说明当前 `128×128×64, stages=4` 路线已经逼近现有 Triton kernel 的稳定上限，继续提升需要更深的 kernel 级优化
+
+#### Pattern overlap 全量复测（统一 runtime + 动态 heap）
+
+命令：
+```bash
+PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10
+```
+
+**摘要结果**：
+
+| M | N | K | Best Pattern | Best Speedup |
+|------|------|-------|--------------|--------------|
+| 4096 | 4096 | 4096 | fused_sequential | **1.004×** |
+| 8192 | 4608 | 36864 | bulk_sync | 1.000× |
+| 8192 | 3584 | 14336 | bulk_sync | 1.000× |
+| 8192 | 8192 | 30720 | bulk_sync | 1.000× |
+| 4096 | 8192 | 8192 | bulk_sync | 1.000× |
+| 2048 | 16384 | 8192 | bulk_sync | 1.000× |
+
+**更新结论**：
+- 旧的 `1.067×` 结果来自单尺寸单轮次，不应再作为项目 headline 指标
+- 在统一 runtime、完整 6 尺寸复测下，当前最好的**稳定** speedup 只有 `1.004×`
+- 因此 XTile 当前真正已站稳的是 runtime/context 一致性与 benchmark 可复现性，而不是 overlap pattern 已经压倒性领先
+
 ---
 
 ## Benchmark 数据

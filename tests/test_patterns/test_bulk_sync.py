@@ -10,21 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-
-def _make_ctx(rank, world_size, device, backend_name, heap_bases):
-    """Build a minimal context object for pattern testing."""
-    from xtile.backends import get_backend
-
-    class _Ctx:
-        pass
-
-    ctx = _Ctx()
-    ctx.rank = rank
-    ctx.world_size = world_size
-    ctx.device = device
-    ctx.backend = get_backend(backend_name)
-    ctx.heap_bases = heap_bases
-    return ctx
+import xtile
 
 
 @pytest.mark.multigpu
@@ -49,7 +35,13 @@ class TestBulkSyncPattern:
             B = torch.randn(K, N, device="cuda:0", dtype=torch.float16)
             C = torch.zeros(M, N, device="cuda:0", dtype=torch.float16)
 
-            ctx = _make_ctx(0, 1, "cuda:0", device_info.backend, heaps[0].get_heap_bases())
+            ctx = xtile.init(
+                backend=device_info.backend,
+                rank=0,
+                world_size=1,
+                heap=heaps[0],
+                force_backend=True,
+            )
 
             pattern = BulkSyncPattern(ctx)
             pattern.execute(A, B, C)
@@ -92,8 +84,13 @@ class TestBulkSyncPattern:
             A = torch.randn(M, K, device="cuda:0", dtype=torch.float16)
             B = torch.randn(K, N, device="cuda:0", dtype=torch.float16)
 
-            ctx = _make_ctx(0, world_size, "cuda:0", device_info.backend,
-                            heaps[0].get_heap_bases())
+            ctx = xtile.init(
+                backend=device_info.backend,
+                rank=0,
+                world_size=world_size,
+                heap=heaps[0],
+                force_backend=True,
+            )
 
             pattern = BulkSyncPattern(ctx, BLOCK_M=128, BLOCK_N=128, BLOCK_K=64)
             pattern.execute(A, B, C0)

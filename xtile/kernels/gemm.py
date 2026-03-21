@@ -26,18 +26,19 @@ import triton.language as tl
 # ---------------------------------------------------------------------------
 
 def _select_config(M: int, N: int, K: int) -> tuple[int, int, int, int, int]:
-    """Select optimal (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps, num_stages).
+    """Select ``(BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps, num_stages)``.
 
     Heuristic based on H100 PCIe benchmarking:
-    - 128x128x64 with num_stages=4 is universally best for large matrices
-    - num_stages controls Triton's software pipelining depth (critical for
-      hiding memory latency on H100)
-    - Small M: smaller tiles to avoid wasted work
+    - 128x128x64 remains the best large-matrix tile family.
+    - `num_stages=4` is the most stable default across fp16/bf16 official
+      `bench_gemm.py` measurements, even though explicit overrides remain
+      available for local experimentation.
+    - Small matrices use 64x64x32 to avoid excessive over-tiling.
     """
-    if M <= 512:
+    if M <= 512 or N <= 512:
         return 64, 64, 32, 4, 4
-    else:
-        return 128, 128, 64, 4, 4
+
+    return 128, 128, 64, 4, 4
 
 
 # Module-level cache for device SM count (avoids repeated CUDA API calls)
@@ -181,6 +182,8 @@ def gemm(
     GROUP_SIZE_M: int = 8,
     NUM_SMS: int | None = None,
     allow_tf32: bool = True,
+    num_warps: int | None = None,
+    num_stages: int | None = None,
 ):
     """Launch the persistent GEMM kernel: ``C = A @ B``.
 
@@ -198,6 +201,8 @@ def gemm(
         GROUP_SIZE_M: Swizzle group size (default 8).
         NUM_SMS: Persistent grid size.  Defaults to the device SM count.
         allow_tf32: Enable TF32 for fp32 accumulation (default True).
+        num_warps: Optional override for Triton launch warps.
+        num_stages: Optional override for Triton software pipeline depth.
 
     Returns:
         Output tensor C of shape ``(M, N)``.
@@ -214,11 +219,27 @@ def gemm(
     else:
         assert C.shape == (M, N), f"C shape mismatch: expected ({M}, {N}), got {C.shape}"
 
-    # Auto-select block sizes and launch parameters if not specified
-    num_warps = 4
-    num_stages = 4
-    if BLOCK_SIZE_M is None or BLOCK_SIZE_N is None or BLOCK_SIZE_K is None:
-        BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps, num_stages = _select_config(M, N, K)
+    # Auto-select block sizes and launch parameters if not specified.
+    if (
+        BLOCK_SIZE_M is None
+        or BLOCK_SIZE_N is None
+        or BLOCK_SIZE_K is None
+        or num_warps is None
+        or num_stages is None
+    ):
+        selected_BM, selected_BN, selected_BK, selected_warps, selected_stages = (
+            _select_config(M, N, K)
+        )
+        if BLOCK_SIZE_M is None:
+            BLOCK_SIZE_M = selected_BM
+        if BLOCK_SIZE_N is None:
+            BLOCK_SIZE_N = selected_BN
+        if BLOCK_SIZE_K is None:
+            BLOCK_SIZE_K = selected_BK
+        if num_warps is None:
+            num_warps = selected_warps
+        if num_stages is None:
+            num_stages = selected_stages
 
     if NUM_SMS is None:
         dev_idx = A.device.index

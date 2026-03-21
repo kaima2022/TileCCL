@@ -136,9 +136,17 @@ def _bench_pattern(args: argparse.Namespace) -> None:
     print()
 
     import subprocess
-    quick_flag = ["--quick"] if getattr(args, "quick", False) else []
+    cmd = [sys.executable, "-u", "tests/benchmarks/bench_patterns.py"]
+    if getattr(args, "quick", False):
+        cmd.append("--quick")
+    if getattr(args, "warmup", None) is not None:
+        cmd.extend(["--warmup", str(args.warmup)])
+    if getattr(args, "iters", None) is not None:
+        cmd.extend(["--iters", str(args.iters)])
+    if getattr(args, "heap_size_mb", None) is not None:
+        cmd.extend(["--heap-size-mb", str(args.heap_size_mb)])
     result = subprocess.run(
-        [sys.executable, "-u", "tests/benchmarks/bench_patterns.py"] + quick_flag,
+        cmd,
         cwd=_project_root(), env=_bench_env(),
     )
     sys.exit(result.returncode)
@@ -279,33 +287,23 @@ def _handle_bench(args: argparse.Namespace) -> None:
 def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
     """Run pattern benchmark with auto-select."""
     import torch
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.backends import get_backend, detect_hardware
+    import xtile
     from xtile.patterns.auto_select import auto_select, benchmark_all_patterns
 
     world_size = 2
     heap_size = max(512 * 1024 * 1024, M * K * 2 + K * (N // world_size) * 2 + M * N * 2)
-    heaps = SymmetricHeap.create_all(size=heap_size, world_size=world_size)
+    contexts = xtile.init_local(world_size=world_size, heap_size=heap_size)
 
     try:
         rank = 0
         torch.cuda.set_device(rank)
-        hw = detect_hardware()
-        backend = get_backend(hw)
-        bases = heaps[rank].get_heap_bases()
-
-        class _Ctx:
-            pass
-        ctx = _Ctx()
-        ctx.rank = rank
-        ctx.world_size = world_size
-        ctx.heap_bases = bases
-        ctx.backend = backend
+        ctx = contexts[rank]
+        heap = ctx.require_heap()
 
         N_per_rank = N // world_size
-        A = heaps[rank].allocate_tensor((M, K), torch.float16)
-        B = heaps[rank].allocate_tensor((K, N_per_rank), torch.float16)
-        C = heaps[rank].allocate_tensor((M, N_per_rank), torch.float16)
+        A = heap.allocate_tensor((M, K), torch.float16)
+        B = heap.allocate_tensor((K, N_per_rank), torch.float16)
+        C = heap.allocate_tensor((M, N_per_rank), torch.float16)
         A.normal_()
         B.normal_()
         C.zero_()
@@ -332,8 +330,9 @@ def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
             print(f"{r['pattern']:25s} | {r['mean_ms']:10.3f} | {r['min_ms']:10.3f} | {speedup:>8s}")
         print(f"\nBest: {results['best']}")
     finally:
-        for h in heaps:
-            h.cleanup()
+        for ctx in contexts:
+            if ctx.heap is not None:
+                ctx.heap.cleanup()
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +408,14 @@ def main() -> None:
 
     pat_parser = bench_sub.add_parser("pattern", help="Pattern overlap efficiency benchmark")
     pat_parser.add_argument("--quick", action="store_true", help="Quick mode")
+    pat_parser.add_argument("--warmup", type=int, default=3, help="Warmup iterations per pattern")
+    pat_parser.add_argument("--iters", type=int, default=10, help="Timed iterations per pattern")
+    pat_parser.add_argument(
+        "--heap-size-mb",
+        type=int,
+        default=None,
+        help="Per-rank symmetric heap size override in MiB",
+    )
 
     gemm_parser = bench_sub.add_parser("gemm", help="GEMM vs torch.matmul benchmark")
 

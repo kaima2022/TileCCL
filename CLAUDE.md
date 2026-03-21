@@ -14,7 +14,7 @@
 
 ## 架构层次（6 层）
 ```
-1. User API         xtile/__init__.py       init(), XTileContext, SymmetricHeap
+1. User API         xtile/__init__.py       init(), init_local(), XTileContext, SymmetricHeap
 2. Pattern Library   xtile/patterns/         BulkSync / FusedSeq / PC / WGSpec / AutoSelect
 3. Core Primitives   xtile/primitives/       compute / memory / communication（三位一体）
 4. Synchronization   xtile/sync/             atomic_* + tile_signal/wait + barrier
@@ -46,6 +46,7 @@ memory/symmetric_heap → backends/{hip,cuda}
    - tile_signal/tile_wait = 本地原语（同 GPU 内 compute/comm worker 同步，无翻译）
    - tile_atomic_* = 远端原语（跨 GPU，需 target_rank + caller_rank + heap_bases）
 7. **Persistent kernel 风格**：所有 GEMM 和 pattern 内核使用 round-robin `range(pid, total, NUM_SMS)`
+8. **禁止手工拼装伪 ctx**：CLI / tests / benchmarks 应复用 `XTileContext`，不得再用 `_Ctx`/`DistCtx` 临时对象绕过真实 runtime 契约
 
 ## 关键参考实现
 - **Iris** (github.com/ROCm/iris): 核心算法参考（Listing 1/3/4/5），本地副本 `/home/makai/iris`
@@ -150,6 +151,22 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] HIP 后端同步修复
 - [x] P1-002 根因确认：ctypes bug + 系统 ptrace_scope 双因素
 
+### Phase 7 交付物（2026-03-20）
+- [x] Runtime context 统一：`XTileContext` 现持有 `backend` 实例、`backend_name`、可选 `heap`
+- [x] `XTileContext.heap_bases` 属性：pattern/collective 不再依赖外部手工塞字段
+- [x] `xtile.init(..., heap=...)`：可绑定外部 `SymmetricHeap`
+- [x] `xtile.init(..., heap_size=...)`：单 GPU / 分布式 rank-local 自动建堆
+- [x] `xtile.init_local(world_size, heap_size)`：单进程多 GPU 统一入口
+- [x] `XTileContext.empty/zeros/randn/barrier/auto_select_pattern` 主机侧便捷 API
+- [x] CLI pattern bench 切换到真实 `XTileContext`
+- [x] pattern 测试移除手工 `_Ctx`，覆盖真实 runtime 入口
+- [x] 新增 `tests/test_context.py`，回归验证 context + heap 绑定路径
+- [x] `xtile.kernels.gemm.gemm(..., num_warps=..., num_stages=...)`：公开实验覆盖参数，避免 benchmark 误判 wrapper 配置
+- [x] Pattern benchmark 动态 heap sizing：按 `(M, N, K)` 自动估算每 rank 对称堆需求，不再固定 512 MiB
+- [x] `bench_patterns.py` 切换到 `xtile.init_local(...)`：benchmark 与真实 runtime 入口对齐
+- [x] CLI `xtile bench pattern` 新增 `--warmup/--iters/--heap-size-mb`
+- [x] `producer_consumer` / `wg_specialized` 复用 lock buffer 与 stream，削减每次 `execute()` 的主机端辅助开销
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -163,9 +180,9 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P1-007 | Collective benchmark 死锁 | ✅ 已修复（并发 stream） |
 | P4-001 | tl.multiple_of on 2D load ptr 性能倒退 | ⚠️ 绕行（仅 offset hint） |
 | P4-002 | 小矩阵 (≤2048) GEMM 42-46% | ⚠️ kernel launch 开销限制 |
-| P5-001 | 8192³ GEMM 79% — kernel 本身限制 | ⚠️ 需 PTX-level 优化 |
+| P5-001 | 8192³ GEMM 仍仅 84-86% of cuBLAS（3 次 official helper 复测中位数） | ⚠️ 仍需 kernel-level 优化 |
 | P5-002 | P2P 83% — Triton-on-H100-NVLink 天花板 | ⚠️ 可能需 inline PTX |
-| P5-003 | Pattern benchmark heap_size=512MB 不够大尺寸 | ⚠️ 增大 heap 即可 |
+| P5-003 | Pattern benchmark heap_size=512MB 不够大尺寸 | ✅ 已修复（动态估算 + CLI override） |
 
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |
@@ -173,11 +190,11 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P2P read (134MB, f32) | 248.70 GB/s (82.9%) | ≥ 95% | ❌ 硬件天花板 |
 | P2P write (134MB, f32) | 248.14 GB/s (82.7%) | ≥ 95% | ❌ 硬件天花板 |
 | Collective 归一化带宽 | N/A (tile级原语) | ≥ 90% | ⚠️ 不适用 |
-| GEMM vs cuBLAS (4096³ fp16) | **100.7%** | ≥ 90% | ✅ |
-| GEMM vs cuBLAS (4096³ bf16) | **90.1%** | ≥ 90% | ✅ |
-| GEMM vs cuBLAS (8192³ fp16) | 79.4% | ≥ 90% | ⚠️ kernel 瓶颈 |
-| GEMM vs cuBLAS (8192³ bf16) | 79.0% | ≥ 90% | ⚠️ kernel 瓶颈 |
-| Pattern overlap (fused_seq) | **1.067×** (8192×3584×14336) | ≥ 1.3× | ⚠️ 2-GPU 限制 |
+| GEMM vs cuBLAS (4096³ fp16) | **100.2%** (official helper 3 次复测中位数) | ≥ 90% | ✅ |
+| GEMM vs cuBLAS (4096³ bf16) | **91.1%** (official helper 3 次复测中位数) | ≥ 90% | ✅ |
+| GEMM vs cuBLAS (8192³ fp16) | 84.2% (official helper 3 次复测中位数) | ≥ 90% | ⚠️ 未达标但优于 Phase 5 |
+| GEMM vs cuBLAS (8192³ bf16) | 86.1% (official helper 3 次复测中位数) | ≥ 90% | ⚠️ 未达标但优于 Phase 5 |
+| Pattern overlap (full 6-size rerun) | **1.004×** best stable speedup | ≥ 1.3× | ⚠️ 旧的 1.067× 单点结果未复现 |
 
 ## 重要约束
 - **不** 包装 xSHMEM/NVSHMEM 为不透明字节码

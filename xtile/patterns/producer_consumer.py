@@ -75,6 +75,12 @@ class ProducerConsumerPattern(Pattern):
         self.BLOCK_K = BLOCK_K
         self.COMPUTE_SMS = COMPUTE_SMS
         self.COMM_SMS = COMM_SMS
+        self._lock_buffer: Any = None
+        self._lock_capacity: int = 0
+        self._lock_device_index: int | None = None
+        self._compute_stream: Any = None
+        self._comm_stream: Any = None
+        self._stream_device_index: int | None = None
 
     def _resolve_sm_split(self) -> tuple[int, int]:
         """Determine the compute/comm SM split.
@@ -88,6 +94,44 @@ class ProducerConsumerPattern(Pattern):
         comm = max(1, int(total_sms * self._COMM_SM_FRACTION))
         compute = total_sms - comm
         return compute, comm
+
+    def _get_locks(self, total_tiles: int, device: "torch.device") -> "torch.Tensor":
+        """Return a zeroed lock buffer, reusing storage across launches."""
+        import torch
+
+        device_index = device.index if device.index is not None else torch.cuda.current_device()
+        if (
+            self._lock_buffer is None
+            or self._lock_capacity < total_tiles
+            or self._lock_device_index != device_index
+        ):
+            self._lock_buffer = torch.empty(
+                total_tiles,
+                dtype=torch.int32,
+                device=device,
+            )
+            self._lock_capacity = total_tiles
+            self._lock_device_index = device_index
+
+        locks = self._lock_buffer[:total_tiles]
+        locks.zero_()
+        return locks
+
+    def _get_streams(self, device: "torch.device") -> tuple["torch.cuda.Stream", "torch.cuda.Stream"]:
+        """Create or reuse dedicated compute/communication streams."""
+        import torch
+
+        device_index = device.index if device.index is not None else torch.cuda.current_device()
+        if (
+            self._compute_stream is None
+            or self._comm_stream is None
+            or self._stream_device_index != device_index
+        ):
+            self._compute_stream = torch.cuda.Stream(device=device)
+            self._comm_stream = torch.cuda.Stream(device=device)
+            self._stream_device_index = device_index
+
+        return self._compute_stream, self._comm_stream
 
     # ------------------------------------------------------------------
     # Public API
@@ -124,12 +168,11 @@ class ProducerConsumerPattern(Pattern):
 
         # Lock tensor for tile-level synchronization: one int32 per tile.
         # Producer writes 1, consumer waits for 1.
-        locks = torch.zeros(total_tiles, dtype=torch.int32, device=A.device)
+        locks = self._get_locks(total_tiles, A.device)
 
-        # Create separate streams for producer and consumer
-        # TODO: Use stream pool from ctx when available.
-        compute_stream = torch.cuda.Stream()
-        comm_stream = torch.cuda.Stream()
+        # Reuse dedicated streams to keep benchmarked launches focused on
+        # kernel work rather than per-iteration stream allocation overhead.
+        compute_stream, comm_stream = self._get_streams(A.device)
 
         # Launch producer on compute stream
         producer_grid = (min(compute_sms, total_tiles),)
