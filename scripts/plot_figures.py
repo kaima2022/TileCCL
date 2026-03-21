@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""XTile — Publication-quality figures showing current performance status.
+"""XTile — publication-quality figures showing the latest validated status.
 
 Generates 5 figures in Nature/Science style:
-  1. GEMM: XTile vs cuBLAS (current performance)
+  1. GEMM: XTile vs cuBLAS (official helper, median of 3 repeats)
   2. P2P bandwidth vs transfer size (saturation curve)
-  3. Pattern overlap comparison (4 patterns × 4 sizes)
+  3. Pattern speedup vs bulk_sync (full 6-size rerun)
   4. 6-layer architecture diagram
   5. Roofline model (GEMM position analysis)
 
@@ -53,6 +53,46 @@ OUTDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 os.makedirs(OUTDIR, exist_ok=True)
 
 
+# ---------------------------------------------------------------------------
+# Data sources
+# ---------------------------------------------------------------------------
+
+# GEMM data: `tests/benchmarks/bench_gemm.py::_run_gemm_comparison`
+# rerun 3 times on 2026-03-21, then median aggregated per size/dtype.
+GEMM_BARS = {
+    "sizes": [
+        "1024³\nfp16",
+        "1024³\nbf16",
+        "2048³\nfp16",
+        "2048³\nbf16",
+        "4096³\nfp16",
+        "4096³\nbf16",
+        "8192³\nfp16",
+        "8192³\nbf16",
+    ],
+    "cublas_tflops": [60.93, 81.33, 284.14, 363.06, 409.47, 470.00, 484.07, 487.90],
+    "xtile_tflops": [27.92, 40.48, 157.26, 288.63, 408.75, 435.42, 381.98, 408.97],
+    "ratio_pct": [45.8, 49.8, 55.0, 79.6, 99.8, 92.1, 78.3, 84.9],
+}
+
+# Pattern data: `PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10`
+# full 6-size rerun on 2026-03-20. These are speedups vs bulk_sync.
+PATTERN_SPEEDUPS = {
+    "sizes": [
+        "4096³",
+        "8192×4608\n×36864",
+        "8192×3584\n×14336",
+        "8192×8192\n×30720",
+        "4096×8192\n×8192",
+        "2048×16384\n×8192",
+    ],
+    "bulk_sync": [1.000, 1.000, 1.000, 1.000, 1.000, 1.000],
+    "fused_sequential": [1.004, 0.876, 0.890, 0.779, 0.844, 0.959],
+    "producer_consumer": [0.239, 0.856, 0.485, 0.763, 0.339, 0.360],
+    "wg_specialized": [0.562, 0.817, 0.827, 0.849, 0.905, 0.854],
+}
+
+
 def _save(fig, name):
     fig.savefig(os.path.join(OUTDIR, f"{name}.pdf"))
     fig.savefig(os.path.join(OUTDIR, f"{name}.png"))
@@ -64,12 +104,10 @@ def _save(fig, name):
 # Figure 1: GEMM — XTile vs cuBLAS (current state)
 # ===================================================================
 def fig1_gemm_performance():
-    sizes = ["1024³\nfp16", "1024³\nbf16", "2048³\nfp16", "2048³\nbf16",
-             "4096³\nfp16", "4096³\nbf16", "8192³\nfp16", "8192³\nbf16"]
-    # cuBLAS TFLOPS (Phase 5)
-    cublas = [78.5, 78.4, 355.6, 367.5, 410.5, 477.3, 473.0, 508.4]
-    xtile  = [39.1, 38.6, 275.3, 283.2, 413.4, 429.9, 375.7, 401.5]
-    ratio  = [49.7, 49.2, 77.4, 77.0, 100.7, 90.1, 79.4, 79.0]
+    sizes = GEMM_BARS["sizes"]
+    cublas = GEMM_BARS["cublas_tflops"]
+    xtile = GEMM_BARS["xtile_tflops"]
+    ratio = GEMM_BARS["ratio_pct"]
 
     x = np.arange(len(sizes))
     w = 0.35
@@ -89,7 +127,7 @@ def fig1_gemm_performance():
                 ha="center", va="bottom", fontsize=7, color=color, fontweight=weight)
 
     ax.set_ylabel("TFLOPS")
-    ax.set_title("GEMM Performance: XTile vs cuBLAS (2× H100 PCIe)")
+    ax.set_title("GEMM Performance: XTile vs cuBLAS (median of 3 runs)")
     ax.set_xticks(x)
     ax.set_xticklabels(sizes, fontsize=8)
     ax.set_ylim(0, 580)
@@ -145,21 +183,16 @@ def fig2_p2p_bandwidth():
 # Figure 3: Pattern Overlap Comparison
 # ===================================================================
 def fig3_pattern_overlap():
-    sizes = [
-        "4096³",
-        "8192×3584\n×14336",
-        "4096×8192\n×8192",
-        "2048×16384\n×8192",
-    ]
-    bulk      = [1.0, 1.0, 1.0, 1.0]
-    fused     = [1.000, 1.067, 0.952, 0.929]
-    prod_cons = [0.233, 0.606, 0.385, 0.350]
-    wg_spec   = [0.643, 0.936, 0.907, 0.832]
+    sizes = PATTERN_SPEEDUPS["sizes"]
+    bulk = PATTERN_SPEEDUPS["bulk_sync"]
+    fused = PATTERN_SPEEDUPS["fused_sequential"]
+    prod_cons = PATTERN_SPEEDUPS["producer_consumer"]
+    wg_spec = PATTERN_SPEEDUPS["wg_specialized"]
 
     x = np.arange(len(sizes))
     w = 0.2
 
-    fig, ax = plt.subplots(figsize=(7, 3.5))
+    fig, ax = plt.subplots(figsize=(8.2, 3.8))
 
     ax.bar(x - 1.5 * w, bulk, w, label="bulk_sync", color=COLORS[0], edgecolor="white", linewidth=0.5)
     ax.bar(x - 0.5 * w, fused, w, label="fused_sequential", color=COLORS[1], edgecolor="white", linewidth=0.5)
@@ -169,20 +202,22 @@ def fig3_pattern_overlap():
     ax.axhline(1.0, color="gray", linestyle="-", linewidth=0.8, alpha=0.5)
 
     ax.annotate(
-        "1.067×",
-        xy=(1 - 0.5 * w, 1.067),
-        xytext=(1 - 0.5 * w, 1.18),
-        fontsize=9, fontweight="bold", color=COLORS[1],
+        "best stable\n1.004×",
+        xy=(0 - 0.5 * w, fused[0]),
+        xytext=(0.15, 1.06),
+        fontsize=8,
+        fontweight="bold",
+        color=COLORS[1],
         arrowprops=dict(arrowstyle="-", color=COLORS[1], lw=0.8),
         ha="center",
     )
 
     ax.set_xlabel("Problem Size (M × N × K)")
     ax.set_ylabel("Speedup vs bulk_sync")
-    ax.set_title("Pattern Overlap Efficiency (2× H100)")
+    ax.set_title("Pattern Speedup vs bulk_sync (full 6-size rerun)")
     ax.set_xticks(x)
-    ax.set_xticklabels(sizes, fontsize=8)
-    ax.set_ylim(0, 1.3)
+    ax.set_xticklabels(sizes, fontsize=7.5)
+    ax.set_ylim(0, 1.1)
     ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
     ax.legend(loc="upper right", ncol=2, fontsize=8)
 
@@ -263,8 +298,8 @@ def fig5_roofline():
         bytes_moved = 2 * (n * n + n * n + n * n)
         intensity.append(flops / bytes_moved)
 
-    cublas_tflops = [78.5, 355.6, 410.5, 473.0]
-    xtile_tflops  = [39.1, 275.3, 413.4, 375.7]
+    cublas_tflops = [60.93, 284.14, 409.47, 484.07]
+    xtile_tflops  = [27.92, 157.26, 408.75, 381.98]
 
     fig, ax = plt.subplots(figsize=(3.5, 3))
 
@@ -283,7 +318,7 @@ def fig5_roofline():
     for i, n in enumerate(sizes):
         ax.annotate(f"{n}", (intensity[i], cublas_tflops[i]),
                     textcoords="offset points", xytext=(5, 5), fontsize=6, color=COLORS[0])
-        suffix = "\n(100.7%)" if n == 4096 else ""
+        suffix = "\n(99.8%)" if n == 4096 else ""
         ax.annotate(f"{n}{suffix}", (intensity[i], xtile_tflops[i]),
                     textcoords="offset points", xytext=(5, -10), fontsize=6, color=COLORS[1])
 

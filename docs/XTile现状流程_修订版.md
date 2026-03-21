@@ -4,6 +4,7 @@
 > - 原始文档保留不动；本文件是在原文基础上的核对修订版。
 > - `【修订】` 表示原文该处已按当前仓库现实改写。
 > - `【新增核对】` 表示为避免误解而补充的仓库现状说明。
+> - `【新增状态更新 2026-03-21】` 表示基于最新代码、benchmark 与绘图脚本的状态更新。
 
 ## 任务定义
 
@@ -18,41 +19,28 @@ M=8192, N=4608, K=36864, 4 GPUs.
 
 ### 实际代码（方式 A：当前仓库可执行路径，非一键 API）
 
-【修订】原文示例把 `XTileContext` 直接当作 pattern 运行时上下文，并把 `gemm_scatter` 当作合法 op；这两点在当前仓库都不成立。下面改成与现有实现一致的写法。
+【修订】这部分原先写成“先 `xtile.init()`，再手工拼 `_PatternCtx`，再把 `heap_bases` 塞回去”。这在 2026-03-20 之后已经不是当前主路径。现在 pattern / CLI / benchmarks 都应复用真实 `XTileContext`。
 
 ```python
 import torch
 import xtile
-from xtile.backends import get_backend
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.patterns.auto_select import auto_select
 
-runtime = xtile.init(backend="auto", rank=0, world_size=4)
-
-heaps = SymmetricHeap.create_all(
-    size=1 << 30,
+contexts = xtile.init_local(
     world_size=4,
-    backend=runtime.backend,
+    heap_size=1 << 30,
 )
-heap = heaps[runtime.rank]
+ctx = contexts[0]  # rank 0
 
-class _PatternCtx:
-    pass
+A = ctx.randn(M, K, dtype=torch.float16)
+B = ctx.randn(K, N, dtype=torch.float16)
+C = ctx.zeros(M, N, dtype=torch.float16)
 
-ctx = _PatternCtx()
-ctx.rank = runtime.rank
-ctx.world_size = runtime.world_size
-ctx.heap_bases = heap.get_heap_bases()
-ctx.backend = get_backend(runtime.backend)
-
-# 当前实现里通常只要求参与远端写入/翻译的输出张量在 heap 上
-A = torch.randn((M, K), device=runtime.device, dtype=torch.float16)
-B = torch.randn((K, N), device=runtime.device, dtype=torch.float16)
-C = heap.allocate_tensor((M, N), dtype=torch.float16)
-
-pattern = auto_select("gemm_allscatter", M, N, K, world_size=4, ctx=ctx)
-# → N/world_size = 1152，不满足 fused_sequential 的 < 1024 条件
-# → 按当前 heuristics，本例更接近 ProducerConsumerPattern
+pattern = ctx.auto_select_pattern(
+    "gemm_allscatter",
+    M=M,
+    N=N,
+    K=K,
+)
 pattern.execute(A, B, C)
 ```
 
@@ -61,9 +49,11 @@ pattern.execute(A, B, C)
 | 设想 | 现状 | 差距 |
 |------|------|------|
 | `xtile.fused_gemm_scatter(A, B, C, strategy="auto")` | `pattern = auto_select(...); pattern.execute(...)` | 缺少一键 API，用户仍需手动组织调用 |
-| `ctx.randn(...)` 直接在堆上分配 | 仍需 `heap.allocate_tensor(...)` 或普通 `torch.randn(...)` | 缺少 context 级便利方法 |
-| 自动检测后端 `backend="auto"` | `xtile.init()` 默认就是 `backend="auto"` | 这一点已集成，不应再写成“未完全集成” |
-| `xtile.init()` 返回的 ctx 可直接执行 pattern | 仍需手工补齐 `heap_bases` 和 backend 对象 | runtime ctx 与 pattern ctx 尚未统一 |
+| `ctx.randn(...)` 直接在堆上分配 | `XTileContext` 已支持 `empty/zeros/randn()` | 这一项已打通 |
+| 自动检测后端 `backend="auto"` | `xtile.init()` 默认就是 `backend="auto"` | 这一项已集成 |
+| `xtile.init()` 返回的 ctx 可直接执行 pattern | `xtile.init(..., heap=...)` / `heap_size=...` / `init_local(...)` 都可直接返回可运行 pattern 的真实 ctx | runtime ctx 主路径已统一 |
+| benchmark / tests / CLI 与 runtime 入口一致 | 已统一到 `XTileContext` | 这一项已打通 |
+| 高层 op API | 仍缺 `xtile.ops.gemm_allscatter(...)` | 这是现在真正剩下的用户层缺口 |
 
 ---
 
@@ -160,7 +150,7 @@ def _fused_kernel(
 - `scatter_tile_to_peer` 使用 `translate_ptr` + `tl.store` ✅
 - `heap_bases` 作为 kernel 参数传入 ✅
 
-**差异（修订）**：核心通信原理接近 Iris，但当前 XTile 的 shape / ctx 约定还没有完全收敛。tests 使用完整 `B(K,N)`、完整 `C(M,N)`；benchmarks / CLI 则使用 `B(K,N_per_rank)`、`C(M,N_per_rank)`；而 `fused_sequential.py` 又会从 `B.shape[1]` 推导 `N` 再计算 `N_per_rank`。因此这里不宜再写成“无实质差异”。
+**差异（修订）**：核心通信原理接近 Iris，但当前 XTile 的 shape 约定还没有完全收敛。correctness tests 使用完整 `B(K,N)`、完整 `C(M,N)`；benchmarks / CLI 则使用 `B(K,N_per_rank)`、`C(M,N_per_rank)`；而部分 pattern 内核又会从 `B.shape[1]` 推导 `N` 再计算 `N_per_rank`。因此这里不宜再写成“无实质差异”。
 
 ---
 
@@ -394,6 +384,90 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 ## 总体差距汇总
 
+## 【新增状态更新 2026-03-21】我到底改了什么？是不是负优化？
+
+先说结论：
+
+- **不能把当前 headline 变差简单解释成“负优化”**。
+- 更准确的说法是：**runtime / benchmark /图表口径被收紧以后，之前那个最好看的 `1.067×` 不再能当稳定结论**。
+- 目前证据更支持“以前的 pattern headline 带有单尺寸单轮次偏乐观成分”，而不是“我把 pattern kernel 真正优化坏了”。
+
+### 这轮我实际做过的修改与优化
+
+1. **runtime context 统一**
+   - `XTileContext` 现在持有 `backend`、可选 `heap`、`heap_bases`
+   - `xtile.init(..., heap=...)`、`xtile.init(..., heap_size=...)`、`xtile.init_local(...)` 打通
+   - `ctx.empty/zeros/randn/barrier/auto_select_pattern` 已补齐
+
+2. **tests / CLI / benchmark 切到真实 runtime 入口**
+   - pattern tests 不再手工塞 `_Ctx`
+   - `bench_patterns.py` 改走 `xtile.init_local(...)`
+   - CLI `xtile bench pattern` 支持 `--warmup/--iters/--heap-size-mb`
+
+3. **pattern benchmark 从“能跑”改到“更可复现”**
+   - 不再写死 `512 MiB` heap
+   - 改成根据 `(M, N, K)` 自动估算每 rank 对称堆需求
+   - 这修掉了大尺寸 benchmark 直接失败的问题（原 `P5-003`）
+
+4. **pattern 辅助开销削减**
+   - `ProducerConsumerPattern` 复用 lock buffer 与 streams
+   - `WGSpecializedPattern` 复用 lock buffer
+   - 这是主机侧辅助路径优化，不是 fused kernel 算法本身的大改
+
+5. **GEMM benchmark 口径修正**
+   - `xtile.kernels.gemm.gemm(...)` 现在显式支持 `num_warps` / `num_stages`
+   - 避免以前 benchmark 看起来在调参，实际 wrapper 并没真的吃到这些参数
+
+6. **绘图脚本修正**
+   - 原来 `scripts/plot_figures.py` 里 `fig3_pattern_overlap` 直接把 `1.067×` 写死
+   - 现在已经改成基于最新 full 6-size rerun 的稳定结果出图，不再保留这个过期 headline
+
+### 为什么现在结果看起来没有以前好？
+
+主要有 4 个原因：
+
+1. **旧的 `1.067×` 不是当前最稳结论**
+   - 它来自旧阶段的单尺寸单轮次结果
+   - 当前统一 runtime + 动态 heap + 6 尺寸完整复测后，best stable 只有 `1.004×`
+
+2. **旧图表曾经直接画了过期硬编码数据**
+   - 之前的 `fig3_pattern_overlap` 不是“重跑实验自动出图”，而是“把旧数值重新画一遍”
+   - 所以你会看到图还写着 `1.067×`
+
+3. **这轮改动主要优化的是“工程正确性与复现性”，不是 pattern 内核性能本身**
+   - 真正明确改善的是 runtime 统一、benchmark 稳定性、heap 配置、实验口径
+   - 不是 fused pattern 的大规模算法升级
+
+4. **pattern 路径本来就还没有被证明稳定优于 baseline**
+   - 这轮复测只是把这个事实更清楚地暴露出来
+   - 从工程视角，这是“去掉了过强叙事”，不是“做出了可证实的负优化”
+
+### 那有没有真实的正向改进？
+
+有，但主要集中在工程主路径和 GEMM，而不是 overlap headline：
+
+- `XTileContext` 主路径统一了，这是真的正向工程改进
+- pattern benchmark 大尺寸能稳定跑完了，这是真的正向改进
+- GEMM 8192³ 的 official helper 3 次复测中位数现在约：
+  - fp16: `84.2%`
+  - bf16: `86.1%`
+- 相比此前文档里长期引用的约 `79%`，这是更好的当前口径
+
+### 当前最准确的现状判断
+
+- **不是“XTile 被我做坏了”**
+- **而是“runtime 与 benchmark 更严谨了，旧的 pattern 最优结论站不住了”**
+- 现在 XTile 真正已经站稳的是：
+  - transparent primitive 路线
+  - unified runtime context
+  - dynamic symmetric heap benchmark path
+  - 4096³ GEMM 达标
+- 现在仍然没站稳的是：
+  - overlap pattern 的稳定性能优势
+  - 8192³ GEMM ≥ 90%
+  - 一键式高层 API
+  - shape 约定完全统一
+
 ### 核心路径：完全实现
 
 | 组件 | 设想 | 现状 | 状态 |
@@ -401,8 +475,8 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 | translate_ptr (5 指令) | 匹配 Iris | ✅ 100% 匹配 | 完成 |
 | SymmetricHeap | IPC/peer access | ✅ 三级 fallback (ctypes IPC → PyTorch IPC → peer access) | 完成 |
 | 4 种 overlap pattern | kernel 实现 | ✅ 全部实现 | 完成 |
-| GEMM kernel | ≥ 90% cuBLAS | ✅ 4096³: 100.7% | 完成 |
-| Auto-select | 硬件感知 | ✅ 启发式已实现，但未与一键 API / 统一 ctx 完全打通 | 基本完成 |
+| GEMM kernel | ≥ 90% cuBLAS | ✅ 4096³：fp16 100.2%，bf16 91.1%（official helper 3 次复测中位数） | 完成 |
+| Auto-select | 硬件感知 | ✅ 启发式已实现，且已与统一 `XTileContext` 主路径打通 | 基本完成 |
 | tile 级 collective | ring allreduce 等 | ⚠️ 代码已实现，但当前结果里至少 allreduce collective benchmark 仍报 `invalid resource handle` | 部分完成 |
 | 跨平台 HAL | CUDA + HIP | ✅ 代码就绪 | 待 AMD 硬件 |
 
@@ -412,7 +486,7 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 |------|------|------|------|
 | P2P ≥ 95% | 285 GB/s | ❌ 当前约 82.7%–82.9% 峰值 | Triton/PTX 路径与协议开销 |
 | 一键 API | `xtile.fused_gemm_scatter(...)` | ❌ 需手动组合 | 便利封装未做 |
-| 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 79% | PTX-level 瓶颈 |
-| Pattern ≥ 1.3× overlap | 多 GPU overlap | ❌ 1.067× | 2 GPU 限制 |
+| 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 当前约 84.2%–86.1% | 仍需更深 kernel-level 优化 |
+| Pattern ≥ 1.3× overlap | 多 GPU overlap | ❌ 当前 best stable 仅 1.004× | 旧 1.067× 单点结果未复现 |
 | 跨节点 IPC | UCX/GDR | ❌ 待实现 | 需跨机通信基础设施 |
 | AMD 实测 | MI300X 验证 | ❌ 待硬件 | 无 AMD GPU |
