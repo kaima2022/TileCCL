@@ -778,6 +778,7 @@ contracts = {
 - `SymmetricHeap.peer_export_descriptors()` / `peer_memory_map()` / `peer_memory_map_metadata()` 已接入，peer import/map 元数据不再只能靠调试器看内部状态。
 - `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_imports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
 - `ImportedPeerMemory`、`SymmetricHeap.peer_imports()` / `peer_import_metadata()` 已接入，peer import state 不再只是 `mapped_ptr + cleanup resource` 的内部临时结构，而是正式结构化 surface。
+- `PeerMemoryExportDescriptor` / `ImportedPeerMemory` 现都显式带 `peer_rank`；peer export/import records 不再只靠列表位置隐式表达 rank。
 - `peer_imports` 现在已经是 `SymmetricHeap` import-map 的单一真实状态源；`heap_bases`、`translate()`、`peer_memory_map()` 现在都直接从它派生，不再额外维护 `_remote_ptrs` / `_peer_map` 这类并行派生缓存。
 - `heap_bases` 的刷新链路也已经收口到 `_refresh_heap_bases()`；`create_all(...)`、single-rank init 与 multiprocess transport setup 不再各自手工覆写 `_heap_bases`。
 - `SymmetricHeap._validate_peer_mapping_state(...)` 已接入；`peer_exports` / `peer_imports` 现在在发布前会校验 world-size、segment metadata、export/import 对齐关系，以及 local-rank import 是否仍精确指向 `local_base`。

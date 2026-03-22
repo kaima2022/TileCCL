@@ -2281,3 +2281,53 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - `SymmetricHeap` 的 peer mapping state 现在不只是“结构化”，也开始具备 fail-closed consistency guard
 - 这让 allocator-first substrate 更接近可维护的 canonical backend，但 external mapping / segmented import-map / unified access 仍未完成
+
+### Part M: peer export/import records become self-describing (2026-03-22)
+
+继续沿着 P0-next 收口，这一轮继续减少“靠列表位置隐含语义”的部分。
+
+本轮完成：
+
+- `PeerMemoryExportDescriptor` 新增 `peer_rank`
+- `ImportedPeerMemory` 新增 `peer_rank`
+- allocator export/import 路径已经把 `peer_rank` 保留到结构化记录里
+- synthetic single-process / single-rank peer records 也都显式写入 `peer_rank`
+- `peer_import_metadata()` / `metadata()["peer_imports"]` / `metadata()["peer_exports"]` 现已成为自描述记录，不再要求消费方额外假设“第 i 项就是 rank i”
+- `_validate_peer_mapping_state(...)` 现在也显式校验 record 内 `peer_rank` 与列表位置一致
+
+这一步的意义是：
+
+- `peer_imports` / `peer_exports` 现在更接近 canonical import-map record，而不是“结构化数组 + 隐式索引约定”
+- benchmark artifact、context metadata、文档导出之后如果消费这层信息，不需要再额外做 rank 回填
+- 这对后续 segmented import-map 或更复杂 external mapping backend 更重要，因为记录本身先要自描述，才能安全扩展
+
+这一步没有做的事情同样需要明确：
+
+- 没有改变 transport 支持面
+- 没有改变 collective public contract
+- 没有引入新的 allocator backend
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py
+pytest -q tests/test_support.py tests/test_context.py tests/test_benchmark_results.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py` → `41 passed in 6.11s`
+- `tests/test_support.py tests/test_context.py tests/test_benchmark_results.py tests/test_cli_support.py` → `17 passed in 6.50s`
+- `allgather + gemm_allgather` → `2 passed in 36.57s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 65.23s`
+
+结论：
+
+- peer import/export records 已经从“结构化”进一步推进到“自描述”
+- 这一步仍然属于 P0 substrate 收口，不代表 external mapping / segmented import-map 已经完成

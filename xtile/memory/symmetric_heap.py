@@ -347,6 +347,7 @@ class SymmetricHeap:
         segment = self._allocator.primary_segment()
         return [
             PeerMemoryExportDescriptor(
+                peer_rank=rank,
                 segment_id=segment.segment_id,
                 segment_kind=segment.segment_kind,
                 allocator_name=self.allocator_name,
@@ -369,6 +370,7 @@ class SymmetricHeap:
         segment = self._allocator.primary_segment()
         return [
             ImportedPeerMemory(
+                peer_rank=rank,
                 segment_id=segment.segment_id,
                 segment_kind=segment.segment_kind,
                 allocator_name=self.allocator_name,
@@ -389,10 +391,10 @@ class SymmetricHeap:
     ) -> list[PeerMemoryMapEntry]:
         """Build the structured peer-mapping view for diagnostics."""
         entries: list[PeerMemoryMapEntry] = []
-        for rank, imported in enumerate(peer_imports):
+        for imported in peer_imports:
             entries.append(
                 PeerMemoryMapEntry(
-                    peer_rank=rank,
+                    peer_rank=imported.peer_rank,
                     segment_id=imported.segment_id,
                     segment_kind=imported.segment_kind,
                     allocator_name=imported.allocator_name,
@@ -401,7 +403,7 @@ class SymmetricHeap:
                     exported_base_ptr=imported.exported_base_ptr,
                     size_bytes=imported.size_bytes,
                     device=imported.device,
-                    is_local_rank=(rank == self._rank),
+                    is_local_rank=(imported.peer_rank == self._rank),
                     cleanup_kind=imported.cleanup_kind,
                 )
             )
@@ -419,6 +421,7 @@ class SymmetricHeap:
             if peer_rank == self._rank:
                 imported_peers.append(
                     ImportedPeerMemory(
+                        peer_rank=peer_rank,
                         segment_id=local_segment.segment_id,
                         segment_kind=local_segment.segment_kind,
                         allocator_name=self.allocator_name,
@@ -471,10 +474,20 @@ class SymmetricHeap:
                     f"{prefix} export allocator {export.allocator_name!r} "
                     f"does not match local allocator {expected_allocator!r}"
                 )
+            if export.peer_rank != peer_rank:
+                raise RuntimeError(
+                    f"{prefix} export peer_rank {export.peer_rank} "
+                    f"does not match list position {peer_rank}"
+                )
             if imported.allocator_name != expected_allocator:
                 raise RuntimeError(
                     f"{prefix} import allocator {imported.allocator_name!r} "
                     f"does not match local allocator {expected_allocator!r}"
+                )
+            if imported.peer_rank != peer_rank:
+                raise RuntimeError(
+                    f"{prefix} import peer_rank {imported.peer_rank} "
+                    f"does not match list position {peer_rank}"
                 )
             if export.segment_id != imported.segment_id:
                 raise RuntimeError(
@@ -647,6 +660,7 @@ class SymmetricHeap:
     def _setup_multiprocess_ctypes_ipc(self) -> None:
         """Map peer heaps via raw CUDA/HIP IPC handles."""
         local_export = self._allocator.export_peer_memory(
+            peer_rank=self._rank,
             transport="ctypes_ipc",
             backend=self._backend,
         )
@@ -674,6 +688,7 @@ class SymmetricHeap:
                     pass
 
         local_export = self._allocator.export_peer_memory(
+            peer_rank=self._rank,
             transport="pytorch_ipc",
             backend=self._backend,
         )
@@ -705,6 +720,7 @@ class SymmetricHeap:
                     pass
 
         local_export = self._allocator.export_peer_memory(
+            peer_rank=self._rank,
             transport="peer_access_pointer_exchange",
             backend=self._backend,
         )

@@ -68,6 +68,7 @@ def _make_peer_export(
     from xtile.memory.allocators import PeerMemoryExportDescriptor
 
     return PeerMemoryExportDescriptor(
+        peer_rank=rank,
         segment_id=segment_id,
         segment_kind=segment_kind,
         allocator_name=allocator_name,
@@ -94,6 +95,7 @@ def _make_peer_import(
     from xtile.memory.allocators import ImportedPeerMemory
 
     return ImportedPeerMemory(
+        peer_rank=rank,
         segment_id=segment_id,
         segment_kind=segment_kind,
         allocator_name=allocator_name,
@@ -355,6 +357,38 @@ class TestSymmetricHeapUnit:
         ]
 
         with pytest.raises(RuntimeError, match="segment_kind"):
+            heap._validate_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
+    def test_validate_peer_mapping_state_rejects_embedded_peer_rank_mismatch(
+        self,
+    ) -> None:
+        """Structured peer records must not disagree with their list position."""
+        heap = _make_validation_heap()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+            _make_peer_export(rank=0, base_ptr=0x2000, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="export peer_rank 0"):
             heap._validate_peer_mapping_state(
                 peer_exports=peer_exports,
                 peer_imports=peer_imports,
@@ -640,9 +674,11 @@ class TestSymmetricHeapUnit:
         assert metadata[0]["is_local_rank"] is True
         assert metadata[0]["cleanup_kind"] == "none"
         assert exports[0].segment_id == "heap"
+        assert exports[0].peer_rank == 0
         assert exports[0].segment_kind == "device_heap"
         assert exports[0].transport == "local_only"
         assert exports[0].base_ptr == symmetric_heap.local_base
+        assert imports[0]["peer_rank"] == 0
         assert imports[0]["segment_id"] == "heap"
         assert imports[0]["transport"] == "local_only"
         assert imports[0]["mapped_ptr"] == symmetric_heap.local_base
@@ -683,11 +719,13 @@ class TestSymmetricHeapUnit:
 
         backend = _FakeBackend()
         export = symmetric_heap._allocator.export_peer_memory(
+            peer_rank=0,
             transport="ctypes_ipc",
             backend=backend,  # type: ignore[arg-type]
         )
 
         assert backend.seen_ptr == symmetric_heap.local_base
+        assert export.peer_rank == 0
         assert export.allocator_name == symmetric_heap.allocator_name
         assert export.transport == "ctypes_ipc"
         assert export.size_bytes == symmetric_heap.size
@@ -701,6 +739,7 @@ class TestSymmetricHeapUnit:
             backend=backend,  # type: ignore[arg-type]
         )
         assert backend.opened_handle == export.payload
+        assert imported.peer_rank == 0
         assert imported.segment_id == "heap"
         assert imported.segment_kind == "device_heap"
         assert imported.transport == "ctypes_ipc"
@@ -720,6 +759,7 @@ class TestSymmetricHeapUnit:
 
         backend = _UnusedBackend()
         export = symmetric_heap._allocator.export_peer_memory(
+            peer_rank=0,
             transport="peer_access_pointer_exchange",
             backend=backend,  # type: ignore[arg-type]
         )
@@ -729,7 +769,9 @@ class TestSymmetricHeapUnit:
         )
 
         assert export.transport == "peer_access_pointer_exchange"
+        assert export.peer_rank == 0
         assert export.payload == symmetric_heap.local_base
+        assert imported.peer_rank == 0
         assert imported.segment_id == "heap"
         assert imported.transport == "peer_access_pointer_exchange"
         assert imported.mapped_ptr == symmetric_heap.local_base
@@ -791,6 +833,8 @@ class TestSymmetricHeapMultiGPU:
             assert len(exports) == world_size
             assert len(imports) == world_size
             assert {entry["peer_rank"] for entry in metadata} == {0, 1}
+            assert {export.peer_rank for export in exports} == {0, 1}
+            assert {entry["peer_rank"] for entry in imports} == {0, 1}
             assert {entry["segment_id"] for entry in metadata} == {"heap"}
             assert {entry["segment_kind"] for entry in metadata} == {"device_heap"}
             assert {entry["transport"] for entry in metadata} == {"peer_access"}

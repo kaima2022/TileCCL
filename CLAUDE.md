@@ -379,6 +379,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 28 交付物（2026-03-22）
+- [x] self-describing peer records：`PeerMemoryExportDescriptor` / `ImportedPeerMemory` 已显式带 `peer_rank`
+- [x] runtime metadata 收口：`peer_exports` / `peer_imports` 不再只靠列表位置隐含 rank，文档/benchmark/context 现在都可直接消费自描述记录
+- [x] validator 增强：`_validate_peer_mapping_state(...)` 现在也校验 record 内的 `peer_rank` 与列表位置一致
+- [x] allocator/export/import 定向回归：`pytest -q tests/test_memory/test_symmetric_heap.py` → `41 passed`
+- [x] allocator/context/support/CLI 回归：`pytest -q tests/test_support.py tests/test_context.py tests/test_benchmark_results.py tests/test_cli_support.py` → `17 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

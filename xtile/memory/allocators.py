@@ -63,6 +63,7 @@ class MemorySegmentDescriptor:
 class PeerMemoryExportDescriptor:
     """Structured description of one exportable peer-memory region."""
 
+    peer_rank: int
     segment_id: str
     segment_kind: str
     allocator_name: str
@@ -75,6 +76,7 @@ class PeerMemoryExportDescriptor:
     def to_dict(self) -> dict[str, object]:
         """Return structured metadata for docs, diagnostics, and tests."""
         return {
+            "peer_rank": self.peer_rank,
             "segment_id": self.segment_id,
             "segment_kind": self.segment_kind,
             "allocator_name": self.allocator_name,
@@ -90,6 +92,7 @@ class PeerMemoryExportDescriptor:
 class ImportedPeerMemory:
     """Result of importing one peer-memory descriptor into the local process."""
 
+    peer_rank: int
     segment_id: str
     segment_kind: str
     allocator_name: str
@@ -104,6 +107,7 @@ class ImportedPeerMemory:
     def to_dict(self) -> dict[str, object]:
         """Return structured imported-peer metadata for diagnostics."""
         return {
+            "peer_rank": self.peer_rank,
             "segment_id": self.segment_id,
             "segment_kind": self.segment_kind,
             "allocator_name": self.allocator_name,
@@ -217,6 +221,7 @@ class BaseSymmetricAllocator(ABC):
     def export_peer_memory(
         self,
         *,
+        peer_rank: int,
         transport: str,
         backend: "BackendInterface",
     ) -> PeerMemoryExportDescriptor:
@@ -429,6 +434,7 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
     def export_peer_memory(
         self,
         *,
+        peer_rank: int,
         transport: str,
         backend: "BackendInterface",
     ) -> PeerMemoryExportDescriptor:
@@ -445,6 +451,7 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 f"Unsupported transport {transport!r} for allocator {self.name!r}"
             )
         return PeerMemoryExportDescriptor(
+            peer_rank=peer_rank,
             segment_id=segment.segment_id,
             segment_kind=segment.segment_kind,
             allocator_name=self.name,
@@ -474,6 +481,7 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 )
             mapped_ptr = backend.open_ipc_handle(export.payload)
             return ImportedPeerMemory(
+                peer_rank=export.peer_rank,
                 segment_id=export.segment_id,
                 segment_kind=export.segment_kind,
                 allocator_name=export.allocator_name,
@@ -492,6 +500,7 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 )
             storage = torch.UntypedStorage._new_shared_cuda(*export.payload)
             return ImportedPeerMemory(
+                peer_rank=export.peer_rank,
                 segment_id=export.segment_id,
                 segment_kind=export.segment_kind,
                 allocator_name=export.allocator_name,
@@ -509,6 +518,7 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                     "peer_access_pointer_exchange exports must carry an integer pointer."
                 )
             return ImportedPeerMemory(
+                peer_rank=export.peer_rank,
                 segment_id=export.segment_id,
                 segment_kind=export.segment_kind,
                 allocator_name=export.allocator_name,
