@@ -2225,3 +2225,59 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - `peer_imports` 现在已经是 import-map 的 canonical host-side state
 - XTile 还没做到 Iris 风格 external mapping substrate，但底层状态机已经进一步收敛
+
+### Part L: peer-mapping state validator and fail-closed apply path (2026-03-22)
+
+继续沿着 P0-next 推进，本轮不新增 transport，也不新增 public API，而是补一层更工业化的内部状态约束。
+
+本轮完成：
+
+- `SymmetricHeap._validate_peer_mapping_state(...)`
+- 显式校验 `peer_exports` / `peer_imports` 长度必须等于 `world_size`
+- 显式校验每个 rank 的 export/import metadata 对齐：
+  - `allocator_name`
+  - `segment_id`
+  - `segment_kind`
+  - `transport`
+  - `size_bytes`
+  - `device`
+  - `export.base_ptr == import.exported_base_ptr`
+- 显式校验 local-rank import 必须仍指向 `local_base`，且 `cleanup_kind='none'`
+- `_apply_peer_mapping_state(...)` 现在改成先校验、再发布 `_peer_exports` / `_peer_imports` / `heap_bases`
+
+这一步的意义是：
+
+- `peer_imports` 不只是 canonical host-side state source
+- 它现在还带有正式的不变量检查，不再依赖“各 transport/setup 分支刚好写对”
+- 如果后续 segmented import-map / external mapping 接进来，state drift 会更早暴露，而不是等到 kernel 侧才炸
+
+这一步没有做的事情同样要写清楚：
+
+- 没有放大 transport 支持面
+- 没有改变 `ctypes_ipc only` 的 multiprocess device-safe 结论
+- 没有改变 public contract / benchmark headline
+
+定向与基础回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py
+pytest -q tests/test_support.py tests/test_context.py tests/test_benchmark_results.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py` → `40 passed in 5.47s`
+- `tests/test_support.py tests/test_context.py tests/test_benchmark_results.py tests/test_cli_support.py` → `17 passed in 6.75s`
+- `allgather + gemm_allgather` → `2 passed in 37.24s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 64.28s`
+
+结论：
+
+- `SymmetricHeap` 的 peer mapping state 现在不只是“结构化”，也开始具备 fail-closed consistency guard
+- 这让 allocator-first substrate 更接近可维护的 canonical backend，但 external mapping / segmented import-map / unified access 仍未完成

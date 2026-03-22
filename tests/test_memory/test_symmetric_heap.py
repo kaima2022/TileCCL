@@ -31,6 +31,100 @@ def _round_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
+class _FakeValidationAllocator:
+    """Minimal allocator stub for peer-state validation unit tests."""
+
+    def __init__(self, *, base_ptr: int, size: int, device: str) -> None:
+        from xtile.memory.allocators import MemorySegmentDescriptor
+
+        self._name = "torch_bump"
+        self._segment = MemorySegmentDescriptor(
+            segment_id="heap",
+            segment_kind="device_heap",
+            allocator_name=self._name,
+            base_ptr=base_ptr,
+            size_bytes=size,
+            device=device,
+        )
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def primary_segment(self):
+        return self._segment
+
+
+def _make_peer_export(
+    *,
+    rank: int,
+    base_ptr: int,
+    size: int,
+    transport: str = "ctypes_ipc",
+    segment_id: str = "heap",
+    segment_kind: str = "device_heap",
+    allocator_name: str = "torch_bump",
+):
+    from xtile.memory.allocators import PeerMemoryExportDescriptor
+
+    return PeerMemoryExportDescriptor(
+        segment_id=segment_id,
+        segment_kind=segment_kind,
+        allocator_name=allocator_name,
+        transport=transport,
+        size_bytes=size,
+        base_ptr=base_ptr,
+        device=f"cuda:{rank}",
+        payload=f"export:{rank}".encode(),
+    )
+
+
+def _make_peer_import(
+    *,
+    rank: int,
+    mapped_ptr: int,
+    exported_base_ptr: int,
+    size: int,
+    transport: str = "ctypes_ipc",
+    segment_id: str = "heap",
+    segment_kind: str = "device_heap",
+    allocator_name: str = "torch_bump",
+    cleanup_kind: str = "ipc_handle",
+):
+    from xtile.memory.allocators import ImportedPeerMemory
+
+    return ImportedPeerMemory(
+        segment_id=segment_id,
+        segment_kind=segment_kind,
+        allocator_name=allocator_name,
+        transport=transport,
+        mapped_ptr=mapped_ptr,
+        exported_base_ptr=exported_base_ptr,
+        size_bytes=size,
+        device=f"cuda:{rank}",
+        cleanup_kind=cleanup_kind,
+    )
+
+
+def _make_validation_heap():
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    heap = SymmetricHeap.__new__(SymmetricHeap)
+    heap._rank = 0
+    heap._world_size = 2
+    heap._size = 4096
+    heap._device = torch.device("cuda", 0)
+    heap._local_ptr = 0x1000
+    heap._allocator = _FakeValidationAllocator(
+        base_ptr=heap._local_ptr,
+        size=heap._size,
+        device=str(heap._device),
+    )
+    heap._peer_exports = []
+    heap._peer_imports = []
+    return heap
+
+
 # ---------------------------------------------------------------------------
 # Unit tests (single GPU or mock -- no IPC needed)
 # ---------------------------------------------------------------------------
@@ -169,6 +263,139 @@ class TestSymmetricHeapUnit:
         heap._setup_multiprocess()
 
         assert calls == ["pytorch_ipc"]
+
+    def test_validate_peer_mapping_state_rejects_export_world_size_mismatch(
+        self,
+    ) -> None:
+        """peer_exports length must always match world_size."""
+        heap = _make_validation_heap()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="peer_exports has 1 entries"):
+            heap._validate_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
+    def test_validate_peer_mapping_state_rejects_local_import_pointer_drift(
+        self,
+    ) -> None:
+        """Local-rank import must still point at the local heap base."""
+        heap = _make_validation_heap()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+            _make_peer_export(rank=1, base_ptr=0x2000, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr + 0x80,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="local import mapped_ptr"):
+            heap._validate_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
+    def test_validate_peer_mapping_state_rejects_export_import_metadata_mismatch(
+        self,
+    ) -> None:
+        """Each peer import must align with its paired export metadata."""
+        heap = _make_validation_heap()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+            _make_peer_export(rank=1, base_ptr=0x2000, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+                segment_kind="dma_buf_segment",
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="segment_kind"):
+            heap._validate_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
+    def test_apply_peer_mapping_state_fails_closed_on_invalid_local_mapping(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Invalid peer state should fail before mutating heap_bases."""
+        heap = symmetric_heap
+        old_bases = heap.get_heap_bases().clone()
+        segment = heap.segment_descriptors()[0]
+        export = _make_peer_export(
+            rank=0,
+            base_ptr=heap.local_base,
+            size=heap.size,
+            transport="local_only",
+            segment_id=segment.segment_id,
+            segment_kind=segment.segment_kind,
+            allocator_name=heap.allocator_name,
+        )
+        invalid_import = _make_peer_import(
+            rank=0,
+            mapped_ptr=heap.local_base + 256,
+            exported_base_ptr=heap.local_base,
+            size=heap.size,
+            transport="local_only",
+            segment_id=segment.segment_id,
+            segment_kind=segment.segment_kind,
+            allocator_name=heap.allocator_name,
+            cleanup_kind="none",
+        )
+
+        with pytest.raises(RuntimeError, match="local import mapped_ptr"):
+            heap._apply_peer_mapping_state(
+                peer_exports=[export],
+                peer_imports=[invalid_import],
+            )
+
+        assert torch.equal(heap.get_heap_bases(), old_bases)
 
     # ---- bump allocator (requires 1 GPU via symmetric_heap fixture) ------
 

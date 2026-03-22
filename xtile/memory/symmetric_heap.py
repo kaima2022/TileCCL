@@ -438,6 +438,121 @@ class SymmetricHeap:
             imported_peers.append(imported)
         return imported_peers
 
+    def _validate_peer_mapping_state(
+        self,
+        *,
+        peer_exports: list[PeerMemoryExportDescriptor],
+        peer_imports: list[ImportedPeerMemory],
+    ) -> None:
+        """Validate one resolved peer-mapping state before publishing it."""
+        if len(peer_exports) != self._world_size:
+            raise RuntimeError(
+                "peer mapping state is inconsistent: "
+                f"peer_exports has {len(peer_exports)} entries, "
+                f"expected world_size={self._world_size}"
+            )
+        if len(peer_imports) != self._world_size:
+            raise RuntimeError(
+                "peer mapping state is inconsistent: "
+                f"peer_imports has {len(peer_imports)} entries, "
+                f"expected world_size={self._world_size}"
+            )
+
+        local_segment = self._allocator.primary_segment()
+        expected_device = str(self._device)
+        expected_allocator = self.allocator_name
+        for peer_rank, (export, imported) in enumerate(
+            zip(peer_exports, peer_imports, strict=True)
+        ):
+            prefix = f"peer mapping state is inconsistent for rank {peer_rank}:"
+
+            if export.allocator_name != expected_allocator:
+                raise RuntimeError(
+                    f"{prefix} export allocator {export.allocator_name!r} "
+                    f"does not match local allocator {expected_allocator!r}"
+                )
+            if imported.allocator_name != expected_allocator:
+                raise RuntimeError(
+                    f"{prefix} import allocator {imported.allocator_name!r} "
+                    f"does not match local allocator {expected_allocator!r}"
+                )
+            if export.segment_id != imported.segment_id:
+                raise RuntimeError(
+                    f"{prefix} export segment_id {export.segment_id!r} "
+                    f"does not match import segment_id {imported.segment_id!r}"
+                )
+            if export.segment_kind != imported.segment_kind:
+                raise RuntimeError(
+                    f"{prefix} export segment_kind {export.segment_kind!r} "
+                    f"does not match import segment_kind {imported.segment_kind!r}"
+                )
+            if export.transport != imported.transport:
+                raise RuntimeError(
+                    f"{prefix} export transport {export.transport!r} "
+                    f"does not match import transport {imported.transport!r}"
+                )
+            if export.size_bytes != self._size:
+                raise RuntimeError(
+                    f"{prefix} export size {export.size_bytes} does not match "
+                    f"heap size {self._size}"
+                )
+            if imported.size_bytes != self._size:
+                raise RuntimeError(
+                    f"{prefix} import size {imported.size_bytes} does not match "
+                    f"heap size {self._size}"
+                )
+            if imported.exported_base_ptr != export.base_ptr:
+                raise RuntimeError(
+                    f"{prefix} import exported_base_ptr 0x{imported.exported_base_ptr:x} "
+                    f"does not match export base_ptr 0x{export.base_ptr:x}"
+                )
+            if imported.device != export.device:
+                raise RuntimeError(
+                    f"{prefix} import device {imported.device!r} "
+                    f"does not match export device {export.device!r}"
+                )
+
+            if peer_rank != self._rank:
+                continue
+
+            if export.segment_id != local_segment.segment_id:
+                raise RuntimeError(
+                    f"{prefix} local export segment_id {export.segment_id!r} "
+                    f"does not match allocator segment_id {local_segment.segment_id!r}"
+                )
+            if export.segment_kind != local_segment.segment_kind:
+                raise RuntimeError(
+                    f"{prefix} local export segment_kind {export.segment_kind!r} "
+                    "does not match allocator segment_kind "
+                    f"{local_segment.segment_kind!r}"
+                )
+            if export.base_ptr != self._local_ptr:
+                raise RuntimeError(
+                    f"{prefix} local export base_ptr 0x{export.base_ptr:x} "
+                    f"does not match local base 0x{self._local_ptr:x}"
+                )
+            if imported.mapped_ptr != self._local_ptr:
+                raise RuntimeError(
+                    f"{prefix} local import mapped_ptr 0x{imported.mapped_ptr:x} "
+                    f"does not match local base 0x{self._local_ptr:x}"
+                )
+            if imported.exported_base_ptr != self._local_ptr:
+                raise RuntimeError(
+                    f"{prefix} local import exported_base_ptr "
+                    f"0x{imported.exported_base_ptr:x} does not match local base "
+                    f"0x{self._local_ptr:x}"
+                )
+            if imported.device != expected_device:
+                raise RuntimeError(
+                    f"{prefix} local import device {imported.device!r} "
+                    f"does not match local device {expected_device!r}"
+                )
+            if imported.cleanup_kind != "none":
+                raise RuntimeError(
+                    f"{prefix} local import cleanup_kind {imported.cleanup_kind!r} "
+                    "must be 'none'"
+                )
+
     def _apply_peer_mapping_state(
         self,
         *,
@@ -445,8 +560,14 @@ class SymmetricHeap:
         peer_imports: list[ImportedPeerMemory],
     ) -> None:
         """Commit one resolved peer-mapping state to the heap."""
-        self._peer_exports = list(peer_exports)
-        self._peer_imports = list(peer_imports)
+        resolved_exports = list(peer_exports)
+        resolved_imports = list(peer_imports)
+        self._validate_peer_mapping_state(
+            peer_exports=resolved_exports,
+            peer_imports=resolved_imports,
+        )
+        self._peer_exports = resolved_exports
+        self._peer_imports = resolved_imports
         self._refresh_heap_bases()
 
     def _peer_base_ptrs(self) -> list[int]:

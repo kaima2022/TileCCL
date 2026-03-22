@@ -370,6 +370,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 27 交付物（2026-03-22）
+- [x] peer-mapping state validator：`SymmetricHeap._validate_peer_mapping_state(...)` 已接入，对 `peer_exports` / `peer_imports` / `world_size` / local-rank base pointer / segment metadata 对齐进行 fail-closed 校验
+- [x] `_apply_peer_mapping_state(...)` 现先校验再发布状态，异常输入不会污染 `_peer_exports` / `_peer_imports` / `heap_bases`
+- [x] focused unit tests：新增长度不一致、local import pointer drift、export/import metadata mismatch、invalid apply fail-closed 覆盖
+- [x] 定向回归：`pytest -q tests/test_memory/test_symmetric_heap.py` → `40 passed`
+- [x] allocator/context/support/CLI 回归：`pytest -q tests/test_support.py tests/test_context.py tests/test_benchmark_results.py tests/test_cli_support.py` → `17 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
