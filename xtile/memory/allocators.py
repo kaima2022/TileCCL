@@ -37,9 +37,34 @@ class AllocationRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MemorySegmentDescriptor:
+    """Structured description of one allocator-owned memory segment."""
+
+    segment_id: str
+    segment_kind: str
+    allocator_name: str
+    base_ptr: int
+    size_bytes: int
+    device: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Return structured segment metadata for docs and diagnostics."""
+        return {
+            "segment_id": self.segment_id,
+            "segment_kind": self.segment_kind,
+            "allocator_name": self.allocator_name,
+            "base_ptr": self.base_ptr,
+            "size_bytes": self.size_bytes,
+            "device": self.device,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PeerMemoryExportDescriptor:
     """Structured description of one exportable peer-memory region."""
 
+    segment_id: str
+    segment_kind: str
     allocator_name: str
     transport: str
     size_bytes: int
@@ -50,6 +75,8 @@ class PeerMemoryExportDescriptor:
     def to_dict(self) -> dict[str, object]:
         """Return structured metadata for docs, diagnostics, and tests."""
         return {
+            "segment_id": self.segment_id,
+            "segment_kind": self.segment_kind,
             "allocator_name": self.allocator_name,
             "transport": self.transport,
             "size_bytes": self.size_bytes,
@@ -134,6 +161,21 @@ class BaseSymmetricAllocator(ABC):
         """Replace the mutable allocation record list."""
 
     @abstractmethod
+    def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
+        """Return the allocator-owned memory segments."""
+
+    def primary_segment(self) -> MemorySegmentDescriptor:
+        """Return the single exportable segment supported by the current runtime."""
+        segments = self.segment_descriptors()
+        if len(segments) != 1:
+            raise RuntimeError(
+                "The current SymmetricHeap runtime only supports one exportable "
+                f"segment per allocator, but allocator {self.name!r} exposes "
+                f"{len(segments)} segments."
+            )
+        return segments[0]
+
+    @abstractmethod
     def allocate_tensor(
         self,
         shape: tuple[int, ...],
@@ -175,13 +217,15 @@ class BaseSymmetricAllocator(ABC):
 
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
+        segments = self.segment_descriptors()
         return {
             "name": self.name,
             "device": str(self.device),
             "size_bytes": self.size,
             "bytes_allocated": self.bytes_allocated,
             "bytes_free": self.bytes_free,
-            "segment_count": 1,
+            "segment_count": len(segments),
+            "segments": [segment.to_dict() for segment in segments],
         }
 
 
@@ -269,6 +313,19 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
         """Replace the mutable allocation record list."""
         self._alloc_records = value
 
+    def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
+        """Return the single contiguous heap segment owned by this allocator."""
+        return (
+            MemorySegmentDescriptor(
+                segment_id="heap",
+                segment_kind="device_heap",
+                allocator_name=self.name,
+                base_ptr=self.base_ptr,
+                size_bytes=self.size,
+                device=str(self.device),
+            ),
+        )
+
     def allocate_tensor(
         self,
         shape: tuple[int, ...],
@@ -341,6 +398,7 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
         backend: "BackendInterface",
     ) -> PeerMemoryExportDescriptor:
         """Export the allocator's single backing region for peer import."""
+        segment = self.primary_segment()
         if transport == "ctypes_ipc":
             payload: object = backend.get_ipc_handle(self.base_ptr)
         elif transport == "pytorch_ipc":
@@ -352,6 +410,8 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 f"Unsupported transport {transport!r} for allocator {self.name!r}"
             )
         return PeerMemoryExportDescriptor(
+            segment_id=segment.segment_id,
+            segment_kind=segment.segment_kind,
             allocator_name=self.name,
             transport=transport,
             size_bytes=self.size,

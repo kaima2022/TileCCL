@@ -86,6 +86,7 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["backend"] == device_info.backend
         assert payload["has_heap"] is True
         assert payload["heap"]["allocator"]["name"] == "torch_bump"
+        assert payload["heap"]["segments"][0]["segment_id"] == "heap"
         assert len(payload["heap"]["peer_memory_map"]) == 1
     finally:
         for heap in heaps:

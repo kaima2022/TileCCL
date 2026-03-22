@@ -25,6 +25,7 @@ from xtile.memory.translation import PointerTranslator
 from xtile.memory.allocators import (
     BaseSymmetricAllocator,
     ImportedPeerMemory,
+    MemorySegmentDescriptor,
     PeerMemoryExportDescriptor,
     TorchBumpAllocator,
 )
@@ -32,6 +33,7 @@ from xtile.memory.allocators import (
 __all__ = [
     "BaseSymmetricAllocator",
     "ImportedPeerMemory",
+    "MemorySegmentDescriptor",
     "PeerMemoryExportDescriptor",
     "PeerMemoryMapEntry",
     "SymmetricHeap",

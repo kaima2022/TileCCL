@@ -204,9 +204,9 @@ def describe_runtime_support(
         "symmetric_heap_allocator_first_import_map": SupportStatus(
             "partial" if has_heap else "unsupported",
             "Allocator-backed heap runtime is implemented with a torch_bump backend, "
-            "allocator-owned peer export/import descriptors, and copy-based external "
-            "import/as_symmetric materialization. Canonical segmented peer import/map "
-            "is still not implemented."
+            "allocator-owned local segment metadata, peer export/import descriptors, "
+            "and copy-based external import/as_symmetric materialization. Canonical "
+            "segmented peer import/map is still not implemented."
             if has_heap
             else "Allocator-first canonical import/map layer requires an attached heap.",
         ),
@@ -216,9 +216,15 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before using external import/as_symmetric helpers.",
         ),
+        "symmetric_heap.segment_metadata": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes allocator-owned local segment metadata for the active heap backend."
+            if has_heap
+            else "Attach a heap before querying allocator-owned segment metadata.",
+        ),
         "symmetric_heap.peer_mapping_metadata": SupportStatus(
             "supported" if has_heap else "partial",
-            "Heap exposes allocator-owned peer export descriptors and structured peer mapping metadata."
+            "Heap exposes allocator-owned peer export descriptors plus structured peer mapping metadata."
             if has_heap
             else "Attach a heap before querying peer export/import mapping metadata.",
         ),

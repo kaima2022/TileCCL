@@ -40,6 +40,7 @@ from xtile.backends import get_backend, detect_hardware
 from xtile.backends.base import BackendInterface
 from xtile.memory.allocators import (
     BaseSymmetricAllocator,
+    MemorySegmentDescriptor,
     PeerMemoryExportDescriptor,
     create_allocator,
 )
@@ -79,6 +80,8 @@ class PeerMemoryMapEntry:
     """One rank-visible peer-memory mapping entry."""
 
     peer_rank: int
+    segment_id: str
+    segment_kind: str
     allocator_name: str
     transport: str
     mapped_ptr: int
@@ -92,6 +95,8 @@ class PeerMemoryMapEntry:
         """Serialize mapping metadata for diagnostics and docs."""
         return {
             "peer_rank": self.peer_rank,
+            "segment_id": self.segment_id,
+            "segment_kind": self.segment_kind,
             "allocator_name": self.allocator_name,
             "transport": self.transport,
             "mapped_ptr": self.mapped_ptr,
@@ -354,8 +359,11 @@ class SymmetricHeap:
         remote_ptrs: list[int],
     ) -> list[PeerMemoryExportDescriptor]:
         """Build synthetic peer-export descriptors for local/single-process modes."""
+        segment = self._allocator.primary_segment()
         return [
             PeerMemoryExportDescriptor(
+                segment_id=segment.segment_id,
+                segment_kind=segment.segment_kind,
                 allocator_name=self.allocator_name,
                 transport=transport,
                 size_bytes=self._size,
@@ -385,6 +393,8 @@ class SymmetricHeap:
             entries.append(
                 PeerMemoryMapEntry(
                     peer_rank=rank,
+                    segment_id=export.segment_id,
+                    segment_kind=export.segment_kind,
                     allocator_name=export.allocator_name,
                     transport=export.transport,
                     mapped_ptr=int(remote_ptrs[rank]),
@@ -721,6 +731,21 @@ class SymmetricHeap:
         """Return structured allocator metadata for docs and benchmarks."""
         return self._allocator.describe()
 
+    def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
+        """Return the local allocator-owned segment descriptors."""
+        return self._allocator.segment_descriptors()
+
+    def segment_metadata(self) -> list[dict[str, object]]:
+        """Return local segment metadata in JSON-friendly form."""
+        return [
+            {
+                **segment.to_dict(),
+                "owner_rank": self.rank,
+                "is_local_rank": True,
+            }
+            for segment in self.segment_descriptors()
+        ]
+
     def peer_export_descriptors(self) -> tuple[PeerMemoryExportDescriptor, ...]:
         """Return the rank-visible peer export descriptors for this heap."""
         return tuple(self._peer_exports)
@@ -745,6 +770,7 @@ class SymmetricHeap:
             "mode": self._mode,
             "transport_strategy": self._transport_strategy,
             "allocator": self.allocator_metadata(),
+            "segments": self.segment_metadata(),
             "peer_exports": [export.to_dict() for export in self._peer_exports],
             "peer_memory_map": self.peer_memory_map_metadata(),
         }

@@ -1932,3 +1932,80 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 - `runtime_metadata` 不再停留在 context/debug 层，而是已经进入 benchmark artifact 主链路
 - figure / export / docs 之后如果需要消费 allocator / heap / peer-map / transport 元数据，不需要再二次拼装
 - 这一轮没有放大 transport 支持面，也没有改变 collectives 主路径语义，只是把结构化证据补齐了
+
+### Part H: allocator-owned segment metadata surface (2026-03-22)
+
+继续沿着 P0-next 往 canonical substrate 推进，本轮不去放大 transport 支持面，而是先把 allocator 的 local segment 语义显式化。
+
+新增内容：
+
+- `MemorySegmentDescriptor`
+- `BaseSymmetricAllocator.segment_descriptors()`
+- `BaseSymmetricAllocator.primary_segment()`
+- `SymmetricHeap.segment_descriptors()`
+- `SymmetricHeap.segment_metadata()`
+
+同时把下面两层结构补齐了 `segment_id` / `segment_kind`：
+
+- `PeerMemoryExportDescriptor`
+- `PeerMemoryMapEntry`
+
+这一步的意义是：
+
+- local allocator segment 不再只是 `segment_count == 1` 这种隐式事实
+- peer export / peer import-map 现在可以和 local segment catalog 共享同一套段级语义
+- 当前 runtime 虽然仍然只有单段 `torch_bump` heap，但“单段”已经是显式 contract，而不是散落在实现里的假设
+
+support matrix 同步新增：
+
+- `memory["symmetric_heap.segment_metadata"]`
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_context.py \
+  tests/test_support.py \
+  tests/test_benchmark_results.py
+
+pytest -q tests/test_cli_support.py
+```
+
+结果：
+
+- `50 passed in 5.73s`
+- `3 passed in 5.33s`
+
+multiprocess 主路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `allgather + gemm_allgather` → `2 passed in 35.33s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 64.11s`
+
+真实 benchmark smoke（H100 PCIe x2）：
+
+```bash
+python -m tests.benchmarks.bench_p2p_translate \
+  --quick \
+  --output-json /tmp/xtile_p2p_segment_metadata_smoke.json
+```
+
+结果：
+
+- artifact 已写出 `segments`
+- `peer_exports[*]` / `peer_memory_map[*]` 已写出 `segment_id = "heap"` 与 `segment_kind = "device_heap"`
+- P2P quick：`best read = 248.74 GB/s`，`best write = 248.23 GB/s`
+
+结论：
+
+- P0 现在已经不只是 allocator boundary + export/import + peer-map metadata
+- local segment catalog 也已经成为正式 surface
+- 但这仍然不是 Iris 那种完整 canonical backend；真正还没做完的是 FD/DMA-BUF external mapping、segmented import-map 和统一 access substrate

@@ -329,6 +329,18 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 23 交付物（2026-03-22）
+- [x] allocator-owned segment metadata：新增 `MemorySegmentDescriptor`
+- [x] peer export / peer map 补齐 `segment_id` / `segment_kind`，把 local segment 与 peer import-map 对齐到同一结构化语义
+- [x] `SymmetricHeap.segment_descriptors()` / `segment_metadata()`：heap 现在可显式暴露本地 segment catalog
+- [x] support matrix 更新：新增 `memory["symmetric_heap.segment_metadata"]`
+- [x] allocator/context/support 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_support.py tests/test_benchmark_results.py` → `50 passed`
+- [x] support CLI 回归：`pytest -q tests/test_cli_support.py` → `3 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+- [x] 真实 benchmark smoke（H100 PCIe x2）：`python -m tests.benchmarks.bench_p2p_translate --quick --output-json /tmp/xtile_p2p_segment_metadata_smoke.json`
+- [x] smoke 结果确认：artifact 已写出 `segments`、`segment_id`、`segment_kind`，P2P quick `best read=248.74 GB/s`、`best write=248.23 GB/s`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -352,7 +364,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P13-001 | multiprocess/device 传输面目前只在 `ctypes_ipc` 上通过真实矩阵，其他 transport 仍未修复 | ⚠️ auto contract 已正式收窄为 `ctypes_ipc only`；下一优先级是修 `pytorch_ipc` / `peer_access_pointer_exchange` 的最小 Triton remote-access 正确性，再决定是否重新放开 |
 | P10-001 | `gemm_allscatter.shard/full` 不应作为 allscatter wrapper 继续补；该需求已独立收口到 `gemm_allgather.shard/full` public contract | ⚠️ contract 已落地，但 `gemm_allgather` 的 broader multiprocess/performance/world-size validation 仍未闭环 |
 | P15-001 | multiprocess `gemm_allscatter` 已完成 2-GPU `ctypes_ipc` public baseline correctness，并补齐 representative auto-selected coverage（4 个 pattern、`full/full + full/shard`），但 broader larger-shape / world-size / stress / performance contract 仍未闭环 | ⚠️ 继续保持 `partial`；下一优先级转为更大 shape、长时压力和 world-size 扩展验证 |
-| P17-001 | allocator-first substrate 已落地 v1，但仍缺 Iris 风格 canonical export/import/map/access substrate | ⚠️ 当前只有 `torch_bump` + copy-based external import；segment metadata、FD/DMA-BUF import-map 和统一 access 语义仍待实现 |
+| P17-001 | allocator-first substrate 已落地 v1，但仍缺 Iris 风格 canonical export/import/map/access substrate | ⚠️ 当前已有 `torch_bump`、local segment metadata、allocator-owned peer export/import 与 peer-map metadata；但 FD/DMA-BUF external mapping、segmented import-map 和统一 access 语义仍待实现 |
 
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |

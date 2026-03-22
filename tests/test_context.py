@@ -51,6 +51,8 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert heap_metadata["mode"] == "single_process"
         assert heap_metadata["transport_strategy"] == "local_only"
         assert heap_metadata["allocator"]["name"] == "torch_bump"
+        assert len(heap_metadata["segments"]) == 1
+        assert heap_metadata["segments"][0]["segment_id"] == "heap"
         assert len(heap_metadata["peer_memory_map"]) == 1
         assert runtime_metadata["backend"] == device_info.backend
         assert runtime_metadata["has_heap"] is True
@@ -85,6 +87,7 @@ def test_init_local_returns_attached_contexts(skip_no_multigpu, device_info) -> 
             assert ctx.heap_bases.shape == (2,)
             assert int(ctx.heap_bases[rank].item()) == ctx.heap.local_base
             assert ctx.heap_metadata()["transport_strategy"] == "peer_access"
+            assert len(ctx.heap_metadata()["segments"]) == 1
             assert len(ctx.heap_metadata()["peer_memory_map"]) == 2
 
             tensor = ctx.zeros(4, 4, dtype=torch.float16)
