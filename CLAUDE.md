@@ -396,6 +396,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 30 交付物（2026-03-22）
+- [x] rank-normalized apply path：`SymmetricHeap._apply_peer_mapping_state(...)` 现先按 `peer_rank` 归一化 `peer_exports` / `peer_imports`，再做一致性校验与发布
+- [x] fail-closed canonicalization：重复 `peer_rank`、缺失 rank、越界 `peer_rank` 会在发布前直接失败
+- [x] internal contract 收紧：incoming peer records 现在只需要“自描述且完整”，不再额外要求调用方先按 rank 排序
+- [x] 定向回归：`pytest -q tests/test_memory/test_symmetric_heap.py` → `43 passed`
+- [x] allocator/context/support/CLI 回归：`pytest -q tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `17 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

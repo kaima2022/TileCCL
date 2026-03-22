@@ -2382,3 +2382,53 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - `peer_exports` 现在已经具备 canonical JSON-friendly metadata surface
 - 这进一步降低了 runtime artifact / docs / benchmark 层对内部 dataclass 细节的耦合
+
+### Part O: peer-mapping apply path no longer depends on caller-side rank ordering (2026-03-22)
+
+继续沿着 P0-next 收口，本轮继续处理一层之前还存在的隐式耦合。
+
+虽然 `PeerMemoryExportDescriptor` / `ImportedPeerMemory` 已经带了 `peer_rank`，但在上一轮之前，`_apply_peer_mapping_state(...)` 仍默认要求调用方先把列表按 rank 排好。
+
+本轮完成：
+
+- 新增 `_canonicalize_peer_records(...)`
+- `peer_exports` / `peer_imports` 在 publish 前先按 `peer_rank` 归一化
+- duplicated / missing / out-of-range `peer_rank` 现在会在 publish 前 fail-closed
+- 之后再执行 `_validate_peer_mapping_state(...)` 和 `heap_bases` 刷新
+
+这一步的意义是：
+
+- `peer_rank` 不再只是 metadata 字段，而开始真正参与 canonical apply path
+- internal contract 变成“记录必须自描述且完整”，而不是“调用方必须额外帮忙排好序”
+- 这让后续如果换 allocator backend、换 import path、或者引入 segmented import-map，state handoff 的耦合更低
+
+这一步没有做的事情：
+
+- 没有改变 transport 支持面
+- 没有放开新的 collective public contract
+- 没有实现 external mapping / unified access substrate
+
+回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py
+pytest -q tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py` → `43 passed in 5.53s`
+- `tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `17 passed in 6.55s`
+- `allgather + gemm_allgather` → `2 passed in 37.00s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 67.58s`
+
+结论：
+
+- peer-mapping 的 apply path 现在已经对 caller-side 顺序不敏感
+- 这一步继续把 XTile 往 canonical import-map substrate 推近了一小步，但底层 allocator/import/map/access 一体化仍未完成

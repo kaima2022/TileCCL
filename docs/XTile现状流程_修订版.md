@@ -782,6 +782,7 @@ contracts = {
 - `peer_imports` 现在已经是 `SymmetricHeap` import-map 的单一真实状态源；`heap_bases`、`translate()`、`peer_memory_map()` 现在都直接从它派生，不再额外维护 `_remote_ptrs` / `_peer_map` 这类并行派生缓存。
 - `heap_bases` 的刷新链路也已经收口到 `_refresh_heap_bases()`；`create_all(...)`、single-rank init 与 multiprocess transport setup 不再各自手工覆写 `_heap_bases`。
 - `SymmetricHeap._validate_peer_mapping_state(...)` 已接入；`peer_exports` / `peer_imports` 现在在发布前会校验 world-size、segment metadata、export/import 对齐关系，以及 local-rank import 是否仍精确指向 `local_base`。
+- `SymmetricHeap._apply_peer_mapping_state(...)` 现在会先按 `peer_rank` 归一化 incoming peer records，再进行校验与发布；内部 contract 不再要求调用方手工先按 rank 排序。
 - `_apply_peer_mapping_state(...)` 现在是 fail-closed 的：非法 peer state 不会污染 `_peer_exports`、`_peer_imports` 或 `heap_bases`。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。

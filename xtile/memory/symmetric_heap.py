@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Optional
+from typing import Optional, TypeVar
 
 import torch
 import torch.distributed as dist
@@ -51,6 +51,12 @@ from xtile.utils.feature_gates import (
 )
 
 logger = logging.getLogger(__name__)
+
+_PeerRecordT = TypeVar(
+    "_PeerRecordT",
+    PeerMemoryExportDescriptor,
+    ImportedPeerMemory,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -566,6 +572,38 @@ class SymmetricHeap:
                     "must be 'none'"
                 )
 
+    def _canonicalize_peer_records(
+        self,
+        *,
+        records: list[_PeerRecordT],
+        label: str,
+    ) -> list[_PeerRecordT]:
+        """Return peer records normalized into rank order."""
+        ordered: list[Optional[_PeerRecordT]] = [None] * self._world_size
+        for record in records:
+            peer_rank = int(record.peer_rank)
+            if peer_rank < 0 or peer_rank >= self._world_size:
+                raise RuntimeError(
+                    "peer mapping state is inconsistent: "
+                    f"{label} contains out-of-range peer_rank={peer_rank} "
+                    f"for world_size={self._world_size}"
+                )
+            if ordered[peer_rank] is not None:
+                raise RuntimeError(
+                    "peer mapping state is inconsistent: "
+                    f"{label} contains duplicate peer_rank={peer_rank}"
+                )
+            ordered[peer_rank] = record
+        missing_ranks = [
+            rank for rank, record in enumerate(ordered) if record is None
+        ]
+        if missing_ranks:
+            raise RuntimeError(
+                "peer mapping state is inconsistent: "
+                f"{label} is missing peer ranks {missing_ranks}"
+            )
+        return [record for record in ordered if record is not None]
+
     def _apply_peer_mapping_state(
         self,
         *,
@@ -573,8 +611,14 @@ class SymmetricHeap:
         peer_imports: list[ImportedPeerMemory],
     ) -> None:
         """Commit one resolved peer-mapping state to the heap."""
-        resolved_exports = list(peer_exports)
-        resolved_imports = list(peer_imports)
+        resolved_exports = self._canonicalize_peer_records(
+            records=list(peer_exports),
+            label="peer_exports",
+        )
+        resolved_imports = self._canonicalize_peer_records(
+            records=list(peer_imports),
+            label="peer_imports",
+        )
         self._validate_peer_mapping_state(
             peer_exports=resolved_exports,
             peer_imports=resolved_imports,

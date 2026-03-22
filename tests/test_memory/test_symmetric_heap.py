@@ -431,6 +431,75 @@ class TestSymmetricHeapUnit:
 
         assert torch.equal(heap.get_heap_bases(), old_bases)
 
+    def test_apply_peer_mapping_state_canonicalizes_records_by_peer_rank(
+        self,
+    ) -> None:
+        """Incoming peer records may be self-describing but unordered."""
+        heap = _make_validation_heap()
+        heap._refresh_heap_bases = MagicMock()
+
+        peer_exports = [
+            _make_peer_export(rank=1, base_ptr=0x2000, size=heap._size),
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+            ),
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+        ]
+
+        heap._apply_peer_mapping_state(
+            peer_exports=peer_exports,
+            peer_imports=peer_imports,
+        )
+
+        assert [export.peer_rank for export in heap._peer_exports] == [0, 1]
+        assert [imported.peer_rank for imported in heap._peer_imports] == [0, 1]
+        heap._refresh_heap_bases.assert_called_once()
+
+    def test_apply_peer_mapping_state_rejects_duplicate_peer_rank(
+        self,
+    ) -> None:
+        """Canonicalization should fail closed on duplicate peer ranks."""
+        heap = _make_validation_heap()
+        heap._refresh_heap_bases = MagicMock()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+            _make_peer_export(rank=0, base_ptr=0x2000, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="duplicate peer_rank=0"):
+            heap._apply_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
     # ---- bump allocator (requires 1 GPU via symmetric_heap fixture) ------
 
     def test_bump_allocator_alignment(self, symmetric_heap) -> None:
