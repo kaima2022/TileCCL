@@ -2009,3 +2009,87 @@ python -m tests.benchmarks.bench_p2p_translate \
 - P0 现在已经不只是 allocator boundary + export/import + peer-map metadata
 - local segment catalog 也已经成为正式 surface
 - 但这仍然不是 Iris 那种完整 canonical backend；真正还没做完的是 FD/DMA-BUF external mapping、segmented import-map 和统一 access substrate
+
+### Part I: structured peer import state (2026-03-22)
+
+继续沿着 P0-next 往 canonical substrate 推进，本轮把 peer import 也从“内部若干并行数组”收口成正式结构化状态。
+
+新增内容：
+
+- `ImportedPeerMemory` 现在携带：
+  - `segment_id`
+  - `segment_kind`
+  - `allocator_name`
+  - `transport`
+  - `mapped_ptr`
+  - `exported_base_ptr`
+  - `size_bytes`
+  - `device`
+  - `cleanup_kind`
+- `SymmetricHeap.peer_imports()`
+- `SymmetricHeap.peer_import_metadata()`
+
+内部实现也同步收口：
+
+- `SymmetricHeap` 不再把 peer import state 主要分散在 `_remote_ptrs + _ipc_opened + _ipc_storages`
+- 现在先持有结构化 imported-peer records，再从它们派生 `heap_bases` 与 cleanup bookkeeping
+
+这一步的意义是：
+
+- export / import / map 三层状态已经开始共享同一批段级字段
+- 当前 runtime 仍是单段 heap，但 peer import 的生命周期和 cleanup 语义已经不再是散落的 side arrays
+- 以后继续接 FD/DMA-BUF external mapping 或 segmented import-map 时，不需要再拆旧的并行状态结构
+
+support matrix 同步新增：
+
+- `memory["symmetric_heap.peer_import_metadata"]`
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_context.py \
+  tests/test_support.py \
+  tests/test_benchmark_results.py
+
+pytest -q tests/test_cli_support.py
+```
+
+结果：
+
+- `50 passed in 6.97s`
+- `3 passed in 6.61s`
+
+multiprocess 主路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `allgather + gemm_allgather` → `2 passed in 38.28s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 64.13s`
+
+真实 benchmark smoke（H100 PCIe x2）：
+
+```bash
+python -m tests.benchmarks.bench_p2p_translate \
+  --quick \
+  --output-json /tmp/xtile_p2p_peer_imports_smoke.json
+```
+
+结果：
+
+- artifact 已写出 `peer_imports`
+- `peer_imports[*]` 现在显式带 `cleanup_kind`
+- P2P quick：`best read = 248.68 GB/s`，`best write = 248.12 GB/s`
+
+结论：
+
+- XTile 的 allocator-first substrate 现在已经有 local segment、peer export、peer import、peer map 四层结构化状态
+- 这比此前“transport-aware fallback + 若干内部数组”更接近工业级 canonical substrate
+- 但真正的下一步仍然是 external mapping / segmented import-map / unified access，而不是继续扩 transport 面

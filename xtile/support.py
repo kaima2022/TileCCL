@@ -222,9 +222,15 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before querying allocator-owned segment metadata.",
         ),
+        "symmetric_heap.peer_import_metadata": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes structured peer-import records for the active transport strategy."
+            if has_heap
+            else "Attach a heap before querying peer-import metadata.",
+        ),
         "symmetric_heap.peer_mapping_metadata": SupportStatus(
             "supported" if has_heap else "partial",
-            "Heap exposes allocator-owned peer export descriptors plus structured peer mapping metadata."
+            "Heap exposes allocator-owned peer export descriptors, peer-import records, plus structured peer mapping metadata."
             if has_heap
             else "Attach a heap before querying peer export/import mapping metadata.",
         ),

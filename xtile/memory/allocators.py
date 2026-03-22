@@ -90,8 +90,30 @@ class PeerMemoryExportDescriptor:
 class ImportedPeerMemory:
     """Result of importing one peer-memory descriptor into the local process."""
 
+    segment_id: str
+    segment_kind: str
+    allocator_name: str
+    transport: str
     mapped_ptr: int
+    exported_base_ptr: int
+    size_bytes: int
+    device: str
+    cleanup_kind: str
     cleanup_resource: object | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """Return structured imported-peer metadata for diagnostics."""
+        return {
+            "segment_id": self.segment_id,
+            "segment_kind": self.segment_kind,
+            "allocator_name": self.allocator_name,
+            "transport": self.transport,
+            "mapped_ptr": self.mapped_ptr,
+            "exported_base_ptr": self.exported_base_ptr,
+            "size_bytes": self.size_bytes,
+            "device": self.device,
+            "cleanup_kind": self.cleanup_kind,
+        }
 
 
 class BaseSymmetricAllocator(ABC):
@@ -439,7 +461,15 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 )
             mapped_ptr = backend.open_ipc_handle(export.payload)
             return ImportedPeerMemory(
+                segment_id=export.segment_id,
+                segment_kind=export.segment_kind,
+                allocator_name=export.allocator_name,
+                transport=export.transport,
                 mapped_ptr=mapped_ptr,
+                exported_base_ptr=export.base_ptr,
+                size_bytes=export.size_bytes,
+                device=export.device,
+                cleanup_kind="ipc_handle",
                 cleanup_resource=mapped_ptr,
             )
         if export.transport == "pytorch_ipc":
@@ -449,7 +479,15 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 )
             storage = torch.UntypedStorage._new_shared_cuda(*export.payload)
             return ImportedPeerMemory(
+                segment_id=export.segment_id,
+                segment_kind=export.segment_kind,
+                allocator_name=export.allocator_name,
+                transport=export.transport,
                 mapped_ptr=storage.data_ptr(),
+                exported_base_ptr=export.base_ptr,
+                size_bytes=export.size_bytes,
+                device=export.device,
+                cleanup_kind="storage",
                 cleanup_resource=storage,
             )
         if export.transport == "peer_access_pointer_exchange":
@@ -457,7 +495,17 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 raise TypeError(
                     "peer_access_pointer_exchange exports must carry an integer pointer."
                 )
-            return ImportedPeerMemory(mapped_ptr=export.payload)
+            return ImportedPeerMemory(
+                segment_id=export.segment_id,
+                segment_kind=export.segment_kind,
+                allocator_name=export.allocator_name,
+                transport=export.transport,
+                mapped_ptr=export.payload,
+                exported_base_ptr=export.base_ptr,
+                size_bytes=export.size_bytes,
+                device=export.device,
+                cleanup_kind="none",
+            )
         raise ValueError(
             f"Unsupported transport {export.transport!r} for allocator {self.name!r}"
         )

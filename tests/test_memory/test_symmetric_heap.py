@@ -392,9 +392,11 @@ class TestSymmetricHeapUnit:
         """Single-rank heaps should still expose one structured mapping entry."""
         metadata = symmetric_heap.peer_memory_map_metadata()
         exports = symmetric_heap.peer_export_descriptors()
+        imports = symmetric_heap.peer_import_metadata()
 
         assert len(metadata) == 1
         assert len(exports) == 1
+        assert len(imports) == 1
         assert metadata[0]["peer_rank"] == 0
         assert metadata[0]["segment_id"] == "heap"
         assert metadata[0]["segment_kind"] == "device_heap"
@@ -408,6 +410,11 @@ class TestSymmetricHeapUnit:
         assert exports[0].segment_kind == "device_heap"
         assert exports[0].transport == "local_only"
         assert exports[0].base_ptr == symmetric_heap.local_base
+        assert imports[0]["segment_id"] == "heap"
+        assert imports[0]["transport"] == "local_only"
+        assert imports[0]["mapped_ptr"] == symmetric_heap.local_base
+        assert imports[0]["exported_base_ptr"] == symmetric_heap.local_base
+        assert imports[0]["cleanup_kind"] == "none"
 
     def test_import_external_tensor_materializes_heap_copy(self, symmetric_heap) -> None:
         """import_external_tensor should copy data onto the symmetric heap."""
@@ -461,7 +468,12 @@ class TestSymmetricHeapUnit:
             backend=backend,  # type: ignore[arg-type]
         )
         assert backend.opened_handle == export.payload
+        assert imported.segment_id == "heap"
+        assert imported.segment_kind == "device_heap"
+        assert imported.transport == "ctypes_ipc"
         assert imported.mapped_ptr == 0x12345000
+        assert imported.exported_base_ptr == symmetric_heap.local_base
+        assert imported.cleanup_kind == "ipc_handle"
         assert imported.cleanup_resource == 0x12345000
 
     def test_allocator_exports_peer_pointer_exchange_descriptor(
@@ -485,7 +497,10 @@ class TestSymmetricHeapUnit:
 
         assert export.transport == "peer_access_pointer_exchange"
         assert export.payload == symmetric_heap.local_base
+        assert imported.segment_id == "heap"
+        assert imported.transport == "peer_access_pointer_exchange"
         assert imported.mapped_ptr == symmetric_heap.local_base
+        assert imported.cleanup_kind == "none"
         assert imported.cleanup_resource is None
 
 
@@ -537,19 +552,23 @@ class TestSymmetricHeapMultiGPU:
         try:
             metadata = heaps[0].peer_memory_map_metadata()
             exports = heaps[0].peer_export_descriptors()
+            imports = heaps[0].peer_import_metadata()
 
             assert len(metadata) == world_size
             assert len(exports) == world_size
+            assert len(imports) == world_size
             assert {entry["peer_rank"] for entry in metadata} == {0, 1}
             assert {entry["segment_id"] for entry in metadata} == {"heap"}
             assert {entry["segment_kind"] for entry in metadata} == {"device_heap"}
             assert {entry["transport"] for entry in metadata} == {"peer_access"}
+            assert {entry["transport"] for entry in imports} == {"peer_access"}
             assert all(entry["size_bytes"] == heaps[0].size for entry in metadata)
             assert metadata[0]["is_local_rank"] is True
             assert metadata[1]["is_local_rank"] is False
             assert metadata[0]["cleanup_kind"] == "none"
             assert metadata[1]["cleanup_kind"] == "none"
             assert exports[0].segment_id == "heap"
+            assert imports[1]["segment_kind"] == "device_heap"
             assert exports[1].transport == "peer_access"
         finally:
             for h in heaps:

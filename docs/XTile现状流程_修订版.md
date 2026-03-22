@@ -776,12 +776,13 @@ contracts = {
   - `import_peer_memory(...)`
   - `PeerMemoryExportDescriptor`
 - `SymmetricHeap.peer_export_descriptors()` / `peer_memory_map()` / `peer_memory_map_metadata()` 已接入，peer import/map 元数据不再只能靠调试器看内部状态。
-- `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
+- `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_imports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
+- `ImportedPeerMemory`、`SymmetricHeap.peer_imports()` / `peer_import_metadata()` 已接入，peer import state 不再只是 `mapped_ptr + cleanup resource` 的内部临时结构，而是正式结构化 surface。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
 - `XTileContext.heap_metadata()` / `runtime_metadata()` 已接入，runtime / heap / peer-map 现在有统一结构化出口。
 - `tests/benchmarks/bench_gemm.py`、`tests/benchmarks/bench_p2p_translate.py`、`tests/benchmarks/bench_patterns.py` 生成的结构化 JSON 已统一带出 `runtime_metadata`；其中 pattern benchmark 因 heap size 随 problem size 变化，额外按 size 记录对应 runtime metadata。
-- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import`、`symmetric_heap.segment_metadata` 与 `symmetric_heap.peer_mapping_metadata` 状态。
+- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import`、`symmetric_heap.segment_metadata`、`symmetric_heap.peer_import_metadata` 与 `symmetric_heap.peer_mapping_metadata` 状态。
 
 当前准确口径是：
 
@@ -894,6 +895,7 @@ benchmark / JSON / plot / 文档导出在当前范围内已经建立起第一版
 - `torch_bump` allocator backend
 - copy-based `import_external_tensor(...)` / `as_symmetric(...)`
 - local segment metadata
+- peer import metadata
 - transport-aware fallback + gate + support matrix
 
 但它还没有做到：
