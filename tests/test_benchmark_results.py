@@ -88,8 +88,12 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["heap"]["allocator"]["name"] == "torch_bump"
         assert payload["heap"]["allocator"]["capabilities"]["external_mapping"] is False
         assert payload["heap"]["segments"][0]["segment_id"] == "heap"
+        assert payload["heap"]["peer_exports"][0]["peer_rank"] == 0
+        assert payload["heap"]["peer_exports"][0]["segment_id"] == "heap"
         assert payload["heap"]["peer_imports"][0]["segment_id"] == "heap"
+        assert payload["heap"]["peer_imports"][0]["peer_rank"] == 0
         assert len(payload["heap"]["peer_memory_map"]) == 1
+        assert payload["heap"]["peer_memory_map"][0]["peer_rank"] == 0
     finally:
         for heap in heaps:
             heap.cleanup()

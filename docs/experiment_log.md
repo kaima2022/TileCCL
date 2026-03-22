@@ -2432,3 +2432,57 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - peer-mapping 的 apply path 现在已经对 caller-side 顺序不敏感
 - 这一步继续把 XTile 往 canonical import-map substrate 推近了一小步，但底层 allocator/import/map/access 一体化仍未完成
+
+### Part P: context and benchmark artifacts now assert peer-mapping metadata visibility (2026-03-22)
+
+继续按最佳实践推进，这一轮不再改 substrate 行为，而是把新 surface 的消费侧回归补齐。
+
+本轮完成：
+
+- `tests/test_context.py`
+  - single-rank / multi-rank heap metadata 现在显式断言：
+    - `peer_exports[*].peer_rank`
+    - `peer_imports[*].peer_rank`
+    - `peer_memory_map[*].peer_rank`
+- `tests/test_benchmark_results.py`
+  - `runtime_metadata_snapshot(...)` 现在显式断言 benchmark/runtime artifact 中：
+    - `peer_exports[0].peer_rank`
+    - `peer_imports[0].peer_rank`
+    - `peer_memory_map[0].peer_rank`
+
+这一步的意义是：
+
+- 前几轮新增的 `peer_rank` / `peer_exports` surface 不再只靠 `SymmetricHeap` 层单测兜底
+- context / benchmark artifact 已经正式成为 contract 的一部分
+- 如果后续有人改坏 metadata 导出，失败会更早暴露在消费层，而不是到文档或绘图阶段才发现
+
+这一步没有做的事情：
+
+- 没有改动 runtime 行为
+- 没有改变 transport 支持面
+- 没有新增 benchmark headline
+
+回归：
+
+```bash
+python -m compileall tests/test_context.py tests/test_benchmark_results.py
+
+pytest -q tests/test_context.py tests/test_benchmark_results.py
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_context.py tests/test_benchmark_results.py` → `8 passed in 6.87s`
+- `tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_cli_support.py` → `52 passed in 6.60s`
+- `allgather + gemm_allgather` → `2 passed in 38.79s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 64.04s`
+
+结论：
+
+- `peer_exports` / `peer_imports` / `peer_memory_map` 的 metadata visibility 现在已经在消费层被锁定
+- 这让 P0 substrate 的结构化 surface 不只是“存在”，而是“被下游显式依赖并受测试保护”
