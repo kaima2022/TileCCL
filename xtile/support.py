@@ -230,6 +230,13 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before querying allocator-owned segment metadata.",
         ),
+        "symmetric_heap.allocator_memory_model": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes the allocator memory-model descriptor, including local segment layout, "
+            "peer import/mapping model, and current external import/mapping modes."
+            if has_heap
+            else "Attach a heap before querying allocator memory-model metadata.",
+        ),
         "symmetric_heap.peer_import_metadata": SupportStatus(
             "supported" if has_heap else "partial",
             "Heap exposes structured peer-import records for the active transport strategy."

@@ -772,6 +772,7 @@ class TestSymmetricHeapUnit:
         assert metadata["capabilities"]["fd_passing"] is False
         assert metadata["capabilities"]["dmabuf_mapping"] is False
         assert metadata["external_tensor_import_mode"] == "copy"
+        assert metadata["external_mapping_mode"] == "none"
         assert metadata["peer_transport_modes"] == [
             "ctypes_ipc",
             "pytorch_ipc",
@@ -783,6 +784,14 @@ class TestSymmetricHeapUnit:
             "mapped_remote",
             "remote_pointer",
         ]
+        assert metadata["memory_model"] == {
+            "allocator_name": "torch_bump",
+            "local_segment_layout": "single_contiguous_device_heap",
+            "peer_import_model": "per_rank_transport_resolved_imports",
+            "peer_mapping_model": "rank_ordered_import_table",
+            "external_tensor_import_mode": "copy",
+            "external_mapping_mode": "none",
+        }
         assert len(metadata["segments"]) == 1
         assert metadata["segments"][0]["segment_id"] == "heap"
         assert metadata["segments"][0]["segment_kind"] == "device_heap"

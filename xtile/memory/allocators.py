@@ -60,6 +60,29 @@ class MemorySegmentDescriptor:
 
 
 @dataclass(frozen=True, slots=True)
+class AllocatorMemoryModelDescriptor:
+    """Structured description of one allocator's current memory model."""
+
+    allocator_name: str
+    local_segment_layout: str
+    peer_import_model: str
+    peer_mapping_model: str
+    external_tensor_import_mode: str
+    external_mapping_mode: str
+
+    def to_dict(self) -> dict[str, str]:
+        """Return JSON-friendly allocator memory-model metadata."""
+        return {
+            "allocator_name": self.allocator_name,
+            "local_segment_layout": self.local_segment_layout,
+            "peer_import_model": self.peer_import_model,
+            "peer_mapping_model": self.peer_mapping_model,
+            "external_tensor_import_mode": self.external_tensor_import_mode,
+            "external_mapping_mode": self.external_mapping_mode,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PeerMemoryExportDescriptor:
     """Structured description of one exportable peer-memory region."""
 
@@ -260,6 +283,22 @@ class BaseSymmetricAllocator(ABC):
         """Return the current external-tensor import mode."""
         return "copy"
 
+    def external_mapping_mode(self) -> str:
+        """Return the current external-mapping mode."""
+        return "none"
+
+    def local_segment_layout(self) -> str:
+        """Return how allocator-owned local memory segments are laid out."""
+        return "single_contiguous_device_heap"
+
+    def peer_import_model(self) -> str:
+        """Return how peer imports are represented after transport setup."""
+        return "per_rank_transport_resolved_imports"
+
+    def peer_mapping_model(self) -> str:
+        """Return how imported peer mappings are indexed by the runtime."""
+        return "rank_ordered_import_table"
+
     def peer_transport_modes(self) -> tuple[str, ...]:
         """Return the allocator-supported peer transport modes."""
         return (
@@ -298,6 +337,21 @@ class BaseSymmetricAllocator(ABC):
             "remote_pointer",
         )
 
+    def memory_model_descriptor(self) -> AllocatorMemoryModelDescriptor:
+        """Return the allocator's current memory-model descriptor."""
+        return AllocatorMemoryModelDescriptor(
+            allocator_name=self.name,
+            local_segment_layout=self.local_segment_layout(),
+            peer_import_model=self.peer_import_model(),
+            peer_mapping_model=self.peer_mapping_model(),
+            external_tensor_import_mode=self.external_tensor_import_mode(),
+            external_mapping_mode=self.external_mapping_mode(),
+        )
+
+    def memory_model(self) -> dict[str, str]:
+        """Return JSON-friendly allocator memory-model metadata."""
+        return self.memory_model_descriptor().to_dict()
+
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
@@ -310,8 +364,10 @@ class BaseSymmetricAllocator(ABC):
             "segment_count": len(segments),
             "capabilities": self.capabilities(),
             "external_tensor_import_mode": self.external_tensor_import_mode(),
+            "external_mapping_mode": self.external_mapping_mode(),
             "peer_transport_modes": list(self.peer_transport_modes()),
             "peer_import_access_kinds": list(self.peer_import_access_kinds()),
+            "memory_model": self.memory_model(),
             "segments": [segment.to_dict() for segment in segments],
         }
 

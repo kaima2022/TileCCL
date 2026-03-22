@@ -53,6 +53,7 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert heap_metadata["allocator"]["name"] == "torch_bump"
         assert heap_metadata["allocator"]["capabilities"]["external_mapping"] is False
         assert heap_metadata["allocator"]["external_tensor_import_mode"] == "copy"
+        assert heap_metadata["allocator"]["external_mapping_mode"] == "none"
         assert heap_metadata["allocator"]["peer_transport_modes"] == [
             "ctypes_ipc",
             "pytorch_ipc",
@@ -64,6 +65,10 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
             "mapped_remote",
             "remote_pointer",
         ]
+        assert heap_metadata["allocator"]["memory_model"]["peer_import_model"] == (
+            "per_rank_transport_resolved_imports"
+        )
+        assert heap_metadata["allocator"]["memory_model"]["external_mapping_mode"] == "none"
         assert len(heap_metadata["segments"]) == 1
         assert heap_metadata["segments"][0]["segment_id"] == "heap"
         assert len(heap_metadata["peer_exports"]) == 1

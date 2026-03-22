@@ -2703,3 +2703,54 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - allocator metadata 现在开始接近一个可扩展的 peer semantics catalog
 - 这仍然只是 canonical substrate 的准备层，不代表 external mapping / segmented import-map 已经落地
+
+### Part U: allocator metadata now exposes a structured memory-model descriptor (2026-03-22)
+
+继续按最佳实践推进，这一轮不再补单个字段，而是把 allocator 底层语义收口成一个更稳定的结构化 schema。
+
+本轮完成：
+
+- `AllocatorMemoryModelDescriptor`
+- allocator metadata 新增 `memory_model`
+- 当前 `torch_bump` 的 `memory_model` 为：
+  - `local_segment_layout = "single_contiguous_device_heap"`
+  - `peer_import_model = "per_rank_transport_resolved_imports"`
+  - `peer_mapping_model = "rank_ordered_import_table"`
+  - `external_tensor_import_mode = "copy"`
+  - `external_mapping_mode = "none"`
+- support matrix 新增 `memory["symmetric_heap.allocator_memory_model"]`
+
+这一步的意义是：
+
+- XTile 现在不只是在 metadata 里堆 capability / mode 字段，而是开始形成一个真正可扩展的 `memory_model` schema
+- 未来如果接 segmented import-map 或 FD/DMA-BUF external mapping，可以优先在这个 schema 上演进，而不是继续在文档和若干零散字段里补丁式扩展
+- 这更接近“单一 canonical memory model”该有的工程形态
+
+这一步没有做的事情：
+
+- 没有实现 segmented import-map
+- 没有实现 external mapping
+- 没有改变 public support 面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/support.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `62 passed in 5.45s`
+- `allgather + gemm_allgather` → `2 passed in 36.82s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 62.88s`
+
+结论：
+
+- allocator metadata 现在已经具备第一版结构化 `memory_model`
+- 这一步是 canonical backend 的 schema 准备，不代表 backend 本体已经完成
