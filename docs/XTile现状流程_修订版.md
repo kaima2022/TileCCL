@@ -779,6 +779,7 @@ contracts = {
 - `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_imports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
 - `ImportedPeerMemory`、`SymmetricHeap.peer_imports()` / `peer_import_metadata()` 已接入，peer import state 不再只是 `mapped_ptr + cleanup resource` 的内部临时结构，而是正式结构化 surface。
 - `peer_imports` 现在已经是 `SymmetricHeap` import-map 的单一真实状态源；`heap_bases`、`translate()`、`peer_memory_map()` 现在都直接从它派生，不再额外维护 `_remote_ptrs` / `_peer_map` 这类并行派生缓存。
+- `heap_bases` 的刷新链路也已经收口到 `_refresh_heap_bases()`；`create_all(...)`、single-rank init 与 multiprocess transport setup 不再各自手工覆写 `_heap_bases`。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。

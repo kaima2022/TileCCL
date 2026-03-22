@@ -186,9 +186,6 @@ class SymmetricHeap:
 
         if _peer_bases is not None:
             # Single-process mode: bases provided by create_all()
-            self._heap_bases = torch.tensor(
-                _peer_bases, dtype=torch.int64, device=self._device,
-            )
             self._transport_strategy = "peer_access"
             self._apply_peer_mapping_state(
                 peer_exports=self._build_local_peer_exports(
@@ -202,9 +199,6 @@ class SymmetricHeap:
             )
         elif world_size == 1:
             # Trivial single-GPU case
-            self._heap_bases = torch.tensor(
-                [self._local_ptr], dtype=torch.int64, device=self._device,
-            )
             self._peer_buffers = [self._buffer]
             self._apply_peer_mapping_state(
                 peer_exports=self._build_local_peer_exports(
@@ -312,9 +306,6 @@ class SymmetricHeap:
                     transport="peer_access",
                     remote_ptrs=list(bases),
                 ),
-            )
-            heap._heap_bases = torch.tensor(
-                bases, dtype=torch.int64, device=f"cuda:{rank}",
             )
             heap._peer_buffers = list(buffers)
             heap._mode = "single_process"
@@ -456,10 +447,19 @@ class SymmetricHeap:
         """Commit one resolved peer-mapping state to the heap."""
         self._peer_exports = list(peer_exports)
         self._peer_imports = list(peer_imports)
+        self._refresh_heap_bases()
 
     def _peer_base_ptrs(self) -> list[int]:
         """Return mapped base pointers derived from the peer-import state."""
         return [imported.mapped_ptr for imported in self._peer_imports]
+
+    def _refresh_heap_bases(self) -> None:
+        """Refresh the device-resident heap-base tensor from peer imports."""
+        self._heap_bases = torch.tensor(
+            self._peer_base_ptrs(),
+            dtype=torch.int64,
+            device=self._device,
+        )
 
     def _setup_multiprocess(self) -> None:
         """Exchange heap pointers across ranks for multi-process mode.
@@ -537,9 +537,6 @@ class SymmetricHeap:
             peer_exports=gathered_exports,
             peer_imports=imported_peers,
         )
-        self._heap_bases = torch.tensor(
-            self._peer_base_ptrs(), dtype=torch.int64, device=self._device,
-        )
         self._transport_strategy = "ctypes_ipc"
         dist.barrier()
         logger.info("Rank %d: ctypes IPC setup complete", self._rank)
@@ -566,9 +563,6 @@ class SymmetricHeap:
         self._apply_peer_mapping_state(
             peer_exports=gathered_exports,
             peer_imports=imported_peers,
-        )
-        self._heap_bases = torch.tensor(
-            self._peer_base_ptrs(), dtype=torch.int64, device=self._device,
         )
         self._transport_strategy = "pytorch_ipc"
         dist.barrier()
@@ -600,9 +594,6 @@ class SymmetricHeap:
         self._apply_peer_mapping_state(
             peer_exports=gathered_exports,
             peer_imports=imported_peers,
-        )
-        self._heap_bases = torch.tensor(
-            self._peer_base_ptrs(), dtype=torch.int64, device=self._device,
         )
         self._transport_strategy = "peer_access_pointer_exchange"
         dist.barrier()

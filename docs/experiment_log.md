@@ -2175,6 +2175,7 @@ python -m tests.benchmarks.bench_p2p_translate \
 - 去掉 `_remote_ptrs` 这类派生缓存
 - 去掉 `_peer_map` 这类派生缓存
 - `heap_bases`、`translate()`、`peer_memory_map()` 统一改成直接从 `peer_imports` 派生
+- `create_all(...)`、single-rank init、三条 multiprocess transport setup 分支也不再手工写 `_heap_bases`，统一经 `_refresh_heap_bases()` 刷新
 
 这一步的意义是：
 

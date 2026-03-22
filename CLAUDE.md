@@ -363,6 +363,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 
 ### Phase 26 交付物（2026-03-22）
 - [x] import-map 单一状态源：`SymmetricHeap` 已去掉 `_remote_ptrs` / `_peer_map` 这类派生缓存，`heap_bases`、`translate()`、`peer_memory_map()` 现直接从 `peer_imports` 派生
+- [x] `heap_bases` 刷新链路收口：不再在 `create_all(...)` / multiprocess transport setup 各分支手工覆写 `_heap_bases`，统一经 `_refresh_heap_bases()` 从 `peer_imports` 重建
 - [x] 这一步是内部 substrate 收口，不改变 transport 支持面，也不改变 public contract
 - [x] allocator/context/support 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_context.py tests/test_benchmark_results.py` → `50 passed`
 - [x] support CLI 回归：`pytest -q tests/test_cli_support.py` → `3 passed`
