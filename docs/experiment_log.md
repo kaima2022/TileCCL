@@ -1607,3 +1607,43 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 - P0 现在更准确的状态是：**allocator-first substrate v1 已完成，但 canonical backend 仍未完成**
 - P1 现在更准确的状态是：**`gemm_allgather.shard/full` 独立 public contract 已完成，剩下的是 multiprocess/world-size/perf/stress 扩验，不是继续设计 API**
 - 当前最真实的支持面仍然是：**multiprocess `ctypes_ipc` only**
+
+### Part C: `ctypes_ipc` 支持面内 shape-grid 扩验 (2026-03-22)
+
+为了避免把 `gemm_allgather` 写成“只在一个最小 baseline case 上成立”，本轮继续补了当前正式支持面内的多 shape 扩验。
+
+脚本增强：
+
+- `tests/benchmarks/bench_gemm_allgather_multiprocess.py` 新增 `--shapes`
+- 可一次性跑多组 `MxNxK`
+- 旧 `--M/--N/--K` 单 shape 入口保持兼容
+
+验收命令：
+
+```bash
+python -m tests.benchmarks.bench_gemm_allgather_multiprocess \
+  --dtypes float16,bfloat16,float32 \
+  --transports auto,ctypes_ipc \
+  --shapes 128x256x128,256x512x256 \
+  --warmup 1 --iters 3 \
+  --timeout-sec 240 \
+  --output-json docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json
+```
+
+结果：
+
+- 总 case 数：`12`
+- 通过：`12`
+- 失败：`0`
+- shape：
+  - `128x256x128`
+  - `256x512x256`
+- transport：
+  - `auto`
+  - forced `ctypes_ipc`
+- dtype：
+  - `fp16`
+  - `bf16`
+  - `fp32`
+
+这组结果不改变“全 transport 矩阵仍然只有 `6/12`”这一事实，但它把当前正式支持面内的证据从“单 shape baseline”推进到了“**双 shape、三 dtype、双 transport selection 的 12/12 通过**”。

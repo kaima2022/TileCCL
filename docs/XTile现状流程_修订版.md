@@ -814,6 +814,15 @@ contracts = {
 - 通过面是 `auto/ctypes_ipc` 与 forced `ctypes_ipc`，`dtype = fp16 / bf16 / fp32`。
 - `pytorch_ipc` 和 `peer_access_pointer_exchange` 当前仍失败，因此 multiprocess 仍需保持 `partial`。
 
+同时还要把“支持面内扩验”和“全 transport 矩阵”区分开写：
+
+- 全 transport 矩阵仍然是 `6/12`。
+- 但在当前正式支持面 `auto/ctypes_ipc + forced ctypes_ipc` 内，已经新增两组 shape 的真机扩验：
+  - `128x256x128`
+  - `256x512x256`
+- 这组 `2 shapes × 3 dtypes × 2 transport selections` 的 shape-grid 结果为 `12/12` 全通过。
+- 因此当前更准确的表述不是“只在一个最小 baseline case 上成立”，而是“**在当前收窄后的正式支持面内，已经开始形成更可信的多 shape baseline**”。
+
 #### 6. `gemm_reducescatter(...)` 的第一版基础工作已经完成
 
 `xtile/ops.py` 里的 `gemm_reducescatter(...)` 已经不是“待做项”，而是已经落地的第一版 public host contract。

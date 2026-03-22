@@ -284,6 +284,13 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] 共享基础路径复测：`pytest -q tests/test_allgather_multiprocess.py` → `1 passed`
 - [x] opt-in collective 侧向回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 18 交付物（2026-03-22）
+- [x] `tests/benchmarks/bench_gemm_allgather_multiprocess.py` 新增 `--shapes` shape-grid 入口，可一次性跑多组 `MxNxK`
+- [x] backward compatibility 验证：旧 `--M/--N/--K` 单 shape 入口仍可用
+- [x] `gemm_allgather` 支持面内扩验：`python -m tests.benchmarks.bench_gemm_allgather_multiprocess --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --shapes 128x256x128,256x512x256 --warmup 1 --iters 3 --timeout-sec 240 --output-json docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json`
+- [x] 当前正式支持面 `auto/ctypes_ipc + forced ctypes_ipc` 的 `2 shapes × 3 dtypes × 2 transport selections` 真机结果为 `12/12` 全通过
+- [x] 结构化 artifact：新增 `docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

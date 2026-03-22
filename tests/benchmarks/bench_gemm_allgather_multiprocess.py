@@ -35,6 +35,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--M", type=int, default=128, help="Rows of A/C.")
     parser.add_argument("--N", type=int, default=256, help="Full output columns.")
     parser.add_argument("--K", type=int, default=128, help="Reduction dimension.")
+    parser.add_argument(
+        "--shapes",
+        type=str,
+        default="",
+        help="Optional comma-separated MxNxK grid (for example: 128x256x128,256x512x256). "
+        "When set, overrides --M/--N/--K.",
+    )
     parser.add_argument("--warmup", type=int, default=1, help="Warmup iterations per case.")
     parser.add_argument("--iters", type=int, default=2, help="Timed iterations per case.")
     parser.add_argument(
@@ -55,6 +62,33 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def _split_csv(raw: str) -> list[str]:
     """Split a comma-separated CLI list, dropping empty entries."""
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _parse_shapes(raw: str, *, default_shape: tuple[int, int, int]) -> list[tuple[int, int, int]]:
+    """Parse one optional comma-separated shape grid."""
+    items = _split_csv(raw)
+    if not items:
+        return [default_shape]
+
+    shapes: list[tuple[int, int, int]] = []
+    for item in items:
+        parts = item.lower().split("x")
+        if len(parts) != 3:
+            raise ValueError(
+                f"Invalid shape {item!r}. Expected MxNxK, for example 128x256x128."
+            )
+        try:
+            shape = tuple(int(part) for part in parts)
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid shape {item!r}. M/N/K must be integers."
+            ) from exc
+        if any(dim <= 0 for dim in shape):
+            raise ValueError(
+                f"Invalid shape {item!r}. M/N/K must all be positive."
+            )
+        shapes.append(shape)
+    return shapes
 
 
 def _aggregate_rank_payloads(payloads: list[dict[str, object]]) -> dict[str, object]:
@@ -90,97 +124,111 @@ def main() -> None:
     args = _parse_args(sys.argv[1:])
     dtypes = _split_csv(args.dtypes)
     transports = _split_csv(args.transports)
+    shapes = _parse_shapes(
+        args.shapes,
+        default_shape=(args.M, args.N, args.K),
+    )
     repo_root = Path(__file__).resolve().parents[2]
 
     cases: list[dict[str, object]] = []
-    for dtype_name in dtypes:
-        for transport in transports:
-            cmd = [
-                sys.executable,
-                "-u",
-                "-m",
-                "tests.test_e2e._run_gemm_allgather_multiprocess",
-                "--M",
-                str(args.M),
-                "--N",
-                str(args.N),
-                "--K",
-                str(args.K),
-                "--dtype",
-                dtype_name,
-                "--warmup",
-                str(args.warmup),
-                "--iters",
-                str(args.iters),
-                "--launcher",
-                "all",
-            ]
-            if transport != "auto":
-                cmd.extend(["--force-transport", transport])
-
-            env = os.environ.copy()
-            try:
-                result = subprocess.run(
-                    cmd,
-                    cwd=repo_root,
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=args.timeout_sec,
-                )
-                payload = {
-                    "dtype": dtype_name,
-                    "requested_transport": transport,
-                    "command": " ".join(cmd),
-                    "returncode": result.returncode,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
-                }
-            except subprocess.TimeoutExpired as exc:
-                payload = {
-                    "dtype": dtype_name,
-                    "requested_transport": transport,
-                    "command": " ".join(cmd),
-                    "returncode": -1,
-                    "stdout": exc.stdout or "",
-                    "stderr": exc.stderr or "",
-                    "status": "timed_out",
-                }
-                cases.append(payload)
-                print(
-                    f"[FAIL] dtype={dtype_name:8s} requested={transport:28s} rc=timeout",
-                    flush=True,
-                )
-                continue
-
-            if result.returncode == 0:
-                rank_payloads = [
-                    json.loads(line)
-                    for line in result.stdout.splitlines()
-                    if line.strip().startswith("{")
+    for M, N, K in shapes:
+        for dtype_name in dtypes:
+            for transport in transports:
+                cmd = [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    "tests.test_e2e._run_gemm_allgather_multiprocess",
+                    "--M",
+                    str(M),
+                    "--N",
+                    str(N),
+                    "--K",
+                    str(K),
+                    "--dtype",
+                    dtype_name,
+                    "--warmup",
+                    str(args.warmup),
+                    "--iters",
+                    str(args.iters),
+                    "--launcher",
+                    "all",
                 ]
-                payload["status"] = "passed"
-                payload["rank_payloads"] = rank_payloads
-                payload["summary"] = _aggregate_rank_payloads(rank_payloads)
-            else:
-                payload["status"] = "failed"
-            cases.append(payload)
+                if transport != "auto":
+                    cmd.extend(["--force-transport", transport])
 
-            summary = payload.get("summary")
-            if payload["status"] == "passed" and isinstance(summary, dict):
-                print(
-                    f"[PASS] dtype={dtype_name:8s} requested={transport:28s} "
-                    f"actual={summary['transport_strategy']:28s} "
-                    f"plan={summary['plan_mean_ms_across_ranks']:.3f} ms "
-                    f"high_level={summary['high_level_mean_ms_across_ranks']:.3f} ms",
-                    flush=True,
-                )
-            else:
-                print(
-                    f"[FAIL] dtype={dtype_name:8s} requested={transport:28s} rc={result.returncode}",
-                    flush=True,
-                )
+                env = os.environ.copy()
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        cwd=repo_root,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=args.timeout_sec,
+                    )
+                    payload = {
+                        "M": M,
+                        "N": N,
+                        "K": K,
+                        "dtype": dtype_name,
+                        "requested_transport": transport,
+                        "command": " ".join(cmd),
+                        "returncode": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                    }
+                except subprocess.TimeoutExpired as exc:
+                    payload = {
+                        "M": M,
+                        "N": N,
+                        "K": K,
+                        "dtype": dtype_name,
+                        "requested_transport": transport,
+                        "command": " ".join(cmd),
+                        "returncode": -1,
+                        "stdout": exc.stdout or "",
+                        "stderr": exc.stderr or "",
+                        "status": "timed_out",
+                    }
+                    cases.append(payload)
+                    print(
+                        f"[FAIL] shape={M}x{N}x{K} dtype={dtype_name:8s} "
+                        f"requested={transport:28s} rc=timeout",
+                        flush=True,
+                    )
+                    continue
+
+                if result.returncode == 0:
+                    rank_payloads = [
+                        json.loads(line)
+                        for line in result.stdout.splitlines()
+                        if line.strip().startswith("{")
+                    ]
+                    payload["status"] = "passed"
+                    payload["rank_payloads"] = rank_payloads
+                    payload["summary"] = _aggregate_rank_payloads(rank_payloads)
+                else:
+                    payload["status"] = "failed"
+                cases.append(payload)
+
+                summary = payload.get("summary")
+                if payload["status"] == "passed" and isinstance(summary, dict):
+                    print(
+                        f"[PASS] shape={M}x{N}x{K} dtype={dtype_name:8s} "
+                        f"requested={transport:28s} "
+                        f"actual={summary['transport_strategy']:28s} "
+                        f"plan={summary['plan_mean_ms_across_ranks']:.3f} ms "
+                        f"high_level={summary['high_level_mean_ms_across_ranks']:.3f} ms",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"[FAIL] shape={M}x{N}x{K} dtype={dtype_name:8s} "
+                        f"requested={transport:28s} rc={result.returncode}",
+                        flush=True,
+                    )
 
     passed_cases = sum(1 for item in cases if item["status"] == "passed")
     payload = {
@@ -191,9 +239,10 @@ def main() -> None:
         "environment": {
             "gpu_name": torch.cuda.get_device_name(0),
             "visible_gpus": torch.cuda.device_count(),
-            "M": args.M,
-            "N": args.N,
-            "K": args.K,
+            "shapes": [
+                {"M": M, "N": N, "K": K}
+                for M, N, K in shapes
+            ],
             "warmup": args.warmup,
             "iters": args.iters,
         },
@@ -210,4 +259,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
