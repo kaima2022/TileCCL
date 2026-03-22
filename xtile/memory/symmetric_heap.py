@@ -938,6 +938,14 @@ class SymmetricHeap:
         """Return the local allocator-owned segment descriptors."""
         return self._allocator.segment_descriptors()
 
+    def exportable_segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
+        """Return the allocator segments exportable through the current runtime."""
+        return self._allocator.exportable_segment_descriptors()
+
+    def primary_segment_descriptor(self) -> MemorySegmentDescriptor:
+        """Return the current primary exportable segment descriptor."""
+        return self._allocator.primary_segment()
+
     def segment_metadata(self) -> list[dict[str, object]]:
         """Return local segment metadata in JSON-friendly form."""
         return [
@@ -947,6 +955,20 @@ class SymmetricHeap:
                 "is_local_rank": True,
             }
             for segment in self.segment_descriptors()
+        ]
+
+    def exportable_segment_metadata(self) -> list[dict[str, object]]:
+        """Return exportable segment metadata in JSON-friendly form."""
+        return [
+            {
+                **segment.to_dict(),
+                "owner_rank": self.rank,
+                "is_local_rank": True,
+                "is_primary_segment": (
+                    segment.segment_id == self.primary_segment_descriptor().segment_id
+                ),
+            }
+            for segment in self.exportable_segment_descriptors()
         ]
 
     def peer_export_descriptors(self) -> tuple[PeerMemoryExportDescriptor, ...]:
@@ -1003,6 +1025,7 @@ class SymmetricHeap:
             "allocator": self.allocator_metadata(),
             "segment_layout": self.segment_layout(),
             "segments": self.segment_metadata(),
+            "exportable_segments": self.exportable_segment_metadata(),
             "peer_exports": self.peer_export_metadata(),
             "peer_imports": self.peer_import_metadata(),
             "peer_memory_map": self.peer_memory_map_metadata(),

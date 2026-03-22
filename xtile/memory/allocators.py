@@ -408,6 +408,7 @@ class BaseSymmetricAllocator(ABC):
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
+        exportable_segments = self.exportable_segment_descriptors()
         return {
             "name": self.name,
             "device": str(self.device),
@@ -423,6 +424,9 @@ class BaseSymmetricAllocator(ABC):
             "peer_import_access_kinds": list(self.peer_import_access_kinds()),
             "memory_model": self.memory_model(),
             "segments": [segment.to_dict() for segment in segments],
+            "exportable_segments": [
+                segment.to_dict() for segment in exportable_segments
+            ],
         }
 
 

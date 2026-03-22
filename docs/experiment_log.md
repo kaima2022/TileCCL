@@ -2862,3 +2862,55 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - `segment_layout` 现在已成为正式 runtime surface
 - 这一步是 segmented import-map 的准备层，不代表 multi-segment backend 已经实现
+
+### Part X: exportable segments are now separated from the full segment catalog (2026-03-22)
+
+继续沿着 segmented import-map 的准备接口推进，这一轮把“allocator 拥有哪些 segments”和“当前 runtime 能导出哪些 segments”正式分开。
+
+本轮完成：
+
+- allocator metadata 新增 `exportable_segments`
+- `SymmetricHeap.exportable_segment_descriptors()`
+- `SymmetricHeap.primary_segment_descriptor()`
+- `SymmetricHeap.exportable_segment_metadata()`
+- support matrix 新增 `memory["symmetric_heap.exportable_segment_metadata"]`
+
+当前 `torch_bump` backend 下，这两层目前仍然相同：
+
+- `segments = ["heap"]`
+- `exportable_segments = ["heap"]`
+
+但这一步的价值在于：
+
+- “当前只有一个 heap segment”不再写死在调用方心智里
+- future multi-segment allocator / segmented import-map 可以优先扩展 `exportable_segments`
+- 当前 runtime 已有了“owned segments” vs “exportable segments”的正式边界
+
+这一步没有做的事情：
+
+- 没有实现 multi-segment allocator
+- 没有实现 segmented import-map
+- 没有改变 public transport support 面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/memory/symmetric_heap.py xtile/support.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `65 passed in 6.92s`
+- `allgather + gemm_allgather` → `2 passed in 36.14s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 63.67s`
+
+结论：
+
+- runtime 现在已经正式区分 full segment catalog 与 exportable segment catalog
+- 这一步是 segmented import-map 的准备接口，不代表 multi-segment backend 已落地

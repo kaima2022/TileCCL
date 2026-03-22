@@ -473,6 +473,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 39 交付物（2026-03-22）
+- [x] exportable-segment split：allocator metadata 现显式带 `exportable_segments`，并与 full `segments` 分开表达
+- [x] heap-level exportable segment surface：`SymmetricHeap.exportable_segment_descriptors()` / `primary_segment_descriptor()` / `exportable_segment_metadata()` 已接入
+- [x] support matrix 更新：新增 `memory["symmetric_heap.exportable_segment_metadata"]`
+- [x] multi-segment 预备接口：当前 runtime 现已正式区分 “allocator-owned segments” 与 “runtime-exportable segments”
+- [x] substrate/support/CLI 回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `65 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

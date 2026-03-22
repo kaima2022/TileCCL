@@ -56,6 +56,9 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert heap_metadata["allocator"]["external_mapping_mode"] == "none"
         assert heap_metadata["segment_layout"]["layout_kind"] == "single_exportable_segment"
         assert heap_metadata["segment_layout"]["primary_segment_id"] == "heap"
+        assert len(heap_metadata["exportable_segments"]) == 1
+        assert heap_metadata["exportable_segments"][0]["segment_id"] == "heap"
+        assert heap_metadata["exportable_segments"][0]["is_primary_segment"] is True
         assert heap_metadata["allocator"]["peer_transport_modes"] == [
             "ctypes_ipc",
             "pytorch_ipc",
@@ -118,6 +121,8 @@ def test_init_local_returns_attached_contexts(skip_no_multigpu, device_info) -> 
             assert int(ctx.heap_bases[rank].item()) == ctx.heap.local_base
             assert ctx.heap_metadata()["transport_strategy"] == "peer_access"
             assert ctx.heap_metadata()["segment_layout"]["exportable_segment_ids"] == ["heap"]
+            assert len(ctx.heap_metadata()["exportable_segments"]) == 1
+            assert ctx.heap_metadata()["exportable_segments"][0]["segment_id"] == "heap"
             assert len(ctx.heap_metadata()["segments"]) == 1
             assert len(ctx.heap_metadata()["peer_exports"]) == 2
             assert {entry["peer_rank"] for entry in ctx.heap_metadata()["peer_exports"]} == {0, 1}

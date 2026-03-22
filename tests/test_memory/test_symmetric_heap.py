@@ -782,6 +782,16 @@ class TestSymmetricHeapUnit:
             "exportable_segment_ids": ["heap"],
             "multi_segment": False,
         }
+        assert metadata["exportable_segments"] == [
+            {
+                "segment_id": "heap",
+                "segment_kind": "device_heap",
+                "allocator_name": "torch_bump",
+                "base_ptr": symmetric_heap.local_base,
+                "size_bytes": symmetric_heap.size,
+                "device": str(symmetric_heap._device),
+            }
+        ]
         assert metadata["peer_transport_modes"] == [
             "ctypes_ipc",
             "pytorch_ipc",
@@ -835,6 +845,25 @@ class TestSymmetricHeapUnit:
         assert descriptor.exportable_segment_ids == ("heap",)
         assert descriptor.multi_segment is False
         assert layout == descriptor.to_dict()
+
+    def test_exportable_segment_accessor_reports_structured_schema(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Heap should expose exportable segment metadata separately."""
+        primary = symmetric_heap.primary_segment_descriptor()
+        exportable_segments = symmetric_heap.exportable_segment_descriptors()
+        exportable_metadata = symmetric_heap.exportable_segment_metadata()
+
+        assert primary.segment_id == "heap"
+        assert len(exportable_segments) == 1
+        assert exportable_segments[0].segment_id == "heap"
+        assert exportable_segments[0].base_ptr == symmetric_heap.local_base
+        assert len(exportable_metadata) == 1
+        assert exportable_metadata[0]["segment_id"] == "heap"
+        assert exportable_metadata[0]["is_primary_segment"] is True
+        assert exportable_metadata[0]["owner_rank"] == symmetric_heap.rank
+        assert exportable_metadata[0]["is_local_rank"] is True
 
     def test_allocator_memory_model_accessor_reports_structured_schema(
         self,

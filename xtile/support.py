@@ -237,6 +237,13 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before querying allocator segment-layout metadata.",
         ),
+        "symmetric_heap.exportable_segment_metadata": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes the current exportable segment descriptors separately from the "
+            "full allocator-owned segment catalog."
+            if has_heap
+            else "Attach a heap before querying exportable segment metadata.",
+        ),
         "symmetric_heap.allocator_memory_model": SupportStatus(
             "supported" if has_heap else "partial",
             "Heap exposes the allocator memory-model descriptor, including local segment layout, "
