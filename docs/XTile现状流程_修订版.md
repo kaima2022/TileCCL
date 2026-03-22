@@ -114,7 +114,7 @@ plan.execute(A, B, C)
 | 自动检测后端 `backend="auto"` | `xtile.init()` 默认就是 `backend="auto"` | 这一项已集成 |
 | `xtile.init()` 返回的 ctx 可直接执行 pattern | `xtile.init(..., heap=...)` / `heap_size=...` / `init_local(...)` 都可直接返回可运行 pattern 的真实 ctx | runtime ctx 主路径已统一 |
 | benchmark / tests / CLI 与 runtime 入口一致 | 已统一到 `XTileContext` | 这一项已打通 |
-| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` / `xtile.ops.reduce_scatter(...)` 已接入，并统一走显式 `plan` 主链 | `gemm_reducescatter(...)` 仍待补齐；`full/shard` 已由 host wrapper 打通，而 `shard/full` 已确认不应继续塞进 `gemm_allscatter(...)`，应转入 future `gemm_allgather` 风格 contract |
+| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` / `xtile.ops.reduce_scatter(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入，并统一走显式 `plan` 主链 | `gemm_reducescatter(...)` 现已补齐稳定 host contract，但 multiprocess 仍继承 `reduce_scatter(device)` 的 experimental gate；`full/shard` 已由 host wrapper 打通，而 `shard/full` 已确认不应继续塞进 `gemm_allscatter(...)`，应转入 future `gemm_allgather` 风格 contract |
 | full-shape correctness path 与 benchmark shard path | 两者都存在，但都已开始通过显式 contract + plan builder 收敛 | 仍需把更多调用点统一迁到高层 op API，并继续弱化直接 `pattern.execute(...)` 的 public 角色 |
 
 ---
@@ -598,7 +598,7 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 ### 与设想的差距
 
 **基本一致（修订）**，但需要补两点：
-- `auto_select(...)` 当前识别的 op 名包括 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`，不是 `gemm_scatter`；但真实“完全支持”的仍主要是 `gemm_allscatter`。
+- `auto_select(...)` 当前识别的 op 名包括 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`，不是 `gemm_scatter`；【修订 2026-03-22】其中 `gemm_reducescatter(...)` 现已具备稳定 host-side public contract，但当前并不走 Triton fused pattern auto-select，而是“local GEMM materialize + packed reduce_scatter”主链。
 - 对本例 `N=4608, world_size=4`，`n_per_rank = 1152`，不会命中 `fused_sequential` 的 `< 1024` 分支，而会更接近 `producer_consumer` 分支。
 - 当前实现还带 `compute_intensity` 与 `N > 4096` 的补充分支，不再只是最初那三条简单规则。
 
@@ -678,9 +678,9 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 - **`gemm_allscatter(...)` 已完成单进程主路径；multiprocess 现已完成 `ctypes_ipc` 下 public `full/full + full/shard` 的 2-GPU baseline correctness，并补齐 representative `auto` pattern coverage，但 broader stress/performance/world-size 闭环仍未完成**
 - **`allgather(...)` 已完成单进程主路径；multiprocess `ctypes_ipc` 已通过 2-GPU 真机验证，但当前仍保守记为 `partial`**
 - **`reduce_scatter(...)` 已完成单进程 reference 主路径并可用**
-- **`gemm_reducescatter(...)` 仍未完成**
+- **【修订 2026-03-22】`gemm_reducescatter(...)` 已完成第一版稳定 host contract**
 
-当前阶段的结论不是“没有高层 API”，而是“高层 API 第一阶段已完成，而且已经开始从‘直接 execute pattern’收口到‘build plan → execute plan’；第二阶段主要剩 `gemm_reducescatter(...)`，以及把错误归类到 `gemm_allscatter(...)` 名下的 `shard/full` 需求转成独立 contract”。
+当前阶段的结论不是“没有高层 API”，而是“高层 API 第一阶段已完成，而且已经开始从‘直接 execute pattern’收口到‘build plan → execute plan’；【修订 2026-03-22】`gemm_reducescatter(...)` 也已补齐到这条主链里。下一阶段不再是‘先把它从占位符补出来’，而是继续收紧 multiprocess/public/performance gate，并把错误归类到 `gemm_allscatter(...)` 名下的 `shard/full` 需求转成独立 contract”。
 【新增状态更新 2026-03-21 第三轮核对】这里需要进一步收紧：`mixed-layout host wrapper` 已经不是“完全没做”，而是：
 - `full/shard` 已完成，并由高层 API 自动 materialize heap-backed full output 后再返回本 rank shard
 - `shard/full` 仍未完成，而且今天的真实诊断已经证明问题不只是“少一层 allgather wrapper”，而是它根本不应继续作为 `gemm_allscatter(...)` 的逆向补丁
@@ -746,10 +746,7 @@ ops = {
         reduce_scatter_state,
         reduce_scatter_detail,
     ),
-    "gemm_reducescatter": SupportStatus(
-        "unsupported",
-        "Public high-level API is still a placeholder; no stable fused contract yet.",
-    ),
+    "gemm_reducescatter": gemm_reducescatter_status,
 }
 ```
 
@@ -764,9 +761,19 @@ ops = {
 
 【新增状态更新 2026-03-21】基于当前代码和文档复核，真正值得继续推进的弱项是下面这些，而不是重复写已经完成的 U1-U4 主链：
 
-1. **高层 op 集合还不完整**
-   - `xtile.ops.gemm_reducescatter(...)` 仍是 `NotImplementedError`。
-   - 当前已经补了 `ReduceScatterPlan` + `xtile.ops.reduce_scatter(...)`，并且 **2-GPU multiprocess/device correctness 已通过真实验收**；但进一步矩阵实验已经确认：目前真正通过的 transport 只有 `ctypes_ipc`，`pytorch_ipc` / `peer_access_pointer_exchange` 仍未通过，因此 `gemm_reducescatter(...)` 仍不能被当成“立刻可公开”的完成项。
+【新增状态更新 2026-03-22】到当前为止，`gemm_reducescatter(...)` 的**第一版基础工作**可以正式记为**已完成**：
+- public contract 已固定
+- `plan` / 高层 `ops` 已落地
+- single-process 与 opt-in multiprocess `ctypes_ipc` 都已有直接真实验收
+- support matrix / 测试 / 文档 已同步
+
+因此，下面的“弱项”不再是“基础功能缺失”，而是“运行时支持面与工业级验证面仍需继续收紧”。
+
+1. **高层 op 集合已基本齐，但 `gemm_reducescatter(...)` 仍有边界条件需要继续收紧**
+   - 【修订 2026-03-22】`xtile.ops.gemm_reducescatter(...)` 已不再是 `NotImplementedError`；当前 contract 已固定为 `A(M,K)` 本地贡献、`B(K,N)` 完整 RHS、`C(M,N/world_size)` 本 rank 输出分片。
+   - 当前实现是稳定 host-side 组合：`local GEMM materialize -> 按列 pack 成 rank-major contiguous input -> 复用 ReduceScatterPlan`。
+   - 【新增状态更新 2026-03-22】当前 contract 还额外收紧了一点：只要求 `C` 位于 attached symmetric heap，`A/B` 可以是普通 device tensor；因为真正需要 symmetric heap 的是 reduce-scatter 输出与内部 workspace，而不是输入 GEMM 源张量本身。
+   - 单进程 peer-access heap 下，这条 public 路径现已通过 1-GPU / 2-GPU 真实回归；【新增状态更新 2026-03-22】opt-in multiprocess `ctypes_ipc` 下，`build plan` 和高层 `ops` 也都已通过 2-GPU 真机校验；但 multiprocess 仍继承 `reduce_scatter(device)` 的 experimental + transport-aware gate，因此还不能把它写成“所有 mode 下 fully supported”的完成项。
 2. **直接 `pattern.execute(...)` 仍然是显式可见的 expert surface**
    - 这对底层调优有价值，但对公共语义收口仍然偏宽。
    - 这轮虽然已经补了 multiprocess unsupported transport 的 host-side 守卫，不再直接掉进 Triton illegal memory access；但它仍属于 expert/internal surface，不应替代高层 op 的稳定 contract。
@@ -862,6 +869,18 @@ ops = {
          - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py`
          - `3 passed`
      - 因此当前可以把**单进程 reference 路径**写成 `supported`，并把 **multiprocess/device correctness** 写成“已通过 2-GPU `ctypes_ipc` 矩阵验证但仍为 experimental”
+     - 【新增状态更新 2026-03-22】`gemm_reducescatter(...)` 现也已补上独立的 2-GPU multiprocess 验收：
+       - 新增 `tests/test_e2e/_run_gemm_reducescatter_multiprocess.py`
+       - 新增 `tests/test_gemm_reducescatter_multiprocess.py`
+       - 实测命令：
+         - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_gemm_reducescatter_multiprocess --dtype float32 --launcher all --M 128 --N 256 --K 128 --warmup 0 --iters 1`
+       - 实测结果：
+         - `rank0: transport_strategy='ctypes_ipc', plan_ok=True, high_level_ok=True, max_abs_diff=0.0`
+         - `rank1: transport_strategy='ctypes_ipc', plan_ok=True, high_level_ok=True, max_abs_diff=0.0`
+       - 因此当前文档口径需要更新为：
+         - `gemm_reducescatter(...)` 的 **single_process stable host contract 已闭环**
+         - **multiprocess `ctypes_ipc` 2-GPU baseline correctness 已有直接证据**
+         - 但 broader dtype/world-size/stress/performance contract 仍未闭环，因此 support 继续保持 `partial`
      - 但这依然不等于 fused `gemm_reducescatter(...)` 前置条件已全部完成
    - 下一步：
      - 当前环境下 `dtype(fp16/bf16/f32)` 与 transport 第一轮矩阵已经完成；下一步优先级改成：
@@ -923,7 +942,7 @@ ops = {
 | 组件 | 设想 | 现状 | 原因 |
 |------|------|------|------|
 | P2P ≥ 95% | 285 GB/s | ❌ 当前约 82.9% 峰值 | Triton/PTX 路径与协议开销 |
-| 一键 API | `xtile.fused_gemm_scatter(...)` | ⚠️ `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` 已接入，但 `gemm_reducescatter(...)` 仍未完成 | 高层 API 正在补齐 |
+| 一键 API | `xtile.fused_gemm_scatter(...)` | 【修订 2026-03-22】⚠️ `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入；其中 `gemm_reducescatter(...)` 现为稳定 host-side contract，但 multiprocess/public-performance gate 仍未闭环 | 高层 API 主集合已补齐，当前弱项转向更严格的运行时 gate 与性能闭环 |
 | 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 当前约 83.0%–83.5% | 仍需更深 kernel-level 优化 |
 | Pattern ≥ 1.3× overlap | 多 GPU overlap | ✅ 当前 full 6-size rerun best = 1.667× | contract 修正后已达标 |
 | 跨节点 IPC | UCX/GDR | ❌ 待实现 | 需跨机通信基础设施 |

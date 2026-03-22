@@ -45,7 +45,7 @@ def test_handle_support_json_output(skip_no_gpu, device_info, capsys) -> None:
     assert payload["ops"]["reduce_scatter"]["state"] == "supported"
     assert payload["execution_paths"]["reduce_scatter.reference"]["state"] == "supported"
     assert payload["execution_paths"]["reduce_scatter.device"]["state"] == "unsupported"
-    assert payload["ops"]["gemm_reducescatter"]["state"] == "unsupported"
+    assert payload["ops"]["gemm_reducescatter"]["state"] == "supported"
 
 
 def test_build_support_context_multigpu_heap(skip_no_multigpu, device_info) -> None:

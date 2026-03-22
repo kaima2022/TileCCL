@@ -119,6 +119,11 @@ def describe_runtime_support(
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
     )
+    gemm_reducescatter_status = _describe_gemm_reducescatter_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+    )
     allgather_status = _describe_allgather_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
@@ -132,10 +137,7 @@ def describe_runtime_support(
             reduce_scatter_state,
             reduce_scatter_detail,
         ),
-        "gemm_reducescatter": SupportStatus(
-            "unsupported",
-            "Public high-level API is still a placeholder; no stable fused contract yet.",
-        ),
+        "gemm_reducescatter": gemm_reducescatter_status,
     }
 
     contracts = {
@@ -154,6 +156,12 @@ def describe_runtime_support(
         "gemm_allscatter.shard/full": SupportStatus(
             "unsupported",
             "Rejected intentionally: current shard/shard gemm_allscatter execution is a peer-scatter contract, not a stable local-shard basis for full-output assembly.",
+        ),
+        "gemm_reducescatter.full/shard": SupportStatus(
+            gemm_reducescatter_status.state,
+            "Stable public host contract: A(M,K) local contribution, B(K,N) full RHS, "
+            "C(M,N/world_size) rank-local shard. Runtime availability inherits the "
+            "validated reduce_scatter path for the current heap mode/transport.",
         ),
     }
 
@@ -357,6 +365,46 @@ def _describe_gemm_allscatter_support(
         "including auto-selected coverage for bulk_sync, fused_sequential, "
         "producer_consumer, and wg_specialized. Broader larger-shape, stress, "
         "performance, and world-size validation is still pending.",
+    )
+
+
+def _describe_gemm_reducescatter_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+) -> SupportStatus:
+    """Describe high-level GEMM + reduce-scatter support conservatively."""
+    reduce_scatter_state, _, _ = _describe_reduce_scatter_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+    )
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "High-level host contract exists, but execution requires an attached "
+            "symmetric heap for the reduce_scatter output path and workspaces.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "supported",
+            "High-level host plan is validated on single-process peer-access heaps "
+            "via local GEMM materialization plus reduce_scatter reference execution.",
+        )
+    if reduce_scatter_state == "unsupported":
+        return SupportStatus(
+            "unsupported",
+            multiprocess_device_collectives_detail(
+                transport_strategy=transport_strategy,
+            ),
+        )
+    return SupportStatus(
+        "partial",
+        "Host GEMM + packed reduce_scatter contract is implemented. Current "
+        "multiprocess execution inherits the experimental device reduce_scatter "
+        "gate: 2-GPU correctness passes for transport_strategy='ctypes_ipc', "
+        "but broader performance/stress/world-size validation is still pending.",
     )
 
 

@@ -287,6 +287,10 @@ PY
   - `allgather = supported`
   - `reduce_scatter = supported`
   - `gemm_reducescatter = unsupported`
+  - `【2026-03-22 追加修订】` 当前代码已不再是占位符；在最新 support matrix 中，`gemm_reducescatter` 现为：
+    - 无 heap：`partial`
+    - single_process heap：`supported`
+    - opt-in multiprocess + `ctypes_ipc`：`partial`
   - `collectives.reduce_scatter_launcher = supported`
 
 - `reduce_scatter(...)` / `xtile.ops.reduce_scatter(...)` 真实值校验：
@@ -309,7 +313,7 @@ PY
 - 当前 `reduce_scatter(...)` host launcher 与 `xtile.ops.reduce_scatter(...)` 单进程 reference 主路径都已闭环
 - support matrix 对这一路径现在应记为 **supported**
 - `implementation="device"` 在 `single_process` 下实测会给出错误值，因此当前已改成显式拒绝，而不是继续暴露一个不可信的强制选项
-- 但 `gemm_reducescatter(...)` 仍然不能宣称完成，因为 fused contract 与 device/multiprocess public gate 还没闭环
+- `【2026-03-22 追加修订】` `gemm_reducescatter(...)` 的 stable host contract 现已补齐，主链为“local GEMM materialize -> column-pack -> reduce_scatter plan”；但 multiprocess/public-performance gate 仍未闭环，因此不能把它写成“所有 mode 下 fully supported”
 - 本轮已把 benchmark 结构化结果的 `runtime_support` 快照接进实际 plot / Markdown 导出主链
 - 定向回归：
   - `pytest -q tests/test_benchmark_results.py tests/test_collectives_host.py tests/test_cli_support.py tests/test_support.py tests/test_ops.py tests/test_patterns/test_contracts.py tests/test_context.py`
@@ -369,8 +373,9 @@ PY
   - 目前只完成了 2-GPU correctness bring-up
   - 还没有完成更大 world size、更多 dtype、更多 transport fallback、benchmark/stress 的稳定 public/performance 验证
 - 对 `gemm_reducescatter(...)` 的影响：
-  - 现在阻塞项已经不再是 crash，而是 **public/performance gate 尚未闭环**
-  - 下一阶段应扩大 multiprocess/device 验证矩阵与 benchmark/stress 证据，再谈 fused public contract
+  - `【2026-03-22 追加修订】` 现在阻塞项已经不再是“高层 API 不存在”，而是 **multiprocess public/performance gate 尚未闭环**
+  - 当前已落地的 public contract 是 host-side 组合式实现，不伪装成 Triton fused kernel
+  - 下一阶段应扩大 multiprocess/device 验证矩阵与 benchmark/stress 证据，再决定是否上调它的 multiprocess support 状态
 
 #### DC-031: multiprocess/device `reduce_scatter` dtype × transport 矩阵 + transport-aware gate
 
@@ -705,6 +710,52 @@ PY
   - **已经不只是 `bulk_sync` baseline**
   - **已经有 representative auto-selected coverage**
   - **下一优先级不再是“补 auto pattern 面”，而是更大 shape、长时间 stress、world-size 扩展与 performance contract**
+
+#### DC-036: multiprocess `gemm_reducescatter` public baseline 真机验证
+
+**背景**：
+- 到这一轮为止，`gemm_reducescatter(...)` 的 single-process stable host contract 已经补齐。
+- 但如果没有独立的 multiprocess 真机脚本，support matrix 对它的 `partial` 仍然只是“继承自 reduce_scatter(device) gate”的间接推断，不够扎实。
+
+**本轮脚本/回归增强**：
+- 新增：
+  - `tests/test_e2e/_run_gemm_reducescatter_multiprocess.py`
+  - `tests/test_gemm_reducescatter_multiprocess.py`
+- 新增契约回归：
+  - `tests/test_ops.py`
+    - 明确验证 `build_gemm_reducescatter_plan(...)` 只要求 `C` 位于 attached symmetric heap
+    - `A/B` 可以是普通 device tensor，不强制绑到 heap
+
+**真实实验**：
+- 直接真机脚本：
+  - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_gemm_reducescatter_multiprocess --dtype float32 --launcher all --M 128 --N 256 --K 128 --warmup 0 --iters 1`
+- 结果摘要：
+  - `rank0`
+    - `transport_strategy = ctypes_ipc`
+    - `plan_ok = True`
+    - `high_level_ok = True`
+    - `plan_max_abs_diff = 0.0`
+    - `high_level_max_abs_diff = 0.0`
+  - `rank1`
+    - `transport_strategy = ctypes_ipc`
+    - `plan_ok = True`
+    - `high_level_ok = True`
+    - `plan_max_abs_diff = 0.0`
+    - `high_level_max_abs_diff = 0.0`
+- opt-in pytest：
+  - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py`
+  - 结果：`4 passed`
+
+**结论**：
+- `gemm_reducescatter(...)` 现在已经不是“只有 single-process 才有直接证据”的状态。
+- 当前更准确的口径是：
+  - **single-process：stable host contract 已闭环**
+  - **multiprocess `ctypes_ipc`：2-GPU plan/high-level baseline correctness 已直接通过**
+  - **support matrix 继续保持 `partial`，因为 broader dtype/world-size/stress/performance contract 仍未闭环**
+- 默认基础回归当前也已更新为：
+  - `pytest -q tests/test_ops.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py tests/test_collectives_host.py`
+  - 结果：`40 passed`
+- 因此，第一版基础工作现在已经基本完成；下一优先级不再是“把 API 从占位符补出来”，而是继续沿着 transport、world-size 和 stress/performance 证据扩展。
 
 ### P2P 带宽 (bench_p2p_translate.py, 2026-03-19)
 

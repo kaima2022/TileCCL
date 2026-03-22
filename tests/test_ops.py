@@ -239,6 +239,175 @@ def test_build_gemm_allscatter_shard_to_full_plan_is_rejected(
             heap.cleanup()
 
 
+def test_gemm_reducescatter_high_level_api(skip_no_multigpu, device_info) -> None:
+    """Single-GPU smoke test for the high-level GEMM + reduce-scatter contract."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    M, N, K = 128, 256, 64
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        ctx = xtile.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        A = torch.randn(M, K, device=ctx.device, dtype=torch.float16)
+        B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
+        C = ctx.zeros(M, N, dtype=torch.float16)
+
+        xtile.ops.gemm_reducescatter(A, B, C, ctx=ctx)
+        torch.cuda.synchronize()
+
+        ref = torch.matmul(A.float(), B.float()).half()
+        assert torch.allclose(C, ref, rtol=1e-2, atol=1e-1)
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_build_gemm_reducescatter_plan_requires_heap(
+    skip_no_gpu,
+    device_info,
+) -> None:
+    """The current GEMM + reduce-scatter runtime should fail early without a heap."""
+    ctx = xtile.init(
+        backend=device_info.backend,
+        rank=0,
+        world_size=1,
+        force_backend=True,
+    )
+    A = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
+    B = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
+    C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
+
+    with pytest.raises(RuntimeError, match="No SymmetricHeap is attached"):
+        xtile.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+
+
+def test_build_gemm_reducescatter_plan_requires_heap_backed_output(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """Only the reduce_scatter output path is heap-backed; a plain device C must be rejected."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        ctx = xtile.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        A = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
+        B = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
+        C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
+
+        with pytest.raises(ValueError, match="C must reside in the attached symmetric heap"):
+            xtile.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """Plan building should resolve GEMM + reduce-scatter metadata once, up front."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    M, N, K = 128, 256, 64
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        ctx = xtile.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        A = torch.randn(M, K, device=ctx.device, dtype=torch.float16)
+        B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
+        C = ctx.zeros(M, N, dtype=torch.float16)
+
+        plan = xtile.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+        payload = plan.to_dict()
+
+        assert plan.contract.full_N == N
+        assert plan.contract.output_cols == N
+        assert plan.implementation == "reference"
+        assert payload["op"] == "gemm_reducescatter"
+        assert payload["implementation"] == "reference"
+        assert payload["contract"]["full_N"] == N
+        assert payload["reduce_scatter_plan"]["implementation"] == "reference"
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+@pytest.mark.multigpu
+def test_gemm_reducescatter_multigpu(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """2-GPU single-process correctness should match summed full GEMM shards."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    M, N, K = 64, 128, 32
+    shard_cols = N // world_size
+    generator = torch.Generator().manual_seed(0)
+    A_host = [
+        torch.randn(M, K, generator=generator, dtype=torch.float32)
+        for _ in range(world_size)
+    ]
+    B_host = [
+        torch.randn(K, N, generator=generator, dtype=torch.float32)
+        for _ in range(world_size)
+    ]
+    expected_full = torch.zeros(M, N, dtype=torch.float32)
+    for A_rank, B_rank in zip(A_host, B_host):
+        expected_full += torch.matmul(A_rank, B_rank)
+
+    heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
+    try:
+        contexts = [
+            xtile.init(
+                backend=device_info.backend,
+                rank=rank,
+                world_size=world_size,
+                heap=heaps[rank],
+                force_backend=True,
+            )
+            for rank in range(world_size)
+        ]
+
+        outputs = []
+        for rank, ctx in enumerate(contexts):
+            torch.cuda.set_device(rank)
+            A = A_host[rank].to(device=ctx.device, dtype=torch.float16)
+            B = B_host[rank].to(device=ctx.device, dtype=torch.float16)
+            C = ctx.zeros(M, shard_cols, dtype=torch.float16)
+
+            xtile.ops.gemm_reducescatter(A, B, C, ctx=ctx)
+            outputs.append(C)
+
+        for rank in range(world_size):
+            torch.cuda.synchronize(rank)
+
+        for rank, output in enumerate(outputs):
+            col_offset = rank * shard_cols
+            expected = expected_full[:, col_offset:col_offset + shard_cols].to(dtype=torch.float16)
+            assert torch.allclose(output.cpu(), expected, rtol=1e-2, atol=1e-1)
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
 def test_build_allgather_plan_exposes_stable_metadata(skip_no_multigpu, device_info) -> None:
     """AllGatherPlan should capture the validated collective contract."""
     from xtile.memory.symmetric_heap import SymmetricHeap

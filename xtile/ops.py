@@ -37,6 +37,11 @@ _PATTERN_ALIASES = {
     "wg_spec": WGSpecializedPattern,
 }
 
+_PENDING_GEMM_REDUCESCATTER_SINGLE_PROCESS: dict[
+    tuple[object, ...],
+    dict[int, tuple["GemmReduceScatterPlan", Any, Any]],
+] = {}
+
 
 @dataclass(frozen=True, slots=True)
 class GemmAllScatterContract:
@@ -325,6 +330,126 @@ class ReduceScatterPlan:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class GemmReduceScatterContract:
+    """Resolved public contract for one high-level GEMM + reduce-scatter call."""
+
+    M: int
+    K: int
+    full_N: int
+    output_cols: int
+    rank: int
+    world_size: int
+    storage_kind: str = "symmetric"
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the contract for logs, docs, and debug output."""
+        return {
+            "M": self.M,
+            "K": self.K,
+            "full_N": self.full_N,
+            "output_cols": self.output_cols,
+            "rank": self.rank,
+            "world_size": self.world_size,
+            "storage_kind": self.storage_kind,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GemmReduceScatterPlan:
+    """Executable host-side plan for GEMM + reduce-scatter."""
+
+    ctx: xtile.XTileContext
+    contract: GemmReduceScatterContract
+    reduce_scatter_plan: ReduceScatterPlan = field(repr=False)
+    implementation: str = "auto"
+    pack_layout: str = "rank_major_column_shards"
+    storage_kind: str = "symmetric"
+
+    def validate_tensors(self, A: Any, B: Any, C: Any) -> None:
+        """Re-validate that tensors still match the resolved public contract."""
+        contract = _resolve_gemm_reducescatter_contract(
+            A,
+            B,
+            C,
+            ctx=self.ctx,
+            storage_kind=self.storage_kind,
+        )
+        if contract != self.contract:
+            raise ValueError(
+                "Tensor contract no longer matches this GemmReduceScatterPlan. "
+                "Build a new plan for tensors with different logical shapes or dtypes."
+            )
+
+    def execute(
+        self,
+        A: Any,
+        B: Any,
+        C: Any,
+        *,
+        validate: bool = True,
+    ) -> Any:
+        """Execute the pre-resolved host GEMM + reduce-scatter plan."""
+        if validate:
+            self.validate_tensors(A, B, C)
+
+        local_full = self.ctx.workspace(
+            "gemm_reducescatter.local_full_output",
+            self.contract.M,
+            self.contract.full_N,
+            dtype=C.dtype,
+        )
+        _run_local_gemm(A, B, out=local_full)
+
+        reduce_src = local_full
+        if self.contract.world_size > 1:
+            packed = self.ctx.workspace(
+                "gemm_reducescatter.packed_input",
+                self.contract.world_size,
+                self.contract.M,
+                self.contract.output_cols,
+                dtype=C.dtype,
+            )
+            packed.copy_(
+                local_full.view(
+                    self.contract.M,
+                    self.contract.world_size,
+                    self.contract.output_cols,
+                ).permute(1, 0, 2)
+            )
+            reduce_src = packed
+
+        if (
+            self.contract.world_size > 1
+            and self.ctx.require_heap().mode == "single_process"
+        ):
+            return _execute_gemm_reducescatter_single_process(
+                self,
+                reduce_src=reduce_src,
+                output=C,
+            )
+
+        self.reduce_scatter_plan.execute(reduce_src, C, validate=False)
+        return C
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the plan for debug output and benchmark metadata."""
+        return {
+            "op": "gemm_reducescatter",
+            "ctx": {
+                "rank": self.ctx.rank,
+                "world_size": self.ctx.world_size,
+                "backend": self.ctx.backend_name,
+                "device": self.ctx.device,
+            },
+            "storage_kind": self.storage_kind,
+            "implementation": self.implementation,
+            "pack_layout": self.pack_layout,
+            "contract": self.contract.to_dict(),
+            "reduce_scatter_plan": self.reduce_scatter_plan.to_dict(),
+        }
+
+
 def build_gemm_allscatter_plan(
     A: Any,
     B: Any,
@@ -494,12 +619,80 @@ def gemm_allscatter_sharded(
     return plan.execute(A, B_shard, C_shard, validate=False)
 
 
-def gemm_reducescatter(*args: Any, **kwargs: Any) -> Any:
-    """Reserved high-level API placeholder."""
-    raise NotImplementedError(
-        "xtile.ops.gemm_reducescatter(...) is not wired yet. "
-        "The shape/layout contract and high-level entrypoint landed first."
+def build_gemm_reducescatter_plan(
+    A: Any,
+    B: Any,
+    C: Any,
+    *,
+    ctx: xtile.XTileContext | None = None,
+    implementation: str = "auto",
+    storage_kind: str = "symmetric",
+) -> GemmReduceScatterPlan:
+    """Resolve a reusable host-side plan for GEMM + reduce-scatter.
+
+    Public contract:
+    - ``A``: local rank contribution of shape ``(M, K)``
+    - ``B``: full RHS matrix of shape ``(K, N)``
+    - ``C``: rank-local output shard of shape ``(M, N / world_size)``
+
+    The current implementation is intentionally conservative. It performs
+    local GEMM into a heap-backed workspace, repacks the full result into a
+    rank-major contiguous reduce-scatter input, then reuses the validated
+    high-level :func:`reduce_scatter` contract.
+    """
+    resolved_ctx = ctx if ctx is not None else xtile.current_context()
+    contract = _resolve_gemm_reducescatter_contract(
+        A,
+        B,
+        C,
+        ctx=resolved_ctx,
+        storage_kind=storage_kind,
     )
+    resolved_implementation = _resolve_reduce_scatter_implementation(
+        resolved_ctx,
+        implementation=implementation,
+    )
+    reduce_input_shape = (
+        (contract.M, contract.full_N)
+        if contract.world_size == 1
+        else (contract.world_size, contract.M, contract.output_cols)
+    )
+    reduce_scatter_plan = ReduceScatterPlan(
+        ctx=resolved_ctx,
+        input_shape=reduce_input_shape,
+        output_shape=tuple(int(dim) for dim in C.shape),
+        block_size=int(C.numel()),
+        implementation=resolved_implementation,
+        storage_kind=storage_kind,
+    )
+    return GemmReduceScatterPlan(
+        ctx=resolved_ctx,
+        contract=contract,
+        reduce_scatter_plan=reduce_scatter_plan,
+        implementation=resolved_implementation,
+        storage_kind=storage_kind,
+    )
+
+
+def gemm_reducescatter(
+    A: Any,
+    B: Any,
+    C: Any,
+    *,
+    ctx: xtile.XTileContext | None = None,
+    implementation: str = "auto",
+    storage_kind: str = "symmetric",
+) -> Any:
+    """Run GEMM + reduce-scatter through the stable high-level host contract."""
+    plan = build_gemm_reducescatter_plan(
+        A,
+        B,
+        C,
+        ctx=ctx,
+        implementation=implementation,
+        storage_kind=storage_kind,
+    )
+    return plan.execute(A, B, C, validate=False)
 
 
 def allgather(
@@ -742,6 +935,76 @@ def _resolve_gemm_allscatter_contract(
     )
 
 
+def _resolve_gemm_reducescatter_contract(
+    A: Any,
+    B: Any,
+    C: Any,
+    *,
+    ctx: xtile.XTileContext,
+    storage_kind: str,
+) -> GemmReduceScatterContract:
+    """Resolve and validate the public high-level GEMM + reduce-scatter contract."""
+    ctx.require_heap()
+    if A.ndim != 2 or B.ndim != 2 or C.ndim != 2:
+        raise ValueError(
+            "gemm_reducescatter expects 2-D tensors: "
+            f"got A.ndim={A.ndim}, B.ndim={B.ndim}, C.ndim={C.ndim}"
+        )
+    if str(A.device) != ctx.device or str(B.device) != ctx.device or str(C.device) != ctx.device:
+        raise ValueError(
+            "gemm_reducescatter tensors must all reside on the context device "
+            f"{ctx.device}, got A={A.device}, B={B.device}, C={C.device}"
+        )
+    if not C.is_contiguous():
+        raise ValueError(
+            "gemm_reducescatter currently requires C to be contiguous so the "
+            "reduce_scatter output contract stays well-defined."
+        )
+    _require_tensor_on_heap(C, ctx=ctx, name="C")
+
+    if A.dtype != B.dtype or B.dtype != C.dtype:
+        raise ValueError(
+            "gemm_reducescatter currently requires A, B, and C to share one dtype: "
+            f"got A={A.dtype}, B={B.dtype}, C={C.dtype}"
+        )
+    if not A.is_floating_point() or not B.is_floating_point() or not C.is_floating_point():
+        raise ValueError(
+            "gemm_reducescatter currently requires floating-point tensors."
+        )
+
+    M, K = int(A.shape[0]), int(A.shape[1])
+    b_k, full_N = int(B.shape[0]), int(B.shape[1])
+    c_m, c_cols = int(C.shape[0]), int(C.shape[1])
+    if b_k != K:
+        raise ValueError(f"B.shape[0] must equal A.shape[1]: got {b_k} vs {K}")
+    if c_m != M:
+        raise ValueError(f"C.shape[0] must equal A.shape[0]: got {c_m} vs {M}")
+    if full_N <= 0:
+        raise ValueError(f"B.shape[1] must be positive, got {full_N}")
+    if full_N % ctx.world_size != 0:
+        raise ValueError(
+            "gemm_reducescatter requires B.shape[1] to be divisible by world_size: "
+            f"{full_N} % {ctx.world_size} != 0"
+        )
+
+    expected_output_cols = full_N if ctx.world_size == 1 else full_N // ctx.world_size
+    if c_cols != expected_output_cols:
+        raise ValueError(
+            "gemm_reducescatter output columns must match the rank-local shard width: "
+            f"expected {expected_output_cols}, got {c_cols}"
+        )
+
+    return GemmReduceScatterContract(
+        M=M,
+        K=K,
+        full_N=full_N,
+        output_cols=c_cols,
+        rank=ctx.rank,
+        world_size=ctx.world_size,
+        storage_kind=storage_kind,
+    )
+
+
 def _full_N_from_layout(*, cols: int, layout: LayoutKind, world_size: int) -> int:
     """Resolve logical full_N from one tensor shape + explicit layout."""
     if layout == "full":
@@ -760,6 +1023,68 @@ class _ShapeOnlyTensor:
 def _shape_only_tensor(shape: tuple[int, int]) -> _ShapeOnlyTensor:
     """Return a tensor-like shape stub for contract resolution."""
     return _ShapeOnlyTensor(shape)
+
+
+def _execute_gemm_reducescatter_single_process(
+    plan: GemmReduceScatterPlan,
+    *,
+    reduce_src: Any,
+    output: Any,
+) -> Any:
+    """Finalize GEMM + reduce-scatter once all local ranks have staged inputs.
+
+    In ``single_process`` mode, rank-local calls often happen sequentially in one
+    Python process. The first rank cannot immediately enter ``reduce_scatter``
+    because peer ranks have not populated their symmetric workspaces yet. This
+    helper stages the rank-local packed input and completes the collective only
+    after every local rank in the heap group has arrived.
+    """
+    key = _single_process_gemm_reducescatter_key(plan, output)
+    pending = _PENDING_GEMM_REDUCESCATTER_SINGLE_PROCESS.setdefault(key, {})
+    pending[plan.ctx.rank] = (plan, reduce_src, output)
+    if len(pending) < plan.contract.world_size:
+        return output
+
+    try:
+        for rank in range(plan.contract.world_size):
+            rank_plan, rank_src, rank_output = pending[rank]
+            rank_plan.reduce_scatter_plan.execute(
+                rank_src,
+                rank_output,
+                validate=False,
+            )
+    finally:
+        _PENDING_GEMM_REDUCESCATTER_SINGLE_PROCESS.pop(key, None)
+    return output
+
+
+def _single_process_gemm_reducescatter_key(
+    plan: GemmReduceScatterPlan,
+    output: Any,
+) -> tuple[object, ...]:
+    """Return a process-local coordination key for staged single-process runs."""
+    heap_bases = tuple(int(base) for base in plan.ctx.heap_bases.tolist())
+    return (
+        "gemm_reducescatter",
+        heap_bases,
+        plan.contract.M,
+        plan.contract.K,
+        plan.contract.full_N,
+        plan.contract.output_cols,
+        str(output.dtype),
+        plan.implementation,
+        plan.storage_kind,
+    )
+
+
+def _run_local_gemm(A: Any, B: Any, *, out: Any) -> None:
+    """Execute one local GEMM into ``out`` with a conservative fallback."""
+    import torch
+
+    try:
+        torch.mm(A, B, out=out)
+    except (RuntimeError, TypeError):
+        out.copy_(torch.matmul(A, B))
 
 
 def _validate_allgather_contract(

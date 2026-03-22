@@ -254,6 +254,18 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] support matrix 收紧：`gemm_allscatter` 无 heap 时不再宣称 `supported`；multiprocess `allgather/gemm_allscatter` 改为 mode/transport 感知状态
 - [x] 回归：`pytest -q tests/test_feature_gates.py tests/test_collectives_host.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_ops.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_allgather_multiprocess.py tests/test_gemm_allscatter_multiprocess.py tests/test_gemm_allscatter_auto_patterns_multiprocess.py` → `80 passed`
 
+### Phase 16 交付物（2026-03-22）
+- [x] `xtile.ops.GemmReduceScatterContract` / `GemmReduceScatterPlan`：补齐高层 GEMM + reduce-scatter 的稳定 public contract
+- [x] `xtile.ops.build_gemm_reducescatter_plan(...)` / `xtile.ops.gemm_reducescatter(...)`：不再是占位符，当前实现主链固定为 `local GEMM materialize -> column-pack -> reduce_scatter plan`
+- [x] contract 收紧：当前显式要求 `A(M,K)`、`B(K,N)`、`C(M,N/world_size)`，并要求 `C` 位于 attached symmetric heap
+- [x] single-process 顺序调用协同：新增 staged finalize 逻辑，支持单进程多 GPU 下按 rank 顺序调用后在最后一个 rank 到达时完成 collective
+- [x] support matrix 更新：`gemm_reducescatter` 从 placeholder/unsupported 口径升级为 mode-aware 状态
+- [x] `gemm_reducescatter` heap 契约回归：新增“仅 `C` 必须在 heap 上”的测试，明确 `A/B` 可为普通 device tensor
+- [x] multiprocess 真机验收：新增 `tests/test_e2e/_run_gemm_reducescatter_multiprocess.py` / `tests/test_gemm_reducescatter_multiprocess.py`
+- [x] 2-GPU `gemm_reducescatter` public baseline：opt-in `ctypes_ipc` 下 `plan` / 高层 `ops` 已完成 float32 真机 correctness 校验
+- [x] 默认基础回归：`pytest -q tests/test_ops.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py tests/test_collectives_host.py` → `40 passed`
+- [x] opt-in multiprocess 回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

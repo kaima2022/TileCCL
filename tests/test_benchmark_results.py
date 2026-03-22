@@ -32,7 +32,7 @@ def test_runtime_support_snapshot_from_context(skip_no_gpu, device_info) -> None
     assert payload["context"]["backend"] == device_info.backend
     assert payload["context"]["has_heap"] is False
     assert payload["ops"]["gemm_allscatter"]["state"] == "partial"
-    assert payload["ops"]["gemm_reducescatter"]["state"] == "unsupported"
+    assert payload["ops"]["gemm_reducescatter"]["state"] == "partial"
 
 
 def test_describe_runtime_support_snapshot_with_heap(
