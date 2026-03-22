@@ -481,6 +481,15 @@ class SymmetricHeap:
                 f"expected world_size={self._world_size}"
             )
 
+        exportable_segments = {
+            segment.segment_id: segment
+            for segment in self._allocator.exportable_segment_descriptors()
+        }
+        if not exportable_segments:
+            raise RuntimeError(
+                "peer mapping state is inconsistent: allocator exposes no "
+                "exportable segments"
+            )
         local_segment = self._allocator.primary_segment()
         expected_device = str(self._device)
         expected_allocator = self.allocator_name
@@ -508,6 +517,18 @@ class SymmetricHeap:
                 raise RuntimeError(
                     f"{prefix} import peer_rank {imported.peer_rank} "
                     f"does not match list position {peer_rank}"
+                )
+            exportable_segment = exportable_segments.get(export.segment_id)
+            if exportable_segment is None:
+                raise RuntimeError(
+                    f"{prefix} export segment_id {export.segment_id!r} "
+                    "is not present in the allocator exportable segment catalog"
+                )
+            if export.segment_kind != exportable_segment.segment_kind:
+                raise RuntimeError(
+                    f"{prefix} export segment_kind {export.segment_kind!r} "
+                    "does not match allocator exportable segment_kind "
+                    f"{exportable_segment.segment_kind!r}"
                 )
             if export.segment_id != imported.segment_id:
                 raise RuntimeError(
@@ -949,9 +970,29 @@ class SymmetricHeap:
         """Return the local allocator-owned segment descriptors."""
         return self._allocator.segment_descriptors()
 
+    def segment_descriptor(self, segment_id: str) -> MemorySegmentDescriptor:
+        """Return one local allocator-owned segment descriptor by id."""
+        for segment in self.segment_descriptors():
+            if segment.segment_id == segment_id:
+                return segment
+        raise KeyError(
+            f"Unknown segment_id {segment_id!r}; available segments="
+            f"{[segment.segment_id for segment in self.segment_descriptors()]}"
+        )
+
     def exportable_segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
         """Return the allocator segments exportable through the current runtime."""
         return self._allocator.exportable_segment_descriptors()
+
+    def exportable_segment_descriptor(self, segment_id: str) -> MemorySegmentDescriptor:
+        """Return one exportable segment descriptor by id."""
+        for segment in self.exportable_segment_descriptors():
+            if segment.segment_id == segment_id:
+                return segment
+        raise KeyError(
+            f"Unknown exportable segment_id {segment_id!r}; available exportable segments="
+            f"{[segment.segment_id for segment in self.exportable_segment_descriptors()]}"
+        )
 
     def primary_segment_descriptor(self) -> MemorySegmentDescriptor:
         """Return the current primary exportable segment descriptor."""

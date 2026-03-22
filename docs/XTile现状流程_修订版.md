@@ -793,8 +793,10 @@ contracts = {
 - `SymmetricHeap.allocator_memory_model_descriptor()` / `allocator_memory_model()` 已接入，allocator `memory_model` 不再只能通过嵌套 metadata 间接读取。
 - allocator metadata / heap surface 现已新增结构化 `segment_layout`；当前单 exportable segment 的现状已能通过 `layout_kind`、`primary_segment_id`、`exportable_segment_ids` 正式表达。
 - allocator metadata / heap surface 现还显式区分 `segments` 与 `exportable_segments`；当前两者仍相同，但边界已正式建立，便于后续 multi-segment / segmented import-map 扩展。
+- `SymmetricHeap.segment_descriptor(segment_id)` / `exportable_segment_descriptor(segment_id)` 已接入；single-segment runtime 现在也有显式的 `segment_id` lookup surface，而不再只能默认“主 segment 就是唯一 segment”。
 - allocator metadata / heap surface 现还显式带结构化 `external_memory_interface`；当前 external interop 语义已能正式表达 `import_mode=copy`、`mapping_mode=none`、`zero_copy_mapping_supported=false`。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
+- `SymmetricHeap._validate_peer_mapping_state(...)` 现在除了校验 world-size、rank 对齐和 local-base 一致性，还会显式校验 peer export 的 `segment_id` 必须存在于 allocator `exportable_segments`，且 `segment_kind` 必须与 exportable segment catalog 一致。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
 - `XTileContext.heap_metadata()` / `runtime_metadata()` 已接入，runtime / heap / peer-map 现在有统一结构化出口。

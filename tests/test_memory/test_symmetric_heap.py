@@ -54,6 +54,9 @@ class _FakeValidationAllocator:
     def primary_segment(self):
         return self._segment
 
+    def exportable_segment_descriptors(self):
+        return (self._segment,)
+
     def peer_import_access_kind(
         self,
         *,
@@ -459,6 +462,44 @@ class TestSymmetricHeapUnit:
                 peer_imports=peer_imports,
             )
 
+    def test_validate_peer_mapping_state_rejects_non_exportable_segment_id(
+        self,
+    ) -> None:
+        """Peer mapping state must only reference exportable segment ids."""
+        heap = _make_validation_heap()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+            _make_peer_export(
+                rank=1,
+                base_ptr=0x2000,
+                size=heap._size,
+                segment_id="staging",
+            ),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+                segment_id="staging",
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="is not present in the allocator exportable segment catalog"):
+            heap._validate_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
     def test_apply_peer_mapping_state_fails_closed_on_invalid_local_mapping(
         self,
         symmetric_heap,
@@ -854,6 +895,26 @@ class TestSymmetricHeapUnit:
         assert descriptor.exportable_segment_ids == ("heap",)
         assert descriptor.multi_segment is False
         assert layout == descriptor.to_dict()
+
+    def test_segment_descriptor_accessors_lookup_by_id(self, symmetric_heap) -> None:
+        """Segment lookup accessors should resolve ids explicitly."""
+        owned = symmetric_heap.segment_descriptor("heap")
+        exportable = symmetric_heap.exportable_segment_descriptor("heap")
+
+        assert owned.segment_id == "heap"
+        assert exportable.segment_id == "heap"
+        assert owned.base_ptr == symmetric_heap.local_base
+        assert exportable.base_ptr == symmetric_heap.local_base
+
+    def test_segment_descriptor_accessors_reject_unknown_id(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Segment lookup accessors should fail on unknown ids."""
+        with pytest.raises(KeyError, match="Unknown segment_id"):
+            symmetric_heap.segment_descriptor("staging")
+        with pytest.raises(KeyError, match="Unknown exportable segment_id"):
+            symmetric_heap.exportable_segment_descriptor("staging")
 
     def test_exportable_segment_accessor_reports_structured_schema(
         self,

@@ -2969,3 +2969,50 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - `external_memory_interface` 现在已成为正式 runtime surface
 - 这一步是 external mapping 的准备接口，不代表 external mapping backend 已实现
+
+### Part Z: peer mapping now validates against the exportable segment catalog (2026-03-22)
+
+继续沿着 P0-next 往 canonical substrate 推，这一轮不新增 transport，也不改运行时行为，而是把 segment catalog 的 host-side contract 再收紧一层。
+
+本轮完成：
+
+- `SymmetricHeap.segment_descriptor(segment_id)`
+- `SymmetricHeap.exportable_segment_descriptor(segment_id)`
+- `SymmetricHeap._validate_peer_mapping_state(...)` 现新增两条 fail-closed 约束：
+  - `peer_exports[*].segment_id` 必须存在于 allocator `exportable_segments`
+  - `peer_exports[*].segment_kind` 必须与 exportable segment catalog 中同 id descriptor 一致
+
+这一步的意义是：
+
+- local/full segment catalog 与 runtime-exportable segment catalog 不再只是“能看见”，而开始真正参与 peer-state 发布前校验
+- 单段运行时现在也不再依赖“反正只有一个 heap segment”这种隐式前提
+- 后续如果继续往 segmented import-map 推进，segment identity 将有更清晰的 host-side lookup 与一致性边界
+
+这一步没有做的事情：
+
+- 没有引入 multi-segment runtime
+- 没有改变当前 single exportable segment 的运行方式
+- 没有放大 public transport support 面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/memory/symmetric_heap.py xtile/support.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `69 passed in 5.61s`
+- `allgather + gemm_allgather` → `2 passed in 29.30s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 59.54s`
+
+结论：
+
+- peer mapping state 现在已经和 allocator exportable segment catalog 建立了显式一致性约束
+- 这一步继续提高了 canonical substrate 的可维护性，但 segmented import-map / external mapping backend 仍未完成
