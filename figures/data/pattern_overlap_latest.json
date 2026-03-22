@@ -17,7 +17,88 @@
     "warmup": 3,
     "world_size": 2
   },
-  "generated_at_utc": "2026-03-21T17:28:45.243099+00:00",
+  "generated_at_utc": "2026-03-21T20:33:34.761228+00:00",
+  "runtime_support": {
+    "collectives": {
+      "collectives.allgather_launcher": {
+        "detail": "Host launcher + high-level op are available.",
+        "state": "supported"
+      },
+      "collectives.allreduce_launcher": {
+        "detail": "Host launcher exists, but benchmark/prod validation is not fully closed.",
+        "state": "partial"
+      },
+      "collectives.reduce_scatter_launcher": {
+        "detail": "Single-process reference reduce_scatter path is validated; the explicit device override is intentionally rejected for this mode until proven correct.",
+        "state": "supported"
+      }
+    },
+    "context": {
+      "backend": "cuda",
+      "device": "cuda:0",
+      "has_heap": true,
+      "heap_mode": "single_process",
+      "rank": 0,
+      "transport_strategy": "peer_access",
+      "world_size": 2
+    },
+    "contracts": {
+      "gemm_allscatter.full/full": {
+        "detail": "Stable public contract for full RHS and full output buffers.",
+        "state": "supported"
+      },
+      "gemm_allscatter.full/shard": {
+        "detail": "High-level wrapper materializes a heap-backed full output, then returns the rank-local shard.",
+        "state": "supported"
+      },
+      "gemm_allscatter.shard/full": {
+        "detail": "Public wrapper for assembling a full output from shard inputs is not implemented yet.",
+        "state": "unsupported"
+      },
+      "gemm_allscatter.shard/shard": {
+        "detail": "Expert contract available via gemm_allscatter_sharded(...).",
+        "state": "supported"
+      }
+    },
+    "execution_paths": {
+      "reduce_scatter.device": {
+        "detail": "Single-process device override is intentionally rejected because it is not yet correct.",
+        "state": "unsupported"
+      },
+      "reduce_scatter.reference": {
+        "detail": "Validated on single-process peer-access heaps.",
+        "state": "supported"
+      }
+    },
+    "memory": {
+      "symmetric_heap.current_runtime": {
+        "detail": "Attached heap mode='single_process', transport_strategy='peer_access'.",
+        "state": "supported"
+      },
+      "symmetric_heap_allocator_first_import_map": {
+        "detail": "Allocator-first canonical import/map layer is not implemented yet.",
+        "state": "unsupported"
+      }
+    },
+    "ops": {
+      "allgather": {
+        "detail": "High-level plan API is wired; requires an attached symmetric heap.",
+        "state": "supported"
+      },
+      "gemm_allscatter": {
+        "detail": "High-level plan API is wired via build_gemm_allscatter_plan(...).",
+        "state": "supported"
+      },
+      "gemm_reducescatter": {
+        "detail": "Public high-level API is still a placeholder; no stable fused contract yet.",
+        "state": "unsupported"
+      },
+      "reduce_scatter": {
+        "detail": "Single-process reference reduce_scatter path is validated; the explicit device override is intentionally rejected for this mode until proven correct.",
+        "state": "supported"
+      }
+    }
+  },
   "schema_version": 1,
   "sizes": [
     {
@@ -25,7 +106,7 @@
       "M": 4096,
       "N": 4096,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.082139662425831,
+      "best_speedup_vs_bulk": 1.1294575866630894,
       "heap_size_bytes": 134217728,
       "local_N": 2048,
       "metadata": {
@@ -130,36 +211,36 @@
       "required_heap_bytes": 134217728,
       "results": [
         {
-          "max_ms": 2.0847730338573456,
-          "mean_ms": 2.072630822658539,
-          "min_ms": 2.064041793346405,
+          "max_ms": 2.35111266374588,
+          "mean_ms": 2.3001331835985184,
+          "min_ms": 2.27399542927742,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 1.9516050815582275,
-          "mean_ms": 1.9209250807762146,
-          "min_ms": 1.9073709845542908,
-          "overlap_efficiency": 0.0759048626327018,
+          "max_ms": 2.0670369267463684,
+          "mean_ms": 2.03508697450161,
+          "min_ms": 2.0133517682552338,
+          "overlap_efficiency": 0.11461925458003575,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.082139662425831
+          "speedup_vs_bulk": 1.1294575866630894
         },
         {
-          "max_ms": 2.557799220085144,
-          "mean_ms": 2.438349276781082,
-          "min_ms": 2.3522265255451202,
-          "overlap_efficiency": -0.1396215585981353,
+          "max_ms": 2.6258863508701324,
+          "mean_ms": 2.5513336062431335,
+          "min_ms": 2.5311559438705444,
+          "overlap_efficiency": -0.11308752483941409,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 0.8774842775264047
+          "speedup_vs_bulk": 0.8984019474517699
         },
         {
-          "max_ms": 2.1388567984104156,
-          "mean_ms": 2.090775966644287,
-          "min_ms": 2.0704083144664764,
-          "overlap_efficiency": -0.0030844923492316934,
+          "max_ms": 2.195741981267929,
+          "mean_ms": 2.135702967643738,
+          "min_ms": 2.077169716358185,
+          "overlap_efficiency": 0.08655501694731993,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 0.9969249924879132
+          "speedup_vs_bulk": 1.0947566832739704
         }
       ]
     },
@@ -168,7 +249,7 @@
       "M": 8192,
       "N": 4608,
       "best_pattern": "wg_specialized",
-      "best_speedup_vs_bulk": 1.6159813095388922,
+      "best_speedup_vs_bulk": 1.6671934740246344,
       "heap_size_bytes": 939524096,
       "local_N": 2304,
       "metadata": {
@@ -273,36 +354,36 @@
       "required_heap_bytes": 939524096,
       "results": [
         {
-          "max_ms": 8.14303383231163,
-          "mean_ms": 8.061618730425835,
-          "min_ms": 7.982663810253143,
+          "max_ms": 8.19491595029831,
+          "mean_ms": 8.056261017918587,
+          "min_ms": 7.977541536092758,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 7.587376981973648,
-          "mean_ms": 7.25352019071579,
-          "min_ms": 6.937138736248016,
-          "overlap_efficiency": 0.13097445900981408,
+          "max_ms": 7.374998182058334,
+          "mean_ms": 7.222707569599152,
+          "min_ms": 6.89857080578804,
+          "overlap_efficiency": 0.1352510325923263,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.1507141652713442
+          "speedup_vs_bulk": 1.1564049657067286
         },
         {
-          "max_ms": 5.57500496506691,
-          "mean_ms": 5.521486327052116,
-          "min_ms": 5.464691668748856,
-          "overlap_efficiency": 0.31543006211412006,
+          "max_ms": 5.42701780796051,
+          "mean_ms": 5.318515747785568,
+          "min_ms": 5.221951752901077,
+          "overlap_efficiency": 0.3454184187853585,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.4607711274734698
+          "speedup_vs_bulk": 1.527693458994676
         },
         {
-          "max_ms": 5.14669343829155,
-          "mean_ms": 5.011823400855064,
-          "min_ms": 4.939824342727661,
-          "overlap_efficiency": 0.38118096162551396,
+          "max_ms": 4.9761272966861725,
+          "mean_ms": 4.874783009290695,
+          "min_ms": 4.785012453794479,
+          "overlap_efficiency": 0.40018959072219584,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.6159813095388922
+          "speedup_vs_bulk": 1.6671934740246344
         }
       ]
     },
@@ -311,7 +392,7 @@
       "M": 8192,
       "N": 3584,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.2155162614461636,
+      "best_speedup_vs_bulk": 1.2184530048963038,
       "heap_size_bytes": 402653184,
       "local_N": 1792,
       "metadata": {
@@ -416,36 +497,36 @@
       "required_heap_bytes": 402653184,
       "results": [
         {
-          "max_ms": 4.353292286396027,
-          "mean_ms": 4.320351406931877,
-          "min_ms": 4.302196204662323,
+          "max_ms": 4.335053265094757,
+          "mean_ms": 4.307418316602707,
+          "min_ms": 4.2912885546684265,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 3.6458857357501984,
-          "mean_ms": 3.5832397639751434,
-          "min_ms": 3.5393983125686646,
-          "overlap_efficiency": 0.17730430129314156,
+          "max_ms": 3.613203763961792,
+          "mean_ms": 3.5771626979112625,
+          "min_ms": 3.521915525197983,
+          "overlap_efficiency": 0.17928718138365562,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.2155162614461636
+          "speedup_vs_bulk": 1.2184530048963038
         },
         {
-          "max_ms": 4.077780991792679,
-          "mean_ms": 4.027136042714119,
-          "min_ms": 3.9841532707214355,
-          "overlap_efficiency": 0.07392571579980989,
+          "max_ms": 4.25323098897934,
+          "mean_ms": 4.060660675168037,
+          "min_ms": 4.005908966064453,
+          "overlap_efficiency": 0.06650207390353957,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.0798269826309412
+          "speedup_vs_bulk": 1.0712396589691704
         },
         {
-          "max_ms": 3.837164491415024,
-          "mean_ms": 3.733105957508087,
-          "min_ms": 3.646261990070343,
-          "overlap_efficiency": 0.15246496984055236,
+          "max_ms": 3.82382795214653,
+          "mean_ms": 3.6968816071748734,
+          "min_ms": 3.6524534225463867,
+          "overlap_efficiency": 0.148867903890327,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.17989223384887
+          "speedup_vs_bulk": 1.1749057573680604
         }
       ]
     },
@@ -454,7 +535,7 @@
       "M": 8192,
       "N": 8192,
       "best_pattern": "wg_specialized",
-      "best_speedup_vs_bulk": 1.6194904546864413,
+      "best_speedup_vs_bulk": 1.5779041436490904,
       "heap_size_bytes": 939524096,
       "local_N": 4096,
       "metadata": {
@@ -559,36 +640,36 @@
       "required_heap_bytes": 939524096,
       "results": [
         {
-          "max_ms": 13.286877423524857,
-          "mean_ms": 13.072125241160393,
-          "min_ms": 12.973681092262268,
+          "max_ms": 13.054799288511276,
+          "mean_ms": 12.923430278897285,
+          "min_ms": 12.716691941022873,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 11.891599744558334,
-          "mean_ms": 11.446628719568253,
-          "min_ms": 10.793402791023254,
-          "overlap_efficiency": 0.16805394596444723,
+          "max_ms": 12.119110673666,
+          "mean_ms": 11.406348273158073,
+          "min_ms": 10.755695402622223,
+          "overlap_efficiency": 0.15420649863150782,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.2020010133460715
+          "speedup_vs_bulk": 1.1823216877192861
         },
         {
-          "max_ms": 8.854970335960388,
-          "mean_ms": 8.77922959625721,
-          "min_ms": 8.716791868209839,
-          "overlap_efficiency": 0.3281173010018963,
+          "max_ms": 8.871044963598251,
+          "mean_ms": 8.742513880133629,
+          "min_ms": 8.695825934410095,
+          "overlap_efficiency": 0.3161880483745805,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.488355038001689
+          "speedup_vs_bulk": 1.4623903510650877
         },
         {
-          "max_ms": 8.411567658185959,
-          "mean_ms": 8.107882365584373,
-          "min_ms": 8.010964840650558,
-          "overlap_efficiency": 0.3825218314154154,
+          "max_ms": 8.397888392210007,
+          "mean_ms": 8.151494711637497,
+          "min_ms": 8.059229701757431,
+          "overlap_efficiency": 0.3662479409633962,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.6194904546864413
+          "speedup_vs_bulk": 1.5779041436490904
         }
       ]
     },
@@ -597,7 +678,7 @@
       "M": 4096,
       "N": 8192,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.1566127078297954,
+      "best_speedup_vs_bulk": 1.1613783610603508,
       "heap_size_bytes": 268435456,
       "local_N": 4096,
       "metadata": {
@@ -702,36 +783,36 @@
       "required_heap_bytes": 268435456,
       "results": [
         {
-          "max_ms": 4.406426101922989,
-          "mean_ms": 4.389090836048126,
-          "min_ms": 4.360448569059372,
+          "max_ms": 4.420533776283264,
+          "mean_ms": 4.402505233883858,
+          "min_ms": 4.3753087520599365,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 3.783486783504486,
-          "mean_ms": 3.775882348418236,
-          "min_ms": 3.770016133785248,
-          "overlap_efficiency": 0.13540635233349196,
+          "max_ms": 3.788210451602936,
+          "mean_ms": 3.777942806482315,
+          "min_ms": 3.767341375350952,
+          "overlap_efficiency": 0.13895416555980133,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.1566127078297954
+          "speedup_vs_bulk": 1.1613783610603508
         },
         {
-          "max_ms": 4.291396588087082,
-          "mean_ms": 4.257412999868393,
-          "min_ms": 4.230298101902008,
-          "overlap_efficiency": 0.02984795373597071,
+          "max_ms": 4.307996481657028,
+          "mean_ms": 4.262092709541321,
+          "min_ms": 4.2296722531318665,
+          "overlap_efficiency": 0.0332859935563411,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.030766263753102
+          "speedup_vs_bulk": 1.034432100222478
         },
         {
-          "max_ms": 4.0815845131874084,
-          "mean_ms": 3.9555687457323074,
-          "min_ms": 3.914888948202133,
-          "overlap_efficiency": 0.10218206081337955,
+          "max_ms": 4.0920451283454895,
+          "mean_ms": 3.965773805975914,
+          "min_ms": 3.9235949516296387,
+          "overlap_efficiency": 0.10324158271519168,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.1138115606221364
+          "speedup_vs_bulk": 1.1151275312561715
         }
       ]
     },
@@ -740,7 +821,7 @@
       "M": 2048,
       "N": 16384,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.1862250337621723,
+      "best_speedup_vs_bulk": 1.1900181334351898,
       "heap_size_bytes": 268435456,
       "local_N": 8192,
       "metadata": {
@@ -845,42 +926,42 @@
       "required_heap_bytes": 268435456,
       "results": [
         {
-          "max_ms": 4.5712776482105255,
-          "mean_ms": 4.553910344839096,
-          "min_ms": 4.5385099947452545,
+          "max_ms": 4.588443785905838,
+          "mean_ms": 4.564887657761574,
+          "min_ms": 4.549670964479446,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 4.2187124490737915,
-          "mean_ms": 3.8787513971328735,
-          "min_ms": 3.826010972261429,
-          "overlap_efficiency": 0.15698963389058662,
+          "max_ms": 3.869198262691498,
+          "mean_ms": 3.8398031145334244,
+          "min_ms": 3.8231946527957916,
+          "overlap_efficiency": 0.15967667054506984,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.1862250337621723
+          "speedup_vs_bulk": 1.1900181334351898
         },
         {
-          "max_ms": 4.396677017211914,
-          "mean_ms": 4.356473311781883,
-          "min_ms": 4.342306405305862,
-          "overlap_efficiency": 0.04323083780063486,
+          "max_ms": 4.421215504407883,
+          "mean_ms": 4.376541078090668,
+          "min_ms": 4.339292645454407,
+          "overlap_efficiency": 0.04624033708536768,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.04518418810788
+          "speedup_vs_bulk": 1.0484821689188029
         },
         {
-          "max_ms": 4.202615469694138,
-          "mean_ms": 4.1087377816438675,
-          "min_ms": 4.030738025903702,
-          "overlap_efficiency": 0.11188076470679975,
+          "max_ms": 4.203088581562042,
+          "mean_ms": 4.084593057632446,
+          "min_ms": 4.033755511045456,
+          "overlap_efficiency": 0.1133962120473957,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.1259749369912744
+          "speedup_vs_bulk": 1.1278995348184295
         }
       ]
     }
   ],
   "summary": {
-    "best_speedup_vs_bulk": 1.6194904546864413,
+    "best_speedup_vs_bulk": 1.6671934740246344,
     "size_count": 6
   }
 }
