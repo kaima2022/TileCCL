@@ -877,6 +877,16 @@ ops = {
        - 实测结果：
          - `rank0: transport_strategy='ctypes_ipc', plan_ok=True, high_level_ok=True, max_abs_diff=0.0`
          - `rank1: transport_strategy='ctypes_ipc', plan_ok=True, high_level_ok=True, max_abs_diff=0.0`
+       - 【新增状态更新 2026-03-22】随后又补上了结构化矩阵：
+         - `PYTHONPATH=. python -u tests/benchmarks/bench_gemm_reducescatter_multiprocess.py --M 128 --N 256 --K 128 --warmup 0 --iters 1 --timeout-sec 120 --output-json docs/generated/gemm_reducescatter_multiprocess_matrix.json`
+         - 结果汇总：`12` 个 case 中 `6` 个通过、`6` 个失败
+         - 通过面：
+           - `auto` / `ctypes_ipc`
+           - `dtype = fp16 / bf16 / fp32`
+           - 实际 transport 均为 `ctypes_ipc`
+         - 未通过面：
+           - `pytorch_ipc`
+           - `peer_access_pointer_exchange`
        - 因此当前文档口径需要更新为：
          - `gemm_reducescatter(...)` 的 **single_process stable host contract 已闭环**
          - **multiprocess `ctypes_ipc` 2-GPU baseline correctness 已有直接证据**

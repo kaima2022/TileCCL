@@ -263,6 +263,8 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] `gemm_reducescatter` heap 契约回归：新增“仅 `C` 必须在 heap 上”的测试，明确 `A/B` 可为普通 device tensor
 - [x] multiprocess 真机验收：新增 `tests/test_e2e/_run_gemm_reducescatter_multiprocess.py` / `tests/test_gemm_reducescatter_multiprocess.py`
 - [x] 2-GPU `gemm_reducescatter` public baseline：opt-in `ctypes_ipc` 下 `plan` / 高层 `ops` 已完成 float32 真机 correctness 校验
+- [x] multiprocess `gemm_reducescatter` 结构化矩阵：新增 `tests/benchmarks/bench_gemm_reducescatter_multiprocess.py`，产出 `docs/generated/gemm_reducescatter_multiprocess_matrix.json`
+- [x] 2-GPU dtype × transport 真机矩阵：`auto/ctypes_ipc` 在 `fp16/bf16/fp32` 全通过；`pytorch_ipc` / `peer_access_pointer_exchange` 当前全部失败
 - [x] 默认基础回归：`pytest -q tests/test_ops.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py tests/test_collectives_host.py` → `40 passed`
 - [x] opt-in multiprocess 回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 

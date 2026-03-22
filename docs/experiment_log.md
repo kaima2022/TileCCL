@@ -757,6 +757,52 @@ PY
   - 结果：`40 passed`
 - 因此，第一版基础工作现在已经基本完成；下一优先级不再是“把 API 从占位符补出来”，而是继续沿着 transport、world-size 和 stress/performance 证据扩展。
 
+#### DC-037: multiprocess `gemm_reducescatter` dtype × transport 结构化矩阵
+
+**背景**：
+- DC-036 已经补了 `gemm_reducescatter(...)` 的 2-GPU baseline 真机脚本，但还缺一份像 `reduce_scatter` / `allgather` / `gemm_allscatter` 那样可回放的结构化矩阵产物。
+- 基础工程层面，下一步最有价值的不是调优，而是把 `transport-aware` 结论固定成 artifact。
+
+**本轮脚本/产物**：
+- 新增：
+  - `tests/benchmarks/bench_gemm_reducescatter_multiprocess.py`
+- 生成：
+  - `docs/generated/gemm_reducescatter_multiprocess_matrix.json`
+
+**真实实验**：
+- 执行命令：
+  - `PYTHONPATH=. python -u tests/benchmarks/bench_gemm_reducescatter_multiprocess.py --M 128 --N 256 --K 128 --warmup 0 --iters 1 --timeout-sec 120 --output-json docs/generated/gemm_reducescatter_multiprocess_matrix.json`
+- 结构化结果摘要：
+  - `case_count = 12`
+  - `passed_cases = 6`
+  - `failed_cases = 6`
+
+| dtype | requested transport | 结果 | actual transport | 备注 |
+|------|----------------------|------|------------------|------|
+| fp16 | `auto` | PASS | `ctypes_ipc` | `max_abs_diff = 0.0625` |
+| fp16 | `ctypes_ipc` | PASS | `ctypes_ipc` | `max_abs_diff = 0.0625` |
+| fp16 | `pytorch_ipc` | FAIL | N/A | host 侧显式拒绝 |
+| fp16 | `peer_access_pointer_exchange` | FAIL | N/A | host 侧显式拒绝 |
+| bf16 | `auto` | PASS | `ctypes_ipc` | `max_abs_diff = 0.5` |
+| bf16 | `ctypes_ipc` | PASS | `ctypes_ipc` | `max_abs_diff = 0.5` |
+| bf16 | `pytorch_ipc` | FAIL | N/A | host 侧显式拒绝 |
+| bf16 | `peer_access_pointer_exchange` | FAIL | N/A | host 侧显式拒绝 |
+| fp32 | `auto` | PASS | `ctypes_ipc` | `max_abs_diff = 0.0` |
+| fp32 | `ctypes_ipc` | PASS | `ctypes_ipc` | `max_abs_diff = 0.0` |
+| fp32 | `pytorch_ipc` | FAIL | N/A | host 侧显式拒绝 |
+| fp32 | `peer_access_pointer_exchange` | FAIL | N/A | host 侧显式拒绝 |
+
+**结论**：
+- `gemm_reducescatter(...)` 的 multiprocess baseline 现在已经具备与 `reduce_scatter` / `allgather` / `gemm_allscatter` 同级别的第一版结构化证据。
+- 当前结论与其他 multiprocess public surface 一致：
+  - **`auto` 实际收敛到 `ctypes_ipc`**
+  - **`ctypes_ipc` 在 2-GPU `fp16/bf16/fp32` 上通过**
+  - **`pytorch_ipc` / `peer_access_pointer_exchange` 继续保持 host-side 明确拒绝**
+- 这进一步支持当前 support matrix 口径：
+  - **single-process：`supported`**
+  - **opt-in multiprocess `ctypes_ipc`：`partial`**
+  - **其余 transport：`unsupported`**
+
 ### P2P 带宽 (bench_p2p_translate.py, 2026-03-19)
 
 理论峰值：300 GB/s（NV12 NVLink，单向）
