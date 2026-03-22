@@ -369,6 +369,24 @@ class TestSymmetricHeapUnit:
         assert metadata["name"] == "torch_bump"
         assert metadata["size_bytes"] == symmetric_heap.size
         assert metadata["bytes_allocated"] == symmetric_heap.bytes_allocated
+        assert metadata["segment_count"] == 1
+
+    def test_peer_memory_map_metadata_reports_local_segment(self, symmetric_heap) -> None:
+        """Single-rank heaps should still expose one structured mapping entry."""
+        metadata = symmetric_heap.peer_memory_map_metadata()
+        exports = symmetric_heap.peer_export_descriptors()
+
+        assert len(metadata) == 1
+        assert len(exports) == 1
+        assert metadata[0]["peer_rank"] == 0
+        assert metadata[0]["transport"] == "local_only"
+        assert metadata[0]["mapped_ptr"] == symmetric_heap.local_base
+        assert metadata[0]["exported_base_ptr"] == symmetric_heap.local_base
+        assert metadata[0]["size_bytes"] == symmetric_heap.size
+        assert metadata[0]["is_local_rank"] is True
+        assert metadata[0]["cleanup_kind"] == "none"
+        assert exports[0].transport == "local_only"
+        assert exports[0].base_ptr == symmetric_heap.local_base
 
     def test_import_external_tensor_materializes_heap_copy(self, symmetric_heap) -> None:
         """import_external_tensor should copy data onto the symmetric heap."""
@@ -480,6 +498,33 @@ class TestSymmetricHeapMultiGPU:
                 # Each base should be non-zero
                 for i in range(world_size):
                     assert bases[i].item() != 0, f"Rank {rank}: base[{i}] is zero"
+        finally:
+            for h in heaps:
+                h.cleanup()
+
+    def test_create_all_exposes_peer_memory_map_metadata(
+        self,
+        skip_no_multigpu,
+        device_info,
+    ) -> None:
+        """Single-process peer-access heaps should expose full peer mapping metadata."""
+        SymmetricHeap = self._get_heap_cls()
+        world_size = 2
+        heaps = SymmetricHeap.create_all(size=1024 * 1024, world_size=world_size)
+        try:
+            metadata = heaps[0].peer_memory_map_metadata()
+            exports = heaps[0].peer_export_descriptors()
+
+            assert len(metadata) == world_size
+            assert len(exports) == world_size
+            assert {entry["peer_rank"] for entry in metadata} == {0, 1}
+            assert {entry["transport"] for entry in metadata} == {"peer_access"}
+            assert all(entry["size_bytes"] == heaps[0].size for entry in metadata)
+            assert metadata[0]["is_local_rank"] is True
+            assert metadata[1]["is_local_rank"] is False
+            assert metadata[0]["cleanup_kind"] == "none"
+            assert metadata[1]["cleanup_kind"] == "none"
+            assert exports[1].transport == "peer_access"
         finally:
             for h in heaps:
                 h.cleanup()

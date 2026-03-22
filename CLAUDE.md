@@ -301,6 +301,34 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] opt-in collective 主路径回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 - [x] `gemm_allgather` 全 transport 官方矩阵复测：`docs/generated/gemm_allgather_multiprocess_matrix.json` 仍保持 `12 cases = 6 pass / 6 fail`，行为与收口前一致
 
+### Phase 20 交付物（2026-03-22）
+- [x] allocator-owned peer mapping metadata：新增 `PeerMemoryMapEntry`
+- [x] `SymmetricHeap.peer_export_descriptors()` / `peer_memory_map()` / `peer_memory_map_metadata()`：peer import/map 元数据正式对外可见
+- [x] single-process / local-only peer map 回归：`tests/test_memory/test_symmetric_heap.py` 新增 local-only 与 peer-access metadata 测试
+- [x] support matrix 更新：新增 `memory["symmetric_heap.peer_mapping_metadata"]`
+- [x] allocator/support 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py` → `48 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
+### Phase 21 交付物（2026-03-22）
+- [x] unified runtime metadata surface：新增 `SymmetricHeap.metadata()`、`XTileContext.heap_metadata()`、`XTileContext.runtime_metadata()`
+- [x] context 回归：`tests/test_context.py` 新增 runtime/heap metadata 验证
+- [x] context/memory/support 基础回归：`pytest -q tests/test_context.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py` → `50 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+
+### Phase 22 交付物（2026-03-22）
+- [x] benchmark artifact 统一补齐 `runtime_metadata`：`tests/benchmarks/bench_gemm.py`、`tests/benchmarks/bench_p2p_translate.py`、`tests/benchmarks/bench_patterns.py`
+- [x] pattern benchmark 额外按 size 持久化 `runtime_metadata`，避免不同 problem size 下 heap_size 变化被顶层单一快照误导
+- [x] benchmark/support 基础回归：`pytest -q tests/test_context.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py` → `52 passed`
+- [x] benchmark reporting / export 回归：`pytest -q tests/test_benchmark_reporting.py tests/test_export_benchmark_summary.py` → `4 passed`
+- [x] 真实 benchmark smoke（H100 PCIe x2）：
+  - `python -m tests.benchmarks.bench_gemm --device cuda:0 --repeats 1 --output-json /tmp/xtile_gemm_runtime_metadata_smoke.json`
+  - `python -m tests.benchmarks.bench_p2p_translate --quick --output-json /tmp/xtile_p2p_runtime_metadata_smoke.json`
+  - `python -m tests.benchmarks.bench_patterns --quick --warmup 1 --iters 1 --output-json /tmp/xtile_patterns_runtime_metadata_smoke.json`
+- [x] smoke 结果确认：三类 artifact 均已写出 `runtime_metadata`；P2P quick `best read=248.71 GB/s`、`best write=247.80 GB/s`；pattern quick `best speedup vs bulk_sync=1.210x`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

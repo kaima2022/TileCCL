@@ -1728,3 +1728,207 @@ python -m tests.benchmarks.bench_gemm_allgather_multiprocess \
 
 - P0 的 allocator-first 不是只停留在 local allocation 层了，已经开始接管 multiprocess peer export/import
 - P1 的 `gemm_allgather` 支持面没有被这次 P0 收口破坏
+
+### Part E: peer mapping metadata surface (2026-03-22)
+
+继续沿着 P0 的最佳实践推进，本轮没有再把 peer import/map 元数据藏在 `SymmetricHeap` 内部，而是把这层状态显式暴露出来。
+
+新增内容：
+
+- `PeerMemoryMapEntry`
+- `SymmetricHeap.peer_export_descriptors()`
+- `SymmetricHeap.peer_memory_map()`
+- `SymmetricHeap.peer_memory_map_metadata()`
+
+这一步的目标不是“增加一个 debug helper”，而是把下面这件事固定成可维护接口：
+
+- 当前 rank 看见的每个 peer memory segment
+- 它的 `transport`
+- `mapped_ptr`
+- `exported_base_ptr`
+- `size_bytes`
+- `device`
+- `cleanup_kind`
+
+这正是后续继续往 canonical `segment metadata / import-map-access` substrate 推进时需要保留的第一手状态。
+
+support matrix 也同步新增：
+
+- `memory["symmetric_heap.peer_mapping_metadata"]`
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_support.py \
+  tests/test_cli_support.py \
+  tests/test_benchmark_results.py
+```
+
+结果：
+
+- `48 passed in 5.31s`
+
+multiprocess 主路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `allgather + gemm_allgather` → `2 passed in 37.37s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 62.41s`
+
+结论：
+
+- P0 现在又往前推进了一步：不只是 allocator 持有 export/import 逻辑，peer mapping state 也已经成为正式 surface
+- 这仍然不是 Iris 完整 canonical substrate，但已经比“heap 内部散落 transport 细节”更接近工业级形态
+
+### Part F: unified runtime metadata surface (2026-03-22)
+
+为了让 P0 不只停在 heap 内部元数据，本轮继续把 runtime 层也收口成统一结构化出口。
+
+新增内容：
+
+- `SymmetricHeap.metadata()`
+- `XTileContext.heap_metadata()`
+- `XTileContext.runtime_metadata()`
+
+现在一个调用方如果想拿完整运行时状态，不需要自己拼：
+
+- `rank/world_size/device/backend`
+- heap mode / transport
+- allocator metadata
+- peer export metadata
+- peer mapping metadata
+
+这些都已经可以从 `ctx.runtime_metadata()` 直接拿到。
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_context.py \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_support.py \
+  tests/test_cli_support.py \
+  tests/test_benchmark_results.py
+```
+
+结果：
+
+- `50 passed in 6.81s`
+
+multiprocess 主路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+```
+
+结果：
+
+- `2 passed in 31.31s`
+
+结论：
+
+- 现在 runtime / heap / peer-map 三层状态已经开始共享统一结构化出口
+- 后续 benchmark / diagnostics / CLI 如果要进一步收口，不需要再重复拼装同一批元数据
+
+### Part G: benchmark artifacts now persist runtime metadata (2026-03-22)
+
+上一轮已经把 `ctx.runtime_metadata()` 这个统一出口做出来了，但如果 benchmark artifact 不跟进，这层信息仍然到不了 figure / export / doc 产物。
+
+本轮补齐了三条 benchmark 产物链路：
+
+- `tests/benchmarks/bench_gemm.py`
+- `tests/benchmarks/bench_p2p_translate.py`
+- `tests/benchmarks/bench_patterns.py`
+
+统一新增：
+
+- 顶层 `runtime_metadata`
+
+其中 pattern benchmark 额外做了一步收口：
+
+- `sizes[*].runtime_metadata`
+
+这样做的原因很直接：
+
+- GEMM / P2P benchmark 的 runtime 配置在一次运行里基本恒定
+- pattern benchmark 的 `heap_size` 可能随 problem size 变化
+- 如果只保留顶层单一快照，会把后续 size 的 heap/runtime 语义压扁成“第一条样本”
+
+因此当前 pattern artifact 的准确口径是：
+
+- 顶层 `runtime_metadata` = 本次 benchmark 运行的首个 context 快照
+- `sizes[*].runtime_metadata` = 各 problem size 对应的真实 heap/runtime 快照
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_context.py \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_support.py \
+  tests/test_cli_support.py \
+  tests/test_benchmark_results.py
+
+pytest -q \
+  tests/test_benchmark_reporting.py \
+  tests/test_export_benchmark_summary.py
+```
+
+结果：
+
+- `52 passed in 6.65s`
+- `4 passed in 0.02s`
+
+真实 benchmark smoke（H100 PCIe x2）：
+
+```bash
+python -m tests.benchmarks.bench_gemm \
+  --device cuda:0 \
+  --repeats 1 \
+  --output-json /tmp/xtile_gemm_runtime_metadata_smoke.json
+
+python -m tests.benchmarks.bench_p2p_translate \
+  --quick \
+  --output-json /tmp/xtile_p2p_runtime_metadata_smoke.json
+
+python -m tests.benchmarks.bench_patterns \
+  --quick \
+  --warmup 1 \
+  --iters 1 \
+  --output-json /tmp/xtile_patterns_runtime_metadata_smoke.json
+```
+
+结果：
+
+- GEMM smoke 成功写出 `runtime_metadata`
+- P2P quick 成功写出 allocator / peer-map / transport 元数据
+- pattern quick 同时写出顶层 `runtime_metadata` 与 `sizes[*].runtime_metadata`
+- P2P quick：`best read = 248.71 GB/s`，`best write = 247.80 GB/s`
+- pattern quick：`best speedup vs bulk_sync = 1.210x`
+
+主路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `allgather + gemm_allgather` → `2 passed in 29.19s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 61.44s`
+
+结论：
+
+- `runtime_metadata` 不再停留在 context/debug 层，而是已经进入 benchmark artifact 主链路
+- figure / export / docs 之后如果需要消费 allocator / heap / peer-map / transport 元数据，不需要再二次拼装
+- 这一轮没有放大 transport 支持面，也没有改变 collectives 主路径语义，只是把结构化证据补齐了

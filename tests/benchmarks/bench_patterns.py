@@ -27,6 +27,7 @@ from xtile.ops import build_gemm_allscatter_plan
 from xtile.utils.benchmark_results import (
     canonical_benchmark_run,
     default_pattern_benchmark_path,
+    runtime_metadata_snapshot,
     runtime_support_snapshot,
     write_json,
 )
@@ -263,6 +264,7 @@ def main():
         all_results: list[PatternResult] = []
         size_payloads: list[dict[str, object]] = []
         support_payload: dict[str, object] | None = None
+        runtime_metadata_payload: dict[str, object] | None = None
 
         for M, N, K in sizes:
             required_heap = _required_heap_size(M, N, K, world_size, torch.float16)
@@ -286,6 +288,7 @@ def main():
                 )
                 if support_payload is None:
                     support_payload = runtime_support_snapshot(contexts[0])
+                    runtime_metadata_payload = runtime_metadata_snapshot(contexts[0])
                 results, size_metadata = benchmark_size(
                     M,
                     N,
@@ -304,6 +307,7 @@ def main():
                     "required_heap_bytes": required_heap,
                     "heap_size_bytes": heap_size,
                     "metadata": size_metadata,
+                    "runtime_metadata": runtime_metadata_snapshot(contexts[0]),
                     "results": [
                         {
                             "pattern": r.pattern,
@@ -382,6 +386,7 @@ def main():
                     "iters": args.iters,
                 },
                 "runtime_support": support_payload,
+                "runtime_metadata": runtime_metadata_payload,
                 "sizes": size_payloads,
                 "summary": {
                     "best_speedup_vs_bulk": best_speedup,

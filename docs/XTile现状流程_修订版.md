@@ -762,7 +762,7 @@ contracts = {
 - `xtile.describe_runtime_support(ctx)` 已经存在。
 - `ctx.support_matrix()` 已经存在。
 - `xtile support --json` 已经存在。
-- benchmark JSON、plot 和文档导出已经开始消费这份 support snapshot。
+- benchmark JSON、plot 和文档导出已经开始消费这份 `runtime_support` snapshot；其中 benchmark JSON 现同时携带 `runtime_metadata`，pattern benchmark 还会按 size 记录对应 heap/runtime metadata。
 - 当前状态判断已经是 `heap_mode + transport_strategy + operation contract` 感知，而不是只看“有没有函数名”。
 
 #### 4. allocator-first memory substrate 第一阶段已经落地
@@ -775,9 +775,12 @@ contracts = {
   - `export_peer_memory(...)`
   - `import_peer_memory(...)`
   - `PeerMemoryExportDescriptor`
+- `SymmetricHeap.peer_export_descriptors()` / `peer_memory_map()` / `peer_memory_map_metadata()` 已接入，peer import/map 元数据不再只能靠调试器看内部状态。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
-- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import` 状态。
+- `XTileContext.heap_metadata()` / `runtime_metadata()` 已接入，runtime / heap / peer-map 现在有统一结构化出口。
+- `tests/benchmarks/bench_gemm.py`、`tests/benchmarks/bench_p2p_translate.py`、`tests/benchmarks/bench_patterns.py` 生成的结构化 JSON 已统一带出 `runtime_metadata`；其中 pattern benchmark 因 heap size 随 problem size 变化，额外按 size 记录对应 runtime metadata。
+- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import` 与 `symmetric_heap.peer_mapping_metadata` 状态。
 
 当前准确口径是：
 

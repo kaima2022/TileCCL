@@ -36,6 +36,7 @@ from xtile.memory.translation import translate_ptr
 from xtile.utils.benchmark_results import (
     canonical_benchmark_run,
     default_p2p_benchmark_path,
+    describe_runtime_metadata_snapshot,
     describe_runtime_support_snapshot,
     write_json,
 )
@@ -291,6 +292,7 @@ def _p2p_payload(
     theoretical_peak: float,
     heaps: list[SymmetricHeap],
     runtime_support: dict[str, object],
+    runtime_metadata: dict[str, object],
 ) -> dict[str, object]:
     """Build a structured P2P benchmark payload."""
     best_read = max((r for r in results if r.direction == "read"), key=lambda item: item.bandwidth_gbps)
@@ -311,6 +313,7 @@ def _p2p_payload(
             "quick_mode": quick,
         },
         "runtime_support": runtime_support,
+        "runtime_metadata": runtime_metadata,
         "results": [
             {
                 "direction": result.direction,
@@ -468,6 +471,13 @@ def main():
                 heap=heaps[0],
                 force_backend=True,
             )
+            runtime_metadata = describe_runtime_metadata_snapshot(
+                backend=getattr(heaps[0], "_backend_name", "auto"),
+                rank=heaps[0].rank,
+                world_size=heaps[0].world_size,
+                heap=heaps[0],
+                force_backend=True,
+            )
 
             num_sms = torch.cuda.get_device_properties(0).multi_processor_count
             results: list[BenchResult] = []
@@ -582,6 +592,7 @@ def main():
                 theoretical_peak=theoretical_peak,
                 heaps=heaps,
                 runtime_support=runtime_support,
+                runtime_metadata=runtime_metadata,
             ))
             print(f"Structured results written to: {output_path}")
         finally:

@@ -11,9 +11,11 @@ import xtile
 from xtile.utils.benchmark_results import (
     canonical_benchmark_run,
     default_gemm_benchmark_path,
+    describe_runtime_metadata_snapshot,
     describe_runtime_support_snapshot,
     is_canonical_benchmark_output,
     project_root,
+    runtime_metadata_snapshot,
     runtime_support_snapshot,
 )
 
@@ -61,6 +63,50 @@ def test_describe_runtime_support_snapshot_with_heap(
     finally:
         for heap in heaps:
             heap.cleanup()
+
+
+def test_runtime_metadata_snapshot_from_context(
+    skip_no_gpu,
+    device_info,
+) -> None:
+    """Existing contexts should also expose unified runtime metadata."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        ctx = xtile.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        payload = runtime_metadata_snapshot(ctx)
+
+        assert payload["backend"] == device_info.backend
+        assert payload["has_heap"] is True
+        assert payload["heap"]["allocator"]["name"] == "torch_bump"
+        assert len(payload["heap"]["peer_memory_map"]) == 1
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_describe_runtime_metadata_snapshot_without_heap(
+    skip_no_gpu,
+    device_info,
+) -> None:
+    """Temporary runtime metadata snapshots should work without a heap."""
+    payload = describe_runtime_metadata_snapshot(
+        backend=device_info.backend,
+        rank=0,
+        world_size=1,
+        force_backend=True,
+    )
+
+    assert payload["backend"] == device_info.backend
+    assert payload["has_heap"] is False
+    assert payload["heap"] is None
 
 
 def test_is_canonical_benchmark_output_matches_figures_data() -> None:

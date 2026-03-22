@@ -20,6 +20,7 @@ Device-side ``@triton.jit`` translation primitives live in
 """
 
 from xtile.memory.symmetric_heap import SymmetricHeap
+from xtile.memory.symmetric_heap import PeerMemoryMapEntry
 from xtile.memory.translation import PointerTranslator
 from xtile.memory.allocators import (
     BaseSymmetricAllocator,
@@ -32,6 +33,7 @@ __all__ = [
     "BaseSymmetricAllocator",
     "ImportedPeerMemory",
     "PeerMemoryExportDescriptor",
+    "PeerMemoryMapEntry",
     "SymmetricHeap",
     "PointerTranslator",
     "TorchBumpAllocator",

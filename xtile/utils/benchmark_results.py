@@ -134,6 +134,24 @@ def runtime_support_snapshot(ctx: Any) -> dict[str, Any]:
     return xtile.describe_runtime_support(ctx).to_dict()
 
 
+def runtime_metadata_snapshot(ctx: Any) -> dict[str, Any]:
+    """Serialize the structured runtime metadata for an existing context."""
+    if hasattr(ctx, "runtime_metadata"):
+        return ctx.runtime_metadata()
+
+    return {
+        "rank": getattr(ctx, "rank", None),
+        "world_size": getattr(ctx, "world_size", None),
+        "device": getattr(ctx, "device", None),
+        "backend": getattr(ctx, "backend_name", None),
+        "has_heap": getattr(ctx, "heap", None) is not None,
+        "heap": getattr(ctx, "heap", None).metadata()
+        if getattr(ctx, "heap", None) is not None
+        and hasattr(getattr(ctx, "heap", None), "metadata")
+        else None,
+    }
+
+
 def describe_runtime_support_snapshot(
     *,
     backend: str = "auto",
@@ -153,3 +171,24 @@ def describe_runtime_support_snapshot(
         force_backend=force_backend,
     )
     return runtime_support_snapshot(ctx)
+
+
+def describe_runtime_metadata_snapshot(
+    *,
+    backend: str = "auto",
+    rank: int = 0,
+    world_size: int = 1,
+    heap: Any | None = None,
+    force_backend: bool = False,
+) -> dict[str, Any]:
+    """Build a temporary context and serialize its runtime metadata."""
+    import xtile
+
+    ctx = xtile.init(
+        backend=backend,
+        rank=rank,
+        world_size=world_size,
+        heap=heap,
+        force_backend=force_backend,
+    )
+    return runtime_metadata_snapshot(ctx)

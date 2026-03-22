@@ -216,6 +216,12 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before using external import/as_symmetric helpers.",
         ),
+        "symmetric_heap.peer_mapping_metadata": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes allocator-owned peer export descriptors and structured peer mapping metadata."
+            if has_heap
+            else "Attach a heap before querying peer export/import mapping metadata.",
+        ),
     }
 
     return RuntimeSupportMatrix(

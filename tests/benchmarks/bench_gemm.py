@@ -26,6 +26,7 @@ import torch
 from xtile.utils.benchmark_results import (
     canonical_benchmark_run,
     default_gemm_benchmark_path,
+    describe_runtime_metadata_snapshot,
     describe_runtime_support_snapshot,
     write_json,
 )
@@ -226,6 +227,7 @@ def _gemm_payload(
     device: str,
     repeats: int,
     runtime_support: dict[str, Any],
+    runtime_metadata: dict[str, Any],
 ) -> dict[str, Any]:
     """Build a structured GEMM benchmark payload."""
     ratios = [float(item["ratio"]) for item in results]
@@ -244,6 +246,7 @@ def _gemm_payload(
             "aggregation": "median_of_full_runs",
         },
         "runtime_support": runtime_support,
+        "runtime_metadata": runtime_metadata,
         "results": results,
         "summary": {
             "target_ratio": _TARGET_RATIO,
@@ -500,6 +503,12 @@ def main(argv: list[str] | None = None) -> None:
             world_size=1,
             force_backend=True,
         )
+        runtime_metadata = describe_runtime_metadata_snapshot(
+            backend=benchmark_backend,
+            rank=device_rank,
+            world_size=1,
+            force_backend=True,
+        )
 
         print()
         passing = [r for r in results if r["ratio"] >= _TARGET_RATIO]
@@ -525,6 +534,7 @@ def main(argv: list[str] | None = None) -> None:
             device=device,
             repeats=args.repeats,
             runtime_support=runtime_support,
+            runtime_metadata=runtime_metadata,
         ))
         print(f"  Structured results written to: {output_path}")
         print("=" * 80)

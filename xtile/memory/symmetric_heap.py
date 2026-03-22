@@ -29,6 +29,7 @@ Supports two modes of operation:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 from typing import Optional
 
@@ -71,6 +72,35 @@ def _resolve_backend(backend: str) -> tuple[str, BackendInterface]:
             )
         backend = hw
     return backend, get_backend(backend)
+
+
+@dataclass(frozen=True, slots=True)
+class PeerMemoryMapEntry:
+    """One rank-visible peer-memory mapping entry."""
+
+    peer_rank: int
+    allocator_name: str
+    transport: str
+    mapped_ptr: int
+    exported_base_ptr: int
+    size_bytes: int
+    device: str
+    is_local_rank: bool
+    cleanup_kind: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize mapping metadata for diagnostics and docs."""
+        return {
+            "peer_rank": self.peer_rank,
+            "allocator_name": self.allocator_name,
+            "transport": self.transport,
+            "mapped_ptr": self.mapped_ptr,
+            "exported_base_ptr": self.exported_base_ptr,
+            "size_bytes": self.size_bytes,
+            "device": self.device,
+            "is_local_rank": self.is_local_rank,
+            "cleanup_kind": self.cleanup_kind,
+        }
 
 
 class SymmetricHeap:
@@ -145,6 +175,8 @@ class SymmetricHeap:
         self._heap_bases: Optional[torch.Tensor] = None
         self._ipc_opened: list[Optional[int]] = []
         self._ipc_storages: list[Optional[torch.UntypedStorage]] = []
+        self._peer_exports: list[PeerMemoryExportDescriptor] = []
+        self._peer_map: list[PeerMemoryMapEntry] = []
         self._peer_buffers: Optional[list[torch.Tensor]] = None
         self._mode: str = "single_process" if _peer_bases is not None or world_size == 1 else "multiprocess"
         self._transport_strategy: str = "local_only" if world_size == 1 else "unknown"
@@ -156,6 +188,16 @@ class SymmetricHeap:
                 _peer_bases, dtype=torch.int64, device=self._device,
             )
             self._transport_strategy = "peer_access"
+            self._peer_exports = self._build_local_peer_exports(
+                transport="peer_access",
+                remote_ptrs=self._remote_ptrs,
+            )
+            self._peer_map = self._build_peer_map(
+                peer_exports=self._peer_exports,
+                remote_ptrs=self._remote_ptrs,
+                ipc_opened=self._ipc_opened,
+                ipc_storages=self._ipc_storages,
+            )
         elif world_size == 1:
             # Trivial single-GPU case
             self._remote_ptrs = [self._local_ptr]
@@ -163,6 +205,16 @@ class SymmetricHeap:
                 [self._local_ptr], dtype=torch.int64, device=self._device,
             )
             self._peer_buffers = [self._buffer]
+            self._peer_exports = self._build_local_peer_exports(
+                transport="local_only",
+                remote_ptrs=self._remote_ptrs,
+            )
+            self._peer_map = self._build_peer_map(
+                peer_exports=self._peer_exports,
+                remote_ptrs=self._remote_ptrs,
+                ipc_opened=self._ipc_opened,
+                ipc_storages=self._ipc_storages,
+            )
         else:
             # Multi-process mode: try IPC, fall back to all_gather of pointers
             self._setup_multiprocess()
@@ -252,6 +304,16 @@ class SymmetricHeap:
             heap._remote_ptrs = list(bases)
             heap._ipc_opened = []
             heap._ipc_storages = []
+            heap._peer_exports = heap._build_local_peer_exports(
+                transport="peer_access",
+                remote_ptrs=heap._remote_ptrs,
+            )
+            heap._peer_map = heap._build_peer_map(
+                peer_exports=heap._peer_exports,
+                remote_ptrs=heap._remote_ptrs,
+                ipc_opened=heap._ipc_opened,
+                ipc_storages=heap._ipc_storages,
+            )
             heap._heap_bases = torch.tensor(
                 bases, dtype=torch.int64, device=f"cuda:{rank}",
             )
@@ -285,6 +347,56 @@ class SymmetricHeap:
             resolved.append(export)
         return resolved
 
+    def _build_local_peer_exports(
+        self,
+        *,
+        transport: str,
+        remote_ptrs: list[int],
+    ) -> list[PeerMemoryExportDescriptor]:
+        """Build synthetic peer-export descriptors for local/single-process modes."""
+        return [
+            PeerMemoryExportDescriptor(
+                allocator_name=self.allocator_name,
+                transport=transport,
+                size_bytes=self._size,
+                base_ptr=int(ptr),
+                device=f"cuda:{rank}",
+                payload=int(ptr),
+            )
+            for rank, ptr in enumerate(remote_ptrs)
+        ]
+
+    def _build_peer_map(
+        self,
+        *,
+        peer_exports: list[PeerMemoryExportDescriptor],
+        remote_ptrs: list[int],
+        ipc_opened: list[Optional[int]],
+        ipc_storages: list[Optional[torch.UntypedStorage]],
+    ) -> list[PeerMemoryMapEntry]:
+        """Build the structured peer-mapping view for diagnostics."""
+        entries: list[PeerMemoryMapEntry] = []
+        for rank, export in enumerate(peer_exports):
+            cleanup_kind = "none"
+            if rank < len(ipc_opened) and ipc_opened[rank] is not None:
+                cleanup_kind = "ipc_handle"
+            elif rank < len(ipc_storages) and ipc_storages[rank] is not None:
+                cleanup_kind = "storage"
+            entries.append(
+                PeerMemoryMapEntry(
+                    peer_rank=rank,
+                    allocator_name=export.allocator_name,
+                    transport=export.transport,
+                    mapped_ptr=int(remote_ptrs[rank]),
+                    exported_base_ptr=export.base_ptr,
+                    size_bytes=export.size_bytes,
+                    device=export.device,
+                    is_local_rank=(rank == self._rank),
+                    cleanup_kind=cleanup_kind,
+                )
+            )
+        return entries
+
     def _resolve_imported_peers(
         self,
         *,
@@ -316,6 +428,26 @@ class SymmetricHeap:
                 ipc_opened.append(None)
                 ipc_storages.append(None)
         return remote_ptrs, ipc_opened, ipc_storages
+
+    def _apply_peer_mapping_state(
+        self,
+        *,
+        peer_exports: list[PeerMemoryExportDescriptor],
+        remote_ptrs: list[int],
+        ipc_opened: list[Optional[int]],
+        ipc_storages: list[Optional[torch.UntypedStorage]],
+    ) -> None:
+        """Commit one resolved peer-mapping state to the heap."""
+        self._peer_exports = list(peer_exports)
+        self._remote_ptrs = list(remote_ptrs)
+        self._ipc_opened = list(ipc_opened)
+        self._ipc_storages = list(ipc_storages)
+        self._peer_map = self._build_peer_map(
+            peer_exports=self._peer_exports,
+            remote_ptrs=self._remote_ptrs,
+            ipc_opened=self._ipc_opened,
+            ipc_storages=self._ipc_storages,
+        )
 
     def _setup_multiprocess(self) -> None:
         """Exchange heap pointers across ranks for multi-process mode.
@@ -390,9 +522,12 @@ class SymmetricHeap:
             transport="ctypes_ipc",
             gathered_exports=gathered_exports,
         )
-        self._remote_ptrs = remote_ptrs
-        self._ipc_opened = ipc_opened
-        self._ipc_storages = ipc_storages
+        self._apply_peer_mapping_state(
+            peer_exports=gathered_exports,
+            remote_ptrs=remote_ptrs,
+            ipc_opened=ipc_opened,
+            ipc_storages=ipc_storages,
+        )
         self._heap_bases = torch.tensor(
             remote_ptrs, dtype=torch.int64, device=self._device,
         )
@@ -420,9 +555,12 @@ class SymmetricHeap:
             transport="pytorch_ipc",
             gathered_exports=gathered_exports,
         )
-        self._remote_ptrs = remote_ptrs
-        self._ipc_opened = ipc_opened
-        self._ipc_storages = ipc_storages
+        self._apply_peer_mapping_state(
+            peer_exports=gathered_exports,
+            remote_ptrs=remote_ptrs,
+            ipc_opened=ipc_opened,
+            ipc_storages=ipc_storages,
+        )
         self._heap_bases = torch.tensor(
             remote_ptrs, dtype=torch.int64, device=self._device,
         )
@@ -454,12 +592,15 @@ class SymmetricHeap:
             transport="peer_access_pointer_exchange",
             gathered_exports=gathered_exports,
         )
-        self._remote_ptrs = remote_ptrs
+        self._apply_peer_mapping_state(
+            peer_exports=gathered_exports,
+            remote_ptrs=remote_ptrs,
+            ipc_opened=ipc_opened,
+            ipc_storages=ipc_storages,
+        )
         self._heap_bases = torch.tensor(
             remote_ptrs, dtype=torch.int64, device=self._device,
         )
-        self._ipc_opened = ipc_opened
-        self._ipc_storages = ipc_storages
         self._transport_strategy = "peer_access_pointer_exchange"
         dist.barrier()
         logger.info("Rank %d: peer-access pointer exchange complete", self._rank)
@@ -580,6 +721,34 @@ class SymmetricHeap:
         """Return structured allocator metadata for docs and benchmarks."""
         return self._allocator.describe()
 
+    def peer_export_descriptors(self) -> tuple[PeerMemoryExportDescriptor, ...]:
+        """Return the rank-visible peer export descriptors for this heap."""
+        return tuple(self._peer_exports)
+
+    def peer_memory_map(self) -> tuple[PeerMemoryMapEntry, ...]:
+        """Return the structured peer-memory mapping table."""
+        return tuple(self._peer_map)
+
+    def peer_memory_map_metadata(self) -> list[dict[str, object]]:
+        """Return peer-memory mapping metadata in JSON-friendly form."""
+        return [entry.to_dict() for entry in self._peer_map]
+
+    def metadata(self) -> dict[str, object]:
+        """Return the structured heap metadata for docs and diagnostics."""
+        return {
+            "rank": self.rank,
+            "world_size": self.world_size,
+            "backend": self._backend_name,
+            "device": str(self._device),
+            "size_bytes": self._size,
+            "local_base": self._local_ptr,
+            "mode": self._mode,
+            "transport_strategy": self._transport_strategy,
+            "allocator": self.allocator_metadata(),
+            "peer_exports": [export.to_dict() for export in self._peer_exports],
+            "peer_memory_map": self.peer_memory_map_metadata(),
+        }
+
     def owns_tensor(self, tensor: torch.Tensor) -> bool:
         """Return ``True`` when *tensor* resides in this symmetric heap."""
         return self._allocator.owns_tensor(tensor)
@@ -665,6 +834,8 @@ class SymmetricHeap:
         self._remote_ptrs = []
         self._ipc_opened = []
         self._ipc_storages = []
+        self._peer_exports = []
+        self._peer_map = []
         self._peer_buffers = None
         self._alloc_records.clear()
         self._bump_offset = 0

@@ -203,6 +203,21 @@ class XTileContext:
 
         return describe_runtime_support(self)
 
+    def heap_metadata(self) -> dict[str, object]:
+        """Return structured metadata for the attached symmetric heap."""
+        return self.require_heap().metadata()
+
+    def runtime_metadata(self) -> dict[str, object]:
+        """Return one structured runtime snapshot for docs and diagnostics."""
+        return {
+            "rank": self.rank,
+            "world_size": self.world_size,
+            "device": self.device,
+            "backend": self.backend_name,
+            "has_heap": self.has_heap,
+            "heap": self.heap_metadata() if self.has_heap else None,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Global context singleton

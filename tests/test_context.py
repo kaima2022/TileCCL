@@ -44,6 +44,18 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         ctx.heap.get_offset(randn.data_ptr())
         ctx.heap.get_offset(empty.data_ptr())
 
+        heap_metadata = ctx.heap_metadata()
+        runtime_metadata = ctx.runtime_metadata()
+        assert heap_metadata["rank"] == 0
+        assert heap_metadata["world_size"] == 1
+        assert heap_metadata["mode"] == "single_process"
+        assert heap_metadata["transport_strategy"] == "local_only"
+        assert heap_metadata["allocator"]["name"] == "torch_bump"
+        assert len(heap_metadata["peer_memory_map"]) == 1
+        assert runtime_metadata["backend"] == device_info.backend
+        assert runtime_metadata["has_heap"] is True
+        assert runtime_metadata["heap"]["local_base"] == ctx.heap.local_base
+
         ctx.barrier()
     finally:
         if ctx.heap is not None:
@@ -72,6 +84,8 @@ def test_init_local_returns_attached_contexts(skip_no_multigpu, device_info) -> 
             assert ctx.heap.world_size == 2
             assert ctx.heap_bases.shape == (2,)
             assert int(ctx.heap_bases[rank].item()) == ctx.heap.local_base
+            assert ctx.heap_metadata()["transport_strategy"] == "peer_access"
+            assert len(ctx.heap_metadata()["peer_memory_map"]) == 2
 
             tensor = ctx.zeros(4, 4, dtype=torch.float16)
             assert tensor.shape == (4, 4)
