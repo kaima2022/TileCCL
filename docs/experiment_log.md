@@ -2165,3 +2165,62 @@ python -m tests.benchmarks.bench_p2p_translate \
 
 - allocator-first substrate 现在不仅暴露“现在有什么”，也开始暴露“还缺什么”
 - 这让后续 FD/DMA-BUF external mapping 的工程推进可以直接对照 runtime metadata / support matrix 收口
+
+### Part K: peer_imports becomes the single import-map state source (2026-03-22)
+
+继续沿着 P0-next 收口，本轮没有继续新增 surface，而是把 `SymmetricHeap` 内部状态进一步去冗余。
+
+本轮完成：
+
+- 去掉 `_remote_ptrs` 这类派生缓存
+- 去掉 `_peer_map` 这类派生缓存
+- `heap_bases`、`translate()`、`peer_memory_map()` 统一改成直接从 `peer_imports` 派生
+
+这一步的意义是：
+
+- `peer_imports` 现在不只是“一个新的 metadata surface”
+- 它已经成为 heap import-map 的唯一真实状态源
+- 后续如果接 segmented import-map / FD-DMA-BUF external mapping，就不需要再同步维护多份 host-side 派生状态
+
+这一步没有做的事情也需要说清楚：
+
+- 没有放大 transport 支持面
+- 没有改变 public contract
+- 没有改变 benchmark headline
+
+它的价值主要是底层 runtime substrate 更整、更不容易发生状态漂移。
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_support.py \
+  tests/test_context.py \
+  tests/test_benchmark_results.py
+
+pytest -q tests/test_cli_support.py
+```
+
+结果：
+
+- `50 passed in 6.07s`
+- `3 passed in 5.60s`
+
+multiprocess 主路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `allgather + gemm_allgather` → `2 passed in 35.64s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 65.08s`
+
+结论：
+
+- `peer_imports` 现在已经是 import-map 的 canonical host-side state
+- XTile 还没做到 Iris 风格 external mapping substrate，但底层状态机已经进一步收敛

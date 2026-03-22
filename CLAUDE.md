@@ -361,6 +361,14 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] 真实 benchmark smoke（H100 PCIe x2）：`python -m tests.benchmarks.bench_p2p_translate --quick --output-json /tmp/xtile_p2p_allocator_capabilities_smoke.json`
 - [x] smoke 结果确认：artifact 已写出 allocator `capabilities`，其中 `external_mapping=false`、`fd_passing=false`、`dmabuf_mapping=false`；P2P quick `best read=248.74 GB/s`、`best write=248.04 GB/s`
 
+### Phase 26 交付物（2026-03-22）
+- [x] import-map 单一状态源：`SymmetricHeap` 已去掉 `_remote_ptrs` / `_peer_map` 这类派生缓存，`heap_bases`、`translate()`、`peer_memory_map()` 现直接从 `peer_imports` 派生
+- [x] 这一步是内部 substrate 收口，不改变 transport 支持面，也不改变 public contract
+- [x] allocator/context/support 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_context.py tests/test_benchmark_results.py` → `50 passed`
+- [x] support CLI 回归：`pytest -q tests/test_cli_support.py` → `3 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

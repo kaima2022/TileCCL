@@ -177,18 +177,15 @@ class SymmetricHeap:
         logger.debug("Rank %d: local heap base = 0x%x", rank, self._local_ptr)
 
         # Build heap_bases ---------------------------------------------------
-        self._remote_ptrs: list[int] = []
         self._heap_bases: Optional[torch.Tensor] = None
         self._peer_exports: list[PeerMemoryExportDescriptor] = []
         self._peer_imports: list[ImportedPeerMemory] = []
-        self._peer_map: list[PeerMemoryMapEntry] = []
         self._peer_buffers: Optional[list[torch.Tensor]] = None
         self._mode: str = "single_process" if _peer_bases is not None or world_size == 1 else "multiprocess"
         self._transport_strategy: str = "local_only" if world_size == 1 else "unknown"
 
         if _peer_bases is not None:
             # Single-process mode: bases provided by create_all()
-            self._remote_ptrs = list(_peer_bases)
             self._heap_bases = torch.tensor(
                 _peer_bases, dtype=torch.int64, device=self._device,
             )
@@ -196,16 +193,15 @@ class SymmetricHeap:
             self._apply_peer_mapping_state(
                 peer_exports=self._build_local_peer_exports(
                     transport="peer_access",
-                    remote_ptrs=self._remote_ptrs,
+                    remote_ptrs=list(_peer_bases),
                 ),
                 peer_imports=self._build_local_peer_imports(
                     transport="peer_access",
-                    remote_ptrs=self._remote_ptrs,
+                    remote_ptrs=list(_peer_bases),
                 ),
             )
         elif world_size == 1:
             # Trivial single-GPU case
-            self._remote_ptrs = [self._local_ptr]
             self._heap_bases = torch.tensor(
                 [self._local_ptr], dtype=torch.int64, device=self._device,
             )
@@ -213,11 +209,11 @@ class SymmetricHeap:
             self._apply_peer_mapping_state(
                 peer_exports=self._build_local_peer_exports(
                     transport="local_only",
-                    remote_ptrs=self._remote_ptrs,
+                    remote_ptrs=[self._local_ptr],
                 ),
                 peer_imports=self._build_local_peer_imports(
                     transport="local_only",
-                    remote_ptrs=self._remote_ptrs,
+                    remote_ptrs=[self._local_ptr],
                 ),
             )
         else:
@@ -306,16 +302,15 @@ class SymmetricHeap:
             )
             heap._buffer = heap._allocator.buffer
             heap._local_ptr = heap._allocator.base_ptr
-            heap._remote_ptrs = list(bases)
             heap._peer_imports = []
             heap._apply_peer_mapping_state(
                 peer_exports=heap._build_local_peer_exports(
                     transport="peer_access",
-                    remote_ptrs=heap._remote_ptrs,
+                    remote_ptrs=list(bases),
                 ),
                 peer_imports=heap._build_local_peer_imports(
                     transport="peer_access",
-                    remote_ptrs=heap._remote_ptrs,
+                    remote_ptrs=list(bases),
                 ),
             )
             heap._heap_bases = torch.tensor(
@@ -461,10 +456,10 @@ class SymmetricHeap:
         """Commit one resolved peer-mapping state to the heap."""
         self._peer_exports = list(peer_exports)
         self._peer_imports = list(peer_imports)
-        self._remote_ptrs = [imported.mapped_ptr for imported in self._peer_imports]
-        self._peer_map = self._build_peer_map(
-            peer_imports=self._peer_imports,
-        )
+
+    def _peer_base_ptrs(self) -> list[int]:
+        """Return mapped base pointers derived from the peer-import state."""
+        return [imported.mapped_ptr for imported in self._peer_imports]
 
     def _setup_multiprocess(self) -> None:
         """Exchange heap pointers across ranks for multi-process mode.
@@ -543,7 +538,7 @@ class SymmetricHeap:
             peer_imports=imported_peers,
         )
         self._heap_bases = torch.tensor(
-            self._remote_ptrs, dtype=torch.int64, device=self._device,
+            self._peer_base_ptrs(), dtype=torch.int64, device=self._device,
         )
         self._transport_strategy = "ctypes_ipc"
         dist.barrier()
@@ -573,7 +568,7 @@ class SymmetricHeap:
             peer_imports=imported_peers,
         )
         self._heap_bases = torch.tensor(
-            self._remote_ptrs, dtype=torch.int64, device=self._device,
+            self._peer_base_ptrs(), dtype=torch.int64, device=self._device,
         )
         self._transport_strategy = "pytorch_ipc"
         dist.barrier()
@@ -607,7 +602,7 @@ class SymmetricHeap:
             peer_imports=imported_peers,
         )
         self._heap_bases = torch.tensor(
-            self._remote_ptrs, dtype=torch.int64, device=self._device,
+            self._peer_base_ptrs(), dtype=torch.int64, device=self._device,
         )
         self._transport_strategy = "peer_access_pointer_exchange"
         dist.barrier()
@@ -758,11 +753,11 @@ class SymmetricHeap:
 
     def peer_memory_map(self) -> tuple[PeerMemoryMapEntry, ...]:
         """Return the structured peer-memory mapping table."""
-        return tuple(self._peer_map)
+        return tuple(self._build_peer_map(peer_imports=self._peer_imports))
 
     def peer_memory_map_metadata(self) -> list[dict[str, object]]:
         """Return peer-memory mapping metadata in JSON-friendly form."""
-        return [entry.to_dict() for entry in self._peer_map]
+        return [entry.to_dict() for entry in self.peer_memory_map()]
 
     def metadata(self) -> dict[str, object]:
         """Return the structured heap metadata for docs and diagnostics."""
@@ -811,7 +806,7 @@ class SymmetricHeap:
                 f"to_rank={to_rank} out of range [0, {self._world_size})"
             )
         offset = self.get_offset(local_ptr)
-        return self._remote_ptrs[to_rank] + offset
+        return self._peer_imports[to_rank].mapped_ptr + offset
 
     def get_offset(self, ptr: int) -> int:
         """Return the byte offset of *ptr* within this rank's heap."""
@@ -864,10 +859,8 @@ class SymmetricHeap:
         self._buffer = None
         self._local_ptr = 0
         self._heap_bases = None
-        self._remote_ptrs = []
         self._peer_exports = []
         self._peer_imports = []
-        self._peer_map = []
         self._peer_buffers = None
         self._alloc_records.clear()
         self._bump_offset = 0
