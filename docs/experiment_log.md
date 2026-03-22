@@ -2754,3 +2754,52 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - allocator metadata 现在已经具备第一版结构化 `memory_model`
 - 这一步是 canonical backend 的 schema 准备，不代表 backend 本体已经完成
+
+### Part V: heap now exposes allocator memory-model accessors directly (2026-03-22)
+
+继续沿着 P0-next 收口，这一轮不是再扩 `memory_model` schema，而是把它提升成 heap-level explicit surface。
+
+本轮完成：
+
+- `SymmetricHeap.allocator_memory_model_descriptor()`
+- `SymmetricHeap.allocator_memory_model()`
+
+这一步的意义是：
+
+- 下游消费方不需要再通过 `allocator_metadata()["memory_model"]` 取值
+- `memory_model` 现在和：
+  - `segment_metadata()`
+  - `peer_export_metadata()`
+  - `peer_import_metadata()`
+  - `peer_memory_map_metadata()`
+  一样，成为 heap-level 明确 surface
+- 这让 context / docs / artifact / future planner code 的调用点更整
+
+这一步没有做的事情：
+
+- 没有新增 schema 字段
+- 没有改变 runtime 行为
+- 没有改变 transport 支持面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py tests/test_context.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `63 passed in 5.87s`
+- `allgather + gemm_allgather` → `2 passed in 34.84s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 63.51s`
+
+结论：
+
+- allocator `memory_model` 现在已成为正式 heap-level surface
+- 这一轮继续提升可维护性，但 external mapping / segmented import-map 仍未实现

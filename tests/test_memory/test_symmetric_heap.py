@@ -810,6 +810,22 @@ class TestSymmetricHeapUnit:
         assert segments[0]["owner_rank"] == symmetric_heap.rank
         assert segments[0]["is_local_rank"] is True
 
+    def test_allocator_memory_model_accessor_reports_structured_schema(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Heap should expose the allocator memory-model accessor directly."""
+        descriptor = symmetric_heap.allocator_memory_model_descriptor()
+        model = symmetric_heap.allocator_memory_model()
+
+        assert descriptor.allocator_name == symmetric_heap.allocator_name
+        assert descriptor.local_segment_layout == "single_contiguous_device_heap"
+        assert descriptor.peer_import_model == "per_rank_transport_resolved_imports"
+        assert descriptor.peer_mapping_model == "rank_ordered_import_table"
+        assert descriptor.external_tensor_import_mode == "copy"
+        assert descriptor.external_mapping_mode == "none"
+        assert model == descriptor.to_dict()
+
     def test_peer_memory_map_metadata_reports_local_segment(self, symmetric_heap) -> None:
         """Single-rank heaps should still expose one structured mapping entry."""
         metadata = symmetric_heap.peer_memory_map_metadata()

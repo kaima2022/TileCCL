@@ -83,6 +83,7 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert runtime_metadata["backend"] == device_info.backend
         assert runtime_metadata["has_heap"] is True
         assert runtime_metadata["heap"]["local_base"] == ctx.heap.local_base
+        assert ctx.heap.allocator_memory_model()["external_mapping_mode"] == "none"
 
         ctx.barrier()
     finally:

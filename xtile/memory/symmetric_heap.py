@@ -39,6 +39,7 @@ import torch.distributed as dist
 from xtile.backends import get_backend, detect_hardware
 from xtile.backends.base import BackendInterface
 from xtile.memory.allocators import (
+    AllocatorMemoryModelDescriptor,
     BaseSymmetricAllocator,
     ImportedPeerMemory,
     MemorySegmentDescriptor,
@@ -915,6 +916,14 @@ class SymmetricHeap:
     def allocator_metadata(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and benchmarks."""
         return self._allocator.describe()
+
+    def allocator_memory_model_descriptor(self) -> AllocatorMemoryModelDescriptor:
+        """Return the allocator's structured memory-model descriptor."""
+        return self._allocator.memory_model_descriptor()
+
+    def allocator_memory_model(self) -> dict[str, str]:
+        """Return allocator memory-model metadata in JSON-friendly form."""
+        return self._allocator.memory_model()
 
     def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
         """Return the local allocator-owned segment descriptors."""
