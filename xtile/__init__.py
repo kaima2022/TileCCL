@@ -128,6 +128,14 @@ class XTileContext:
         """Allocate a tensor from the attached symmetric heap."""
         return self.require_heap().allocate_tensor(shape, dtype)
 
+    def is_symmetric(self, tensor: "torch.Tensor") -> bool:
+        """Return ``True`` when *tensor* resides in the attached symmetric heap."""
+        return self.require_heap().is_symmetric(tensor)
+
+    def as_symmetric(self, tensor: "torch.Tensor") -> "torch.Tensor":
+        """Materialize one external tensor inside the attached symmetric heap."""
+        return self.require_heap().as_symmetric(tensor)
+
     def empty(self, *size: int, dtype: "torch.dtype") -> "torch.Tensor":
         """Allocate an uninitialised tensor from the attached symmetric heap."""
         return self.allocate_tensor(_normalize_shape(size), dtype)

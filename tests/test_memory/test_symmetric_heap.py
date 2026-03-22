@@ -363,6 +363,26 @@ class TestSymmetricHeapUnit:
         base = heap.local_base
         assert base <= ptr < base + heap.size
 
+    def test_allocator_metadata_reports_active_backend(self, symmetric_heap) -> None:
+        """Allocator metadata should expose the canonical backend name."""
+        metadata = symmetric_heap.allocator_metadata()
+        assert metadata["name"] == "torch_bump"
+        assert metadata["size_bytes"] == symmetric_heap.size
+        assert metadata["bytes_allocated"] == symmetric_heap.bytes_allocated
+
+    def test_import_external_tensor_materializes_heap_copy(self, symmetric_heap) -> None:
+        """import_external_tensor should copy data onto the symmetric heap."""
+        external = torch.arange(32, device=symmetric_heap.get_heap_bases().device, dtype=torch.float32)
+        imported = symmetric_heap.import_external_tensor(external)
+
+        assert symmetric_heap.owns_tensor(imported)
+        assert symmetric_heap.is_symmetric(imported)
+        assert imported.data_ptr() != external.data_ptr()
+        assert torch.allclose(imported, external)
+
+        external.zero_()
+        assert not torch.allclose(imported, external)
+
 
 # ---------------------------------------------------------------------------
 # Multi-GPU tests (require >= 2 GPUs)

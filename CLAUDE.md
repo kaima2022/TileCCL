@@ -268,6 +268,22 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] 默认基础回归：`pytest -q tests/test_ops.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py tests/test_collectives_host.py` → `40 passed`
 - [x] opt-in multiprocess 回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 17 交付物（2026-03-22）
+- [x] allocator-first substrate v1：新增 `xtile.memory.allocators`，建立 `BaseSymmetricAllocator` / `TorchBumpAllocator` 边界
+- [x] `SymmetricHeap` allocator 化：分配、ownership、metadata、cleanup 不再全部硬编码在 heap 内部
+- [x] external import surface：新增 `SymmetricHeap.import_external_tensor(...)` / `as_symmetric(...)` 与 `XTileContext.is_symmetric(...)` / `as_symmetric(...)`
+- [x] support matrix 更新：`symmetric_heap_allocator_first_import_map` 升级为 `partial`，新增 `symmetric_heap.external_import`
+- [x] `xtile.ops.GemmAllGatherContract` / `GemmAllGatherPlan`：补齐独立 `gemm_allgather` public contract
+- [x] `xtile.ops.build_gemm_allgather_plan(...)` / `xtile.ops.gemm_allgather(...)`：主链固定为 `local GEMM materialize -> allgather -> full-output materialize`
+- [x] single-process 顺序调用协同：新增 staged finalize 逻辑，支持单进程多 GPU 下按 rank 顺序调用 `gemm_allgather(...)`
+- [x] support matrix 更新：新增 `ops["gemm_allgather"]` 与 `contracts["gemm_allgather.shard/full"]`
+- [x] allocator-first / `gemm_allgather` 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_ops.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py` → `73 passed`
+- [x] multiprocess `gemm_allgather` 真机验收：`pytest -q tests/test_gemm_allgather_multiprocess.py` → `1 passed`
+- [x] multiprocess `gemm_allgather` 结构化矩阵：`python -m tests.benchmarks.bench_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --warmup 0 --iters 1 --timeout-sec 180 --output-json docs/generated/gemm_allgather_multiprocess_matrix.json`
+- [x] 2-GPU dtype × transport 真机矩阵：`auto/ctypes_ipc` 与 forced `ctypes_ipc` 在 `fp16/bf16/fp32` 全通过；`pytorch_ipc` / `peer_access_pointer_exchange` 当前全部失败
+- [x] 共享基础路径复测：`pytest -q tests/test_allgather_multiprocess.py` → `1 passed`
+- [x] opt-in collective 侧向回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -289,8 +305,9 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P8-003 | pattern benchmark shard path 曾把 `N` 语义隐式缩两次，导致 overlap 结论失真 | ✅ 已修复（显式 `full_N + shard/full layout` contract） |
 | P9-001 | `reduce_scatter(...)` 的 single_process reference 与 2-GPU multiprocess/device correctness 已闭环，但 multiprocess public/performance contract 仍未正式放开 | ⚠️ 当前真实支持面已精确收窄为 `ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 尚未通过 device-collective 矩阵，因此默认 gate 仍关闭，仅保留 transport-aware experimental opt-in |
 | P13-001 | multiprocess/device 传输面目前只在 `ctypes_ipc` 上通过真实矩阵，其他 transport 仍未修复 | ⚠️ auto contract 已正式收窄为 `ctypes_ipc only`；下一优先级是修 `pytorch_ipc` / `peer_access_pointer_exchange` 的最小 Triton remote-access 正确性，再决定是否重新放开 |
-| P10-001 | `gemm_allscatter.shard/full` 仍未完成；真实 2-GPU 诊断显示当前 shard/shard gemm_allscatter 输出是 peer-scatter ownership contract，而不是 local-shard basis | ⚠️ 不应继续硬补 allscatter wrapper，需单独定义 `gemm_allgather` 风格 public contract |
+| P10-001 | `gemm_allscatter.shard/full` 不应作为 allscatter wrapper 继续补；该需求已独立收口到 `gemm_allgather.shard/full` public contract | ⚠️ contract 已落地，但 `gemm_allgather` 的 broader multiprocess/performance/world-size validation 仍未闭环 |
 | P15-001 | multiprocess `gemm_allscatter` 已完成 2-GPU `ctypes_ipc` public baseline correctness，并补齐 representative auto-selected coverage（4 个 pattern、`full/full + full/shard`），但 broader larger-shape / world-size / stress / performance contract 仍未闭环 | ⚠️ 继续保持 `partial`；下一优先级转为更大 shape、长时压力和 world-size 扩展验证 |
+| P17-001 | allocator-first substrate 已落地 v1，但仍缺 Iris 风格 canonical export/import/map/access substrate | ⚠️ 当前只有 `torch_bump` + copy-based external import；segment metadata、FD/DMA-BUF import-map 和统一 access 语义仍待实现 |
 
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |

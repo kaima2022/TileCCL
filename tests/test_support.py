@@ -19,17 +19,21 @@ def test_support_matrix_without_heap(skip_no_gpu, device_info) -> None:
 
     assert matrix.has_heap is False
     assert matrix.ops["gemm_allscatter"].state == "partial"
+    assert matrix.ops["gemm_allgather"].state == "partial"
     assert matrix.ops["allgather"].state == "partial"
     assert matrix.ops["reduce_scatter"].state == "partial"
     assert matrix.ops["gemm_reducescatter"].state == "partial"
     assert matrix.contracts["gemm_allscatter.full/full"].state == "supported"
     assert matrix.contracts["gemm_allscatter.full/shard"].state == "supported"
     assert matrix.contracts["gemm_allscatter.shard/full"].state == "unsupported"
+    assert matrix.contracts["gemm_allgather.shard/full"].state == "partial"
     assert matrix.contracts["gemm_reducescatter.full/shard"].state == "partial"
     assert matrix.execution_paths["reduce_scatter.reference"].state == "partial"
     assert matrix.execution_paths["reduce_scatter.device"].state == "partial"
     assert payload["context"]["has_heap"] is False
     assert matrix.memory["symmetric_heap.device_remote_access"].state == "partial"
+    assert matrix.memory["symmetric_heap_allocator_first_import_map"].state == "unsupported"
+    assert matrix.memory["symmetric_heap.external_import"].state == "partial"
 
 
 def test_support_matrix_with_heap_matches_context_method(
@@ -56,16 +60,19 @@ def test_support_matrix_with_heap_matches_context_method(
         assert direct.has_heap is True
         assert direct.heap_mode == heaps[0].mode
         assert direct.transport_strategy == heaps[0].transport_strategy
+        assert direct.ops["gemm_allgather"].state == "supported"
         assert direct.ops["allgather"].state == "supported"
         assert direct.ops["reduce_scatter"].state == "supported"
         assert direct.ops["gemm_reducescatter"].state == "supported"
+        assert direct.contracts["gemm_allgather.shard/full"].state == "supported"
         assert direct.contracts["gemm_reducescatter.full/shard"].state == "supported"
         assert direct.execution_paths["reduce_scatter.reference"].state == "supported"
         assert direct.execution_paths["reduce_scatter.device"].state == "unsupported"
         assert direct.collectives["collectives.allgather_launcher"].state == "supported"
         assert direct.collectives["collectives.reduce_scatter_launcher"].state == "supported"
         assert direct.memory["symmetric_heap.device_remote_access"].state == "supported"
-        assert direct.memory["symmetric_heap_allocator_first_import_map"].state == "unsupported"
+        assert direct.memory["symmetric_heap_allocator_first_import_map"].state == "partial"
+        assert direct.memory["symmetric_heap.external_import"].state == "supported"
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -86,12 +93,14 @@ def test_support_matrix_multigpu_reports_peer_access(
         assert matrix.has_heap is True
         assert matrix.heap_mode == "single_process"
         assert matrix.transport_strategy == "peer_access"
+        assert matrix.ops["gemm_allgather"].state == "supported"
         assert matrix.ops["allgather"].state == "supported"
         assert matrix.ops["reduce_scatter"].state == "supported"
         assert matrix.ops["gemm_reducescatter"].state == "supported"
         assert matrix.execution_paths["reduce_scatter.reference"].state == "supported"
         assert matrix.execution_paths["reduce_scatter.device"].state == "unsupported"
         assert matrix.memory["symmetric_heap.device_remote_access"].state == "supported"
+        assert matrix.memory["symmetric_heap_allocator_first_import_map"].state == "partial"
     finally:
         for ctx in contexts:
             if ctx.heap is not None:
@@ -125,6 +134,7 @@ def test_support_matrix_multiprocess_defaults_to_unsupported(
     assert matrix.ops["reduce_scatter"].state == "unsupported"
     assert matrix.ops["allgather"].state == "unsupported"
     assert matrix.ops["gemm_allscatter"].state == "unsupported"
+    assert matrix.ops["gemm_allgather"].state == "unsupported"
     assert matrix.ops["gemm_reducescatter"].state == "unsupported"
     assert matrix.execution_paths["reduce_scatter.reference"].state == "unsupported"
     assert matrix.execution_paths["reduce_scatter.device"].state == "unsupported"
@@ -158,6 +168,7 @@ def test_support_matrix_multiprocess_opt_in_remains_partial(
     assert matrix.ops["reduce_scatter"].state == "partial"
     assert matrix.ops["allgather"].state == "partial"
     assert matrix.ops["gemm_allscatter"].state == "partial"
+    assert matrix.ops["gemm_allgather"].state == "partial"
     assert matrix.ops["gemm_reducescatter"].state == "partial"
     assert matrix.execution_paths["reduce_scatter.reference"].state == "unsupported"
     assert matrix.execution_paths["reduce_scatter.device"].state == "partial"
@@ -191,6 +202,7 @@ def test_support_matrix_multiprocess_opt_in_rejects_unvalidated_transport(
     assert matrix.ops["reduce_scatter"].state == "unsupported"
     assert matrix.ops["allgather"].state == "unsupported"
     assert matrix.ops["gemm_allscatter"].state == "unsupported"
+    assert matrix.ops["gemm_allgather"].state == "unsupported"
     assert matrix.ops["gemm_reducescatter"].state == "unsupported"
     assert matrix.execution_paths["reduce_scatter.reference"].state == "unsupported"
     assert matrix.execution_paths["reduce_scatter.device"].state == "unsupported"

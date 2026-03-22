@@ -41,6 +41,10 @@ _PENDING_GEMM_REDUCESCATTER_SINGLE_PROCESS: dict[
     tuple[object, ...],
     dict[int, tuple["GemmReduceScatterPlan", Any, Any]],
 ] = {}
+_PENDING_GEMM_ALLGATHER_SINGLE_PROCESS: dict[
+    tuple[object, ...],
+    dict[int, tuple["GemmAllGatherPlan", Any, Any, Any]],
+] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +228,125 @@ class GemmAllScatterMixedLayoutPlan:
             "storage_kind": self.storage_kind,
             "public_contract": self.contract.to_dict(),
             "direct_plan": self.direct_plan.to_dict(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GemmAllGatherContract:
+    """Resolved public contract for one high-level GEMM + allgather call."""
+
+    M: int
+    K: int
+    full_N: int
+    shard_cols: int
+    rank: int
+    world_size: int
+    storage_kind: str = "symmetric"
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the contract for docs, logs, and debug output."""
+        return {
+            "M": self.M,
+            "K": self.K,
+            "full_N": self.full_N,
+            "shard_cols": self.shard_cols,
+            "rank": self.rank,
+            "world_size": self.world_size,
+            "storage_kind": self.storage_kind,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class GemmAllGatherPlan:
+    """Executable host-side plan for GEMM + allgather."""
+
+    ctx: xtile.XTileContext
+    contract: GemmAllGatherContract
+    allgather_plan: "AllGatherPlan" = field(repr=False)
+    materialization: str = "local_gemm_plus_allgather"
+    pack_layout: str = "rank_major_column_shards"
+    storage_kind: str = "symmetric"
+
+    def validate_tensors(self, A: Any, B_shard: Any, C: Any) -> None:
+        """Re-validate that tensors still match the resolved public contract."""
+        contract = _resolve_gemm_allgather_contract(
+            A,
+            B_shard,
+            C,
+            ctx=self.ctx,
+            storage_kind=self.storage_kind,
+        )
+        if contract != self.contract:
+            raise ValueError(
+                "Tensor contract no longer matches this GemmAllGatherPlan. "
+                "Build a new plan for tensors with different logical shapes or dtypes."
+            )
+
+    def execute(
+        self,
+        A: Any,
+        B_shard: Any,
+        C: Any,
+        *,
+        validate: bool = True,
+    ) -> Any:
+        """Execute the pre-resolved host GEMM + allgather plan."""
+        if validate:
+            self.validate_tensors(A, B_shard, C)
+
+        local_shard = self.ctx.workspace(
+            "gemm_allgather.local_output_shard",
+            self.contract.M,
+            self.contract.shard_cols,
+            dtype=C.dtype,
+        )
+        _run_local_gemm(A, B_shard, out=local_shard)
+        gather_output = C
+        if self.contract.world_size > 1:
+            gather_output = self.ctx.workspace(
+                "gemm_allgather.gathered_output_shards",
+                self.contract.world_size,
+                self.contract.M,
+                self.contract.shard_cols,
+                dtype=C.dtype,
+            )
+        if (
+            self.contract.world_size > 1
+            and self.ctx.require_heap().mode == "single_process"
+        ):
+            return _execute_gemm_allgather_single_process(
+                self,
+                local_shard=local_shard,
+                gather_output=gather_output,
+                output=C,
+            )
+
+        self.allgather_plan.execute(local_shard, gather_output, validate=False)
+        if self.contract.world_size > 1:
+            self.ctx.barrier()
+            C.copy_(
+                gather_output.permute(1, 0, 2).reshape(
+                    self.contract.M,
+                    self.contract.full_N,
+                )
+            )
+        return C
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the plan for docs, debug output, and benchmark metadata."""
+        return {
+            "op": "gemm_allgather",
+            "ctx": {
+                "rank": self.ctx.rank,
+                "world_size": self.ctx.world_size,
+                "backend": self.ctx.backend_name,
+                "device": self.ctx.device,
+            },
+            "storage_kind": self.storage_kind,
+            "materialization": self.materialization,
+            "pack_layout": self.pack_layout,
+            "contract": self.contract.to_dict(),
+            "allgather_plan": self.allgather_plan.to_dict(),
         }
 
 
@@ -619,6 +742,75 @@ def gemm_allscatter_sharded(
     return plan.execute(A, B_shard, C_shard, validate=False)
 
 
+def build_gemm_allgather_plan(
+    A: Any,
+    B_shard: Any,
+    C: Any,
+    *,
+    ctx: xtile.XTileContext | None = None,
+    storage_kind: str = "symmetric",
+) -> GemmAllGatherPlan:
+    """Resolve a reusable host-side plan for GEMM + allgather.
+
+    Public contract:
+    - ``A``: full LHS matrix of shape ``(M, K)``
+    - ``B_shard``: rank-local RHS column shard of shape ``(K, N / world_size)``
+    - ``C``: full output matrix of shape ``(M, N)``
+
+    The current implementation is intentionally conservative. It performs one
+    local GEMM into a heap-backed shard workspace and then reuses the validated
+    high-level :func:`allgather` contract to assemble the full output.
+    """
+    resolved_ctx = ctx if ctx is not None else xtile.current_context()
+    _require_device_remote_access_runtime(
+        resolved_ctx,
+        operation="xtile.ops.gemm_allgather(...)",
+    )
+    contract = _resolve_gemm_allgather_contract(
+        A,
+        B_shard,
+        C,
+        ctx=resolved_ctx,
+        storage_kind=storage_kind,
+    )
+    allgather_plan = AllGatherPlan(
+        ctx=resolved_ctx,
+        input_shape=(contract.M, contract.shard_cols),
+        output_shape=(
+            tuple(int(dim) for dim in C.shape)
+            if contract.world_size == 1
+            else (contract.world_size, contract.M, contract.shard_cols)
+        ),
+        block_size=contract.M * contract.shard_cols,
+        storage_kind=storage_kind,
+    )
+    return GemmAllGatherPlan(
+        ctx=resolved_ctx,
+        contract=contract,
+        allgather_plan=allgather_plan,
+        storage_kind=storage_kind,
+    )
+
+
+def gemm_allgather(
+    A: Any,
+    B_shard: Any,
+    C: Any,
+    *,
+    ctx: xtile.XTileContext | None = None,
+    storage_kind: str = "symmetric",
+) -> Any:
+    """Run GEMM + allgather through the stable high-level host contract."""
+    plan = build_gemm_allgather_plan(
+        A,
+        B_shard,
+        C,
+        ctx=ctx,
+        storage_kind=storage_kind,
+    )
+    return plan.execute(A, B_shard, C, validate=False)
+
+
 def build_gemm_reducescatter_plan(
     A: Any,
     B: Any,
@@ -1005,6 +1197,81 @@ def _resolve_gemm_reducescatter_contract(
     )
 
 
+def _resolve_gemm_allgather_contract(
+    A: Any,
+    B_shard: Any,
+    C: Any,
+    *,
+    ctx: xtile.XTileContext,
+    storage_kind: str,
+) -> GemmAllGatherContract:
+    """Resolve and validate the public high-level GEMM + allgather contract."""
+    ctx.require_heap()
+    if A.ndim != 2 or B_shard.ndim != 2 or C.ndim != 2:
+        raise ValueError(
+            "gemm_allgather expects 2-D tensors: "
+            f"got A.ndim={A.ndim}, B_shard.ndim={B_shard.ndim}, C.ndim={C.ndim}"
+        )
+    if (
+        str(A.device) != ctx.device
+        or str(B_shard.device) != ctx.device
+        or str(C.device) != ctx.device
+    ):
+        raise ValueError(
+            "gemm_allgather tensors must all reside on the context device "
+            f"{ctx.device}, got A={A.device}, B_shard={B_shard.device}, C={C.device}"
+        )
+    if not C.is_contiguous():
+        raise ValueError(
+            "gemm_allgather currently requires C to be contiguous so the "
+            "allgather output contract stays well-defined."
+        )
+    _require_tensor_on_heap(C, ctx=ctx, name="C")
+
+    if A.dtype != B_shard.dtype or B_shard.dtype != C.dtype:
+        raise ValueError(
+            "gemm_allgather currently requires A, B_shard, and C to share one dtype: "
+            f"got A={A.dtype}, B_shard={B_shard.dtype}, C={C.dtype}"
+        )
+    if (
+        not A.is_floating_point()
+        or not B_shard.is_floating_point()
+        or not C.is_floating_point()
+    ):
+        raise ValueError("gemm_allgather currently requires floating-point tensors.")
+
+    M, K = int(A.shape[0]), int(A.shape[1])
+    b_k, shard_cols = int(B_shard.shape[0]), int(B_shard.shape[1])
+    c_m, full_N = int(C.shape[0]), int(C.shape[1])
+    if b_k != K:
+        raise ValueError(f"B_shard.shape[0] must equal A.shape[1]: got {b_k} vs {K}")
+    if c_m != M:
+        raise ValueError(f"C.shape[0] must equal A.shape[0]: got {c_m} vs {M}")
+    if full_N <= 0:
+        raise ValueError(f"C.shape[1] must be positive, got {full_N}")
+    if full_N % ctx.world_size != 0:
+        raise ValueError(
+            "gemm_allgather requires C.shape[1] to be divisible by world_size: "
+            f"{full_N} % {ctx.world_size} != 0"
+        )
+    expected_shard_cols = full_N if ctx.world_size == 1 else full_N // ctx.world_size
+    if shard_cols != expected_shard_cols:
+        raise ValueError(
+            "gemm_allgather RHS shard columns must match the rank-local shard width: "
+            f"expected {expected_shard_cols}, got {shard_cols}"
+        )
+
+    return GemmAllGatherContract(
+        M=M,
+        K=K,
+        full_N=full_N,
+        shard_cols=shard_cols,
+        rank=ctx.rank,
+        world_size=ctx.world_size,
+        storage_kind=storage_kind,
+    )
+
+
 def _full_N_from_layout(*, cols: int, layout: LayoutKind, world_size: int) -> int:
     """Resolve logical full_N from one tensor shape + explicit layout."""
     if layout == "full":
@@ -1073,6 +1340,61 @@ def _single_process_gemm_reducescatter_key(
         plan.contract.output_cols,
         str(output.dtype),
         plan.implementation,
+        plan.storage_kind,
+    )
+
+
+def _execute_gemm_allgather_single_process(
+    plan: GemmAllGatherPlan,
+    *,
+    local_shard: Any,
+    gather_output: Any,
+    output: Any,
+) -> Any:
+    """Finalize GEMM + allgather once every local rank has staged its shard."""
+    key = _single_process_gemm_allgather_key(plan, output)
+    pending = _PENDING_GEMM_ALLGATHER_SINGLE_PROCESS.setdefault(key, {})
+    pending[plan.ctx.rank] = (plan, local_shard, gather_output, output)
+    if len(pending) < plan.contract.world_size:
+        return output
+
+    try:
+        for rank in range(plan.contract.world_size):
+            rank_plan, rank_local_shard, rank_gather_output, _ = pending[rank]
+            rank_plan.allgather_plan.execute(
+                rank_local_shard,
+                rank_gather_output,
+                validate=False,
+            )
+        for rank in range(plan.contract.world_size):
+            pending[rank][0].ctx.backend.synchronize()
+        for rank in range(plan.contract.world_size):
+            rank_plan, _, rank_gather_output, rank_output = pending[rank]
+            rank_output.copy_(
+                rank_gather_output.permute(1, 0, 2).reshape(
+                    rank_plan.contract.M,
+                    rank_plan.contract.full_N,
+                )
+            )
+    finally:
+        _PENDING_GEMM_ALLGATHER_SINGLE_PROCESS.pop(key, None)
+    return output
+
+
+def _single_process_gemm_allgather_key(
+    plan: GemmAllGatherPlan,
+    output: Any,
+) -> tuple[object, ...]:
+    """Return a process-local coordination key for staged single-process runs."""
+    heap_bases = tuple(int(base) for base in plan.ctx.heap_bases.tolist())
+    return (
+        "gemm_allgather",
+        heap_bases,
+        plan.contract.M,
+        plan.contract.K,
+        plan.contract.full_N,
+        plan.contract.shard_cols,
+        str(output.dtype),
         plan.storage_kind,
     )
 
@@ -1290,9 +1612,7 @@ def _require_gemm_allscatter_runtime(ctx: xtile.XTileContext) -> None:
 def _require_tensor_on_heap(tensor: Any, *, ctx: xtile.XTileContext, name: str) -> None:
     """Ensure the tensor resides in the attached symmetric heap."""
     heap = ctx.require_heap()
-    try:
-        heap.get_offset(int(tensor.data_ptr()))
-    except Exception as exc:
+    if not heap.owns_tensor(tensor):
         raise ValueError(
             f"{name} must reside in the attached symmetric heap for ctx rank {ctx.rank}"
-        ) from exc
+        )

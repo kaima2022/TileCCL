@@ -772,12 +772,10 @@ def _require_tensor_on_heap(
     name: str,
 ) -> None:
     """Ensure *tensor* resides in *heap*."""
-    try:
-        heap.get_offset(int(tensor.data_ptr()))
-    except Exception as exc:
+    if not heap.owns_tensor(tensor):
         raise ValueError(
             f"{name} must reside in the provided SymmetricHeap for rank {heap.rank}"
-        ) from exc
+        )
 
 
 def _require_device_remote_access_transport(

@@ -1500,3 +1500,110 @@ lib.cudaIpcOpenMemHandle.argtypes = [
 - 单进程 `create_all()` → ✅ 推荐路径（无需 IPC）
 - 多进程同节点 → ✅ PyTorch IPC 或 peer access
 - 多进程跨节点 → ⚠️ 待实现（需 UCX/GDR）
+
+---
+
+## Phase 17: allocator-first substrate v1 + gemm_allgather contract (2026-03-22)
+
+### Part A: allocator-first substrate v1
+
+本轮没有把 XTile 直接改成 Iris 的完整 canonical import/map substrate，但已经完成第一阶段收口：
+
+- 新增 `xtile/memory/allocators.py`
+  - `BaseSymmetricAllocator`
+  - `TorchBumpAllocator`
+  - `create_allocator(...)`
+- `SymmetricHeap` 不再把分配、ownership、cleanup 全硬编码在 heap 内部
+- 新增 `allocator_name` / `allocator_metadata()`
+- 新增 `import_external_tensor(...)` / `as_symmetric(...)`
+- `XTileContext` 新增 `is_symmetric(...)` / `as_symmetric(...)`
+- support matrix 新增：
+  - `memory["symmetric_heap_allocator_first_import_map"] = partial`
+  - `memory["symmetric_heap.external_import"]`
+
+这意味着当前状态已经从“完全没有 allocator-first”推进到“allocator boundary + external import surface 已存在”，但仍未达到 Iris 的 `export/import/map/access` 一体化底座。
+
+### Part B: gemm_allgather 独立 public contract
+
+本轮正式把历史上的 `gemm_allscatter.shard/full` 需求从错误挂靠里拆出来，落到独立的 `gemm_allgather(...)` host contract：
+
+- `A(M, K)`：完整 LHS
+- `B(K, N/world_size)`：本 rank RHS shard
+- `C(M, N)`：完整输出，且必须位于 attached symmetric heap
+
+当前实现主链：
+
+1. local GEMM materialize 到 heap-backed local shard workspace
+2. 复用高层 `allgather` plan 收集 `(world_size, M, shard_cols)`
+3. materialize 成 full output `C(M, N)`
+
+同时补了单进程多 GPU 顺序调用的 staged finalize，避免前几个 rank 先进入 allgather 时 peers 尚未写完本地 shard。
+
+### 实验与回归
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_ops.py \
+  tests/test_support.py \
+  tests/test_cli_support.py \
+  tests/test_benchmark_results.py
+```
+
+结果：
+
+- `73 passed in 7.45s`
+
+`gemm_allgather` multiprocess 真机验收：
+
+```bash
+pytest -q tests/test_gemm_allgather_multiprocess.py
+```
+
+结果：
+
+- `1 passed in 15.71s`
+
+结构化矩阵：
+
+```bash
+python -m tests.benchmarks.bench_gemm_allgather_multiprocess \
+  --M 128 --N 256 --K 128 \
+  --warmup 0 --iters 1 \
+  --timeout-sec 180 \
+  --output-json docs/generated/gemm_allgather_multiprocess_matrix.json
+```
+
+结果：
+
+- 总 case 数：`12`
+- 通过：`6`
+- 失败：`6`
+- 通过面：
+  - `auto/ctypes_ipc`
+  - forced `ctypes_ipc`
+  - `fp16 / bf16 / fp32`
+- 失败面：
+  - forced `pytorch_ipc`
+  - forced `peer_access_pointer_exchange`
+
+共享基础路径复测：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_allgather_multiprocess.py` → `1 passed in 19.17s`
+- opt-in `reduce_scatter/gemm_reducescatter` → `4 passed in 63.52s`
+
+### 结论
+
+- P0 现在更准确的状态是：**allocator-first substrate v1 已完成，但 canonical backend 仍未完成**
+- P1 现在更准确的状态是：**`gemm_allgather.shard/full` 独立 public contract 已完成，剩下的是 multiprocess/world-size/perf/stress 扩验，不是继续设计 API**
+- 当前最真实的支持面仍然是：**multiprocess `ctypes_ipc` only**

@@ -1,0 +1,309 @@
+"""Allocator backends for :mod:`xtile.memory.symmetric_heap`.
+
+The current repository still uses a single contiguous torch buffer as the
+actual heap storage, but the heap runtime should not hard-code allocation and
+ownership logic forever. This module introduces an allocator-first boundary so
+future import/map backends can plug into the same public heap surface.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+import math
+from typing import Optional
+
+import torch
+
+_ALIGN = 256
+
+
+def _round_up(value: int, alignment: int) -> int:
+    """Round *value* up to the next multiple of *alignment*."""
+    return (value + alignment - 1) & ~(alignment - 1)
+
+
+@dataclass(slots=True)
+class AllocationRecord:
+    """Bookkeeping for one tensor sub-allocation inside an allocator."""
+
+    offset: int
+    size: int
+    shape: tuple[int, ...]
+    dtype: torch.dtype
+
+
+class BaseSymmetricAllocator(ABC):
+    """Allocator interface used by :class:`xtile.memory.SymmetricHeap`."""
+
+    def __init__(
+        self,
+        *,
+        size: int,
+        device: torch.device,
+    ) -> None:
+        self._size = int(size)
+        self._device = device
+
+    @property
+    def size(self) -> int:
+        """Return the managed heap size in bytes."""
+        return self._size
+
+    @property
+    def device(self) -> torch.device:
+        """Return the device that owns this allocator."""
+        return self._device
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Short allocator identifier used in docs and metadata."""
+
+    @property
+    @abstractmethod
+    def buffer(self) -> torch.Tensor:
+        """Return the raw byte buffer backing the heap."""
+
+    @property
+    @abstractmethod
+    def base_ptr(self) -> int:
+        """Return the base device pointer of the managed heap."""
+
+    @property
+    @abstractmethod
+    def bytes_allocated(self) -> int:
+        """Return the number of bytes consumed by sub-allocations."""
+
+    @bytes_allocated.setter
+    @abstractmethod
+    def bytes_allocated(self, value: int) -> None:
+        """Override the current bump offset.
+
+        This remains writable to preserve compatibility with benchmark helpers
+        that reset heaps between runs.
+        """
+
+    @property
+    def bytes_free(self) -> int:
+        """Return remaining allocator capacity in bytes."""
+        return self.size - self.bytes_allocated
+
+    @property
+    @abstractmethod
+    def alloc_records(self) -> list[AllocationRecord]:
+        """Return the mutable allocation record list."""
+
+    @alloc_records.setter
+    @abstractmethod
+    def alloc_records(self, value: list[AllocationRecord]) -> None:
+        """Replace the mutable allocation record list."""
+
+    @abstractmethod
+    def allocate_tensor(
+        self,
+        shape: tuple[int, ...],
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        """Allocate one tensor view from the managed heap."""
+
+    @abstractmethod
+    def owns_tensor(self, tensor: torch.Tensor) -> bool:
+        """Return ``True`` when *tensor* resides inside this heap."""
+
+    @abstractmethod
+    def import_external_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Materialize an external tensor inside this allocator's heap."""
+
+    def cleanup(self) -> None:
+        """Release allocator-owned resources."""
+        # The current torch-backed allocator only owns one torch buffer, so
+        # dropping references is enough. More advanced allocators can override.
+        return None
+
+    def describe(self) -> dict[str, object]:
+        """Return structured allocator metadata for docs and diagnostics."""
+        return {
+            "name": self.name,
+            "device": str(self.device),
+            "size_bytes": self.size,
+            "bytes_allocated": self.bytes_allocated,
+            "bytes_free": self.bytes_free,
+        }
+
+
+class TorchBumpAllocator(BaseSymmetricAllocator):
+    """Torch-buffer allocator with aligned bump allocation.
+
+    This is intentionally conservative: it keeps XTile's current runtime model
+    intact while moving allocation, ownership checks, and external import
+    materialization behind an allocator boundary.
+    """
+
+    def __init__(
+        self,
+        *,
+        size: int,
+        device: torch.device,
+        existing_buffer: Optional[torch.Tensor] = None,
+        alignment: int = _ALIGN,
+    ) -> None:
+        super().__init__(size=size, device=device)
+        self._alignment = int(alignment)
+        if existing_buffer is None:
+            self._buffer: Optional[torch.Tensor] = torch.empty(
+                size,
+                dtype=torch.uint8,
+                device=device,
+            )
+        else:
+            if existing_buffer.dtype != torch.uint8:
+                raise ValueError(
+                    f"existing_buffer must use dtype=torch.uint8, got {existing_buffer.dtype}"
+                )
+            if tuple(existing_buffer.shape) != (size,):
+                raise ValueError(
+                    "existing_buffer shape must match heap size exactly: "
+                    f"{tuple(existing_buffer.shape)} != ({size},)"
+                )
+            if existing_buffer.device != device:
+                raise ValueError(
+                    f"existing_buffer device {existing_buffer.device} does not match {device}"
+                )
+            self._buffer = existing_buffer
+        self._bump_offset = 0
+        self._alloc_records: list[AllocationRecord] = []
+
+    @property
+    def name(self) -> str:
+        """Return the allocator identifier used across benchmarks/docs."""
+        return "torch_bump"
+
+    @property
+    def buffer(self) -> torch.Tensor:
+        """Return the raw heap buffer."""
+        if self._buffer is None:
+            raise RuntimeError("Allocator has been cleaned up.")
+        return self._buffer
+
+    @property
+    def base_ptr(self) -> int:
+        """Return the base pointer of the managed heap."""
+        return int(self.buffer.data_ptr())
+
+    @property
+    def bytes_allocated(self) -> int:
+        """Return the current bump offset."""
+        return self._bump_offset
+
+    @bytes_allocated.setter
+    def bytes_allocated(self, value: int) -> None:
+        """Override the current bump offset."""
+        offset = int(value)
+        if offset < 0 or offset > self.size:
+            raise ValueError(
+                f"bytes_allocated must stay within [0, {self.size}], got {offset}"
+            )
+        self._bump_offset = offset
+
+    @property
+    def alloc_records(self) -> list[AllocationRecord]:
+        """Return the mutable allocation record list."""
+        return self._alloc_records
+
+    @alloc_records.setter
+    def alloc_records(self, value: list[AllocationRecord]) -> None:
+        """Replace the mutable allocation record list."""
+        self._alloc_records = value
+
+    def allocate_tensor(
+        self,
+        shape: tuple[int, ...],
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        """Allocate one tensor view from the heap buffer."""
+        if self._buffer is None:
+            raise RuntimeError("Allocator has been cleaned up.")
+
+        numel = math.prod(shape)
+        element_size = torch.tensor([], dtype=dtype).element_size()
+        byte_size = numel * element_size
+        aligned_offset = _round_up(self._bump_offset, self._alignment)
+
+        if aligned_offset + byte_size > self.size:
+            raise RuntimeError(
+                "Symmetric heap exhausted via allocator "
+                f"{self.name}: requested {byte_size} bytes at offset "
+                f"0x{aligned_offset:x}, heap size is {self.size} bytes "
+                f"({self.size - aligned_offset} bytes remaining)"
+            )
+
+        byte_slice = self._buffer.narrow(0, aligned_offset, byte_size)
+        tensor = byte_slice.view(dtype).reshape(shape)
+        self._alloc_records.append(
+            AllocationRecord(
+                offset=aligned_offset,
+                size=byte_size,
+                shape=shape,
+                dtype=dtype,
+            )
+        )
+        self._bump_offset = aligned_offset + byte_size
+        return tensor
+
+    def owns_tensor(self, tensor: torch.Tensor) -> bool:
+        """Return ``True`` when *tensor* lies within the managed heap."""
+        if self._buffer is None:
+            return False
+        if tensor.device != self.device:
+            return False
+        if tensor.numel() == 0:
+            return True
+        ptr = int(tensor.data_ptr())
+        base = self.base_ptr
+        return base <= ptr < base + self.size
+
+    def import_external_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Copy one external device tensor onto the symmetric heap."""
+        if self._buffer is None:
+            raise RuntimeError("Allocator has been cleaned up.")
+        if tensor.device != self.device:
+            raise ValueError(
+                "import_external_tensor requires the tensor to already be on the "
+                f"allocator device {self.device}, got {tensor.device}"
+            )
+        if not tensor.is_contiguous():
+            raise ValueError(
+                "import_external_tensor requires a contiguous tensor. "
+                "Call .contiguous() before importing."
+            )
+        imported = self.allocate_tensor(tuple(int(dim) for dim in tensor.shape), tensor.dtype)
+        imported.copy_(tensor)
+        return imported
+
+    def cleanup(self) -> None:
+        """Release the backing buffer and local bookkeeping."""
+        self._buffer = None
+        self._bump_offset = 0
+        self._alloc_records.clear()
+
+
+def create_allocator(
+    *,
+    allocator_type: str,
+    size: int,
+    device: torch.device,
+    existing_buffer: Optional[torch.Tensor] = None,
+) -> BaseSymmetricAllocator:
+    """Return the allocator implementation requested by *allocator_type*."""
+    normalized = allocator_type.lower()
+    if normalized in {"torch", "torch_bump"}:
+        return TorchBumpAllocator(
+            size=size,
+            device=device,
+            existing_buffer=existing_buffer,
+        )
+    raise ValueError(
+        f"Unknown allocator_type {allocator_type!r}. Supported: 'torch', 'torch_bump'."
+    )
+

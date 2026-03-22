@@ -30,7 +30,6 @@ Supports two modes of operation:
 from __future__ import annotations
 
 import logging
-import math
 from typing import Optional
 
 import torch
@@ -38,6 +37,7 @@ import torch.distributed as dist
 
 from xtile.backends import get_backend, detect_hardware
 from xtile.backends.base import BackendInterface
+from xtile.memory.allocators import BaseSymmetricAllocator, create_allocator
 from xtile.utils.feature_gates import (
     FORCE_MULTIPROCESS_TRANSPORT_ENV,
     forced_multiprocess_transport,
@@ -69,32 +69,6 @@ def _resolve_backend(backend: str) -> tuple[str, BackendInterface]:
     return backend, get_backend(backend)
 
 
-# ---------------------------------------------------------------------------
-# Allocation record kept by the bump allocator
-# ---------------------------------------------------------------------------
-
-class _AllocRecord:
-    """Bookkeeping for a single tensor allocated within the heap."""
-
-    __slots__ = ("offset", "size", "shape", "dtype")
-
-    def __init__(self, offset: int, size: int, shape: tuple[int, ...], dtype: torch.dtype):
-        self.offset = offset
-        self.size = size
-        self.shape = shape
-        self.dtype = dtype
-
-    def __repr__(self) -> str:
-        return (
-            f"_AllocRecord(offset=0x{self.offset:x}, size={self.size}, "
-            f"shape={self.shape}, dtype={self.dtype})"
-        )
-
-
-# ---------------------------------------------------------------------------
-# SymmetricHeap
-# ---------------------------------------------------------------------------
-
 class SymmetricHeap:
     """Symmetric memory heap for multi-GPU communication.
 
@@ -123,7 +97,9 @@ class SymmetricHeap:
         world_size: int,
         backend: str = "auto",
         *,
+        allocator_type: str = "torch_bump",
         _peer_bases: Optional[list[int]] = None,
+        _existing_buffer: Optional[torch.Tensor] = None,
     ) -> None:
         if size <= 0:
             raise ValueError(f"Heap size must be positive, got {size}")
@@ -149,10 +125,15 @@ class SymmetricHeap:
             rank, _human_bytes(size),
         )
         self._device = torch.device("cuda", rank)
-        self._buffer: Optional[torch.Tensor] = torch.empty(
-            size, dtype=torch.uint8, device=self._device,
+        self._allocator_type: str = allocator_type
+        self._allocator: BaseSymmetricAllocator = create_allocator(
+            allocator_type=allocator_type,
+            size=size,
+            device=self._device,
+            existing_buffer=_existing_buffer,
         )
-        self._local_ptr: int = self._buffer.data_ptr()
+        self._buffer: Optional[torch.Tensor] = self._allocator.buffer
+        self._local_ptr: int = self._allocator.base_ptr
         logger.debug("Rank %d: local heap base = 0x%x", rank, self._local_ptr)
 
         # Build heap_bases ---------------------------------------------------
@@ -181,10 +162,6 @@ class SymmetricHeap:
             # Multi-process mode: try IPC, fall back to all_gather of pointers
             self._setup_multiprocess()
 
-        # Bump allocator state -----------------------------------------------
-        self._bump_offset: int = 0
-        self._alloc_records: list[_AllocRecord] = []
-
         # Cleanup flag -------------------------------------------------------
         self._cleaned_up: bool = False
 
@@ -196,6 +173,8 @@ class SymmetricHeap:
         size: int,
         world_size: int,
         backend: str = "auto",
+        *,
+        allocator_type: str = "torch_bump",
     ) -> list["SymmetricHeap"]:
         """Create symmetric heaps for ALL GPUs from a single process.
 
@@ -256,8 +235,15 @@ class SymmetricHeap:
             heap._backend_name = backend_name
             heap._backend = backend_impl
             heap._device = torch.device("cuda", rank)
-            heap._buffer = buffers[rank]
-            heap._local_ptr = bases[rank]
+            heap._allocator_type = allocator_type
+            heap._allocator = create_allocator(
+                allocator_type=allocator_type,
+                size=size,
+                device=heap._device,
+                existing_buffer=buffers[rank],
+            )
+            heap._buffer = heap._allocator.buffer
+            heap._local_ptr = heap._allocator.base_ptr
             heap._remote_ptrs = list(bases)
             heap._ipc_opened = []
             heap._heap_bases = torch.tensor(
@@ -266,14 +252,12 @@ class SymmetricHeap:
             heap._peer_buffers = list(buffers)
             heap._mode = "single_process"
             heap._transport_strategy = "peer_access"
-            heap._bump_offset = 0
-            heap._alloc_records = []
             heap._cleaned_up = False
             heaps.append(heap)
 
         logger.info(
-            "Created %d symmetric heaps (%s each) with peer access",
-            world_size, _human_bytes(size),
+            "Created %d symmetric heaps (%s each) with peer access via allocator=%s",
+            world_size, _human_bytes(size), allocator_type,
         )
         return heaps
 
@@ -474,34 +458,14 @@ class SymmetricHeap:
         """
         if self._buffer is None:
             raise RuntimeError("SymmetricHeap has been cleaned up")
-
-        numel = math.prod(shape)
-        element_size = torch.tensor([], dtype=dtype).element_size()
-        byte_size = numel * element_size
-
-        aligned_offset = _round_up(self._bump_offset, _ALIGN)
-
-        if aligned_offset + byte_size > self._size:
-            raise RuntimeError(
-                f"Symmetric heap exhausted on rank {self._rank}: "
-                f"requested {byte_size} bytes at offset 0x{aligned_offset:x}, "
-                f"but heap size is {self._size} bytes "
-                f"({self._size - aligned_offset} bytes remaining)"
-            )
-
-        byte_slice = self._buffer.narrow(0, aligned_offset, byte_size)
-        tensor = byte_slice.view(dtype).reshape(shape)
-
-        record = _AllocRecord(
-            offset=aligned_offset, size=byte_size, shape=shape, dtype=dtype,
-        )
-        self._alloc_records.append(record)
-        self._bump_offset = aligned_offset + byte_size
-
+        tensor = self._allocator.allocate_tensor(shape, dtype)
         logger.debug(
-            "Rank %d: allocated tensor %s %s at heap+0x%x (ptr 0x%x)",
-            self._rank, shape, dtype, aligned_offset,
-            self._local_ptr + aligned_offset,
+            "Rank %d: allocated tensor %s %s via allocator=%s (ptr 0x%x)",
+            self._rank,
+            shape,
+            dtype,
+            self._allocator.name,
+            int(tensor.data_ptr()),
         )
         return tensor
 
@@ -541,12 +505,12 @@ class SymmetricHeap:
     @property
     def bytes_allocated(self) -> int:
         """Number of bytes currently allocated in this heap."""
-        return self._bump_offset
+        return self._allocator.bytes_allocated
 
     @property
     def bytes_free(self) -> int:
         """Remaining free bytes in this heap."""
-        return self._size - self._bump_offset
+        return self._allocator.bytes_free
 
     @property
     def mode(self) -> str:
@@ -574,6 +538,31 @@ class SymmetricHeap:
                 f"rank={rank} out of range [0, {self._world_size})"
             )
         return self._peer_buffers[rank]
+
+    @property
+    def allocator_name(self) -> str:
+        """Return the active allocator backend identifier."""
+        return self._allocator.name
+
+    def allocator_metadata(self) -> dict[str, object]:
+        """Return structured allocator metadata for docs and benchmarks."""
+        return self._allocator.describe()
+
+    def owns_tensor(self, tensor: torch.Tensor) -> bool:
+        """Return ``True`` when *tensor* resides in this symmetric heap."""
+        return self._allocator.owns_tensor(tensor)
+
+    def is_symmetric(self, tensor: torch.Tensor) -> bool:
+        """Public alias for :meth:`owns_tensor`."""
+        return self.owns_tensor(tensor)
+
+    def import_external_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Materialize *tensor* inside the attached heap via the allocator."""
+        return self._allocator.import_external_tensor(tensor)
+
+    def as_symmetric(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Public alias for :meth:`import_external_tensor`."""
+        return self.import_external_tensor(tensor)
 
     # ---------------------------------------------------------- translation
 
@@ -632,6 +621,12 @@ class SymmetricHeap:
                         self._rank, ptr, exc_info=True,
                     )
 
+        try:
+            self._allocator.cleanup()
+        except Exception:
+            logger.debug(
+                "Rank %d: allocator cleanup raised", self._rank, exc_info=True,
+            )
         self._buffer = None
         self._local_ptr = 0
         self._heap_bases = None
@@ -660,8 +655,27 @@ class SymmetricHeap:
             f"SymmetricHeap(size={_human_bytes(self._size)}, "
             f"rank={self._rank}/{self._world_size}, "
             f"backend={self._backend_name!r}, "
-            f"allocated={_human_bytes(self._bump_offset)})"
+            f"allocator={self.allocator_name!r}, "
+            f"allocated={_human_bytes(self.bytes_allocated)})"
         )
+
+    @property
+    def _bump_offset(self) -> int:
+        """Backward-compatible alias for allocator bump offset."""
+        return self._allocator.bytes_allocated
+
+    @_bump_offset.setter
+    def _bump_offset(self, value: int) -> None:
+        self._allocator.bytes_allocated = value
+
+    @property
+    def _alloc_records(self):
+        """Backward-compatible alias for allocator allocation records."""
+        return self._allocator.alloc_records
+
+    @_alloc_records.setter
+    def _alloc_records(self, value) -> None:
+        self._allocator.alloc_records = value
 
 
 # ---------------------------------------------------------------------------

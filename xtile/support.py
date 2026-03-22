@@ -119,6 +119,11 @@ def describe_runtime_support(
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
     )
+    gemm_allgather_status = _describe_gemm_allgather_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+    )
     gemm_reducescatter_status = _describe_gemm_reducescatter_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
@@ -132,6 +137,7 @@ def describe_runtime_support(
 
     ops = {
         "gemm_allscatter": gemm_allscatter_status,
+        "gemm_allgather": gemm_allgather_status,
         "allgather": allgather_status,
         "reduce_scatter": SupportStatus(
             reduce_scatter_state,
@@ -156,6 +162,12 @@ def describe_runtime_support(
         "gemm_allscatter.shard/full": SupportStatus(
             "unsupported",
             "Rejected intentionally: current shard/shard gemm_allscatter execution is a peer-scatter contract, not a stable local-shard basis for full-output assembly.",
+        ),
+        "gemm_allgather.shard/full": SupportStatus(
+            gemm_allgather_status.state,
+            "Stable public host contract: A(M,K) full LHS, B(K,N/world_size) rank-local "
+            "RHS shard, C(M,N) full output. Runtime availability inherits the "
+            "validated allgather path for the current heap mode/transport.",
         ),
         "gemm_reducescatter.full/shard": SupportStatus(
             gemm_reducescatter_status.state,
@@ -190,8 +202,18 @@ def describe_runtime_support(
             transport_strategy=transport_strategy,
         ),
         "symmetric_heap_allocator_first_import_map": SupportStatus(
-            "unsupported",
-            "Allocator-first canonical import/map layer is not implemented yet.",
+            "partial" if has_heap else "unsupported",
+            "Allocator-backed heap runtime is implemented with a torch_bump backend "
+            "plus copy-based external import/as_symmetric materialization. "
+            "Canonical segmented peer import/map is still not implemented."
+            if has_heap
+            else "Allocator-first canonical import/map layer requires an attached heap.",
+        ),
+        "symmetric_heap.external_import": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes import_external_tensor()/as_symmetric() via the active allocator."
+            if has_heap
+            else "Attach a heap before using external import/as_symmetric helpers.",
         ),
     }
 
@@ -365,6 +387,46 @@ def _describe_gemm_allscatter_support(
         "including auto-selected coverage for bulk_sync, fused_sequential, "
         "producer_consumer, and wg_specialized. Broader larger-shape, stress, "
         "performance, and world-size validation is still pending.",
+    )
+
+
+def _describe_gemm_allgather_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+) -> SupportStatus:
+    """Describe high-level GEMM + allgather support conservatively."""
+    allgather_status = _describe_allgather_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+    )
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "High-level host contract exists, but execution requires an attached "
+            "symmetric heap for the local shard workspace and allgather output path.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "supported",
+            "High-level host plan is validated on single-process peer-access heaps "
+            "via local GEMM materialization plus allgather execution.",
+        )
+    if allgather_status.state == "unsupported":
+        return SupportStatus(
+            "unsupported",
+            multiprocess_device_remote_access_detail(
+                transport_strategy=transport_strategy,
+                operation="xtile.ops.gemm_allgather(...)",
+            ),
+        )
+    return SupportStatus(
+        "partial",
+        "Host GEMM + allgather contract is implemented. Current 2-GPU "
+        "correctness diagnostics pass for transport_strategy='ctypes_ipc', "
+        "but broader performance/stress/world-size validation is still pending.",
     )
 
 
