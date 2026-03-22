@@ -430,6 +430,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 34 交付物（2026-03-22）
+- [x] peer import access semantics：`ImportedPeerMemory` / `PeerMemoryMapEntry` 现显式带 `access_kind`
+- [x] transport vs access 解耦：当前 runtime 现在可区分 `transport`（bring-up 路径）与 `access_kind`（local / peer_direct / mapped_remote / remote_pointer）
+- [x] validator 增强：`_validate_peer_mapping_state(...)` 现在也校验 import record 的 `access_kind` 是否与 transport + local/remote 角色一致
+- [x] allocator/context/runtime artifact 回归：`tests/test_memory/test_symmetric_heap.py`、`tests/test_context.py`、`tests/test_benchmark_results.py` 已补 `access_kind` 断言
+- [x] substrate/support/CLI 回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `62 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

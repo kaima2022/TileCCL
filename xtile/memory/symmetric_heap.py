@@ -91,6 +91,7 @@ class PeerMemoryMapEntry:
     segment_kind: str
     allocator_name: str
     transport: str
+    access_kind: str
     mapped_ptr: int
     exported_base_ptr: int
     size_bytes: int
@@ -106,6 +107,7 @@ class PeerMemoryMapEntry:
             "segment_kind": self.segment_kind,
             "allocator_name": self.allocator_name,
             "transport": self.transport,
+            "access_kind": self.access_kind,
             "mapped_ptr": self.mapped_ptr,
             "exported_base_ptr": self.exported_base_ptr,
             "size_bytes": self.size_bytes,
@@ -381,6 +383,10 @@ class SymmetricHeap:
                 segment_kind=segment.segment_kind,
                 allocator_name=self.allocator_name,
                 transport=transport,
+                access_kind=self._allocator.peer_import_access_kind(
+                    transport=transport,
+                    is_local_rank=(rank == self._rank),
+                ),
                 mapped_ptr=int(ptr),
                 exported_base_ptr=int(ptr),
                 size_bytes=self._size,
@@ -405,6 +411,7 @@ class SymmetricHeap:
                     segment_kind=imported.segment_kind,
                     allocator_name=imported.allocator_name,
                     transport=imported.transport,
+                    access_kind=imported.access_kind,
                     mapped_ptr=imported.mapped_ptr,
                     exported_base_ptr=imported.exported_base_ptr,
                     size_bytes=imported.size_bytes,
@@ -432,6 +439,10 @@ class SymmetricHeap:
                         segment_kind=local_segment.segment_kind,
                         allocator_name=self.allocator_name,
                         transport=export.transport,
+                        access_kind=self._allocator.peer_import_access_kind(
+                            transport=export.transport,
+                            is_local_rank=True,
+                        ),
                         mapped_ptr=self._local_ptr,
                         exported_base_ptr=self._local_ptr,
                         size_bytes=self._size,
@@ -509,6 +520,15 @@ class SymmetricHeap:
                 raise RuntimeError(
                     f"{prefix} export transport {export.transport!r} "
                     f"does not match import transport {imported.transport!r}"
+                )
+            expected_access_kind = self._allocator.peer_import_access_kind(
+                transport=imported.transport,
+                is_local_rank=(peer_rank == self._rank),
+            )
+            if imported.access_kind != expected_access_kind:
+                raise RuntimeError(
+                    f"{prefix} import access_kind {imported.access_kind!r} "
+                    f"does not match expected access_kind {expected_access_kind!r}"
                 )
             if export.size_bytes != self._size:
                 raise RuntimeError(

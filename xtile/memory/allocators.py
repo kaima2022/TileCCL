@@ -97,6 +97,7 @@ class ImportedPeerMemory:
     segment_kind: str
     allocator_name: str
     transport: str
+    access_kind: str
     mapped_ptr: int
     exported_base_ptr: int
     size_bytes: int
@@ -112,6 +113,7 @@ class ImportedPeerMemory:
             "segment_kind": self.segment_kind,
             "allocator_name": self.allocator_name,
             "transport": self.transport,
+            "access_kind": self.access_kind,
             "mapped_ptr": self.mapped_ptr,
             "exported_base_ptr": self.exported_base_ptr,
             "size_bytes": self.size_bytes,
@@ -257,6 +259,27 @@ class BaseSymmetricAllocator(ABC):
     def external_tensor_import_mode(self) -> str:
         """Return the current external-tensor import mode."""
         return "copy"
+
+    def peer_import_access_kind(
+        self,
+        *,
+        transport: str,
+        is_local_rank: bool,
+    ) -> str:
+        """Return how imported peer memory is accessed for one transport."""
+        if is_local_rank:
+            return "local"
+        if transport == "peer_access":
+            return "peer_direct"
+        if transport in {"ctypes_ipc", "pytorch_ipc"}:
+            return "mapped_remote"
+        if transport == "peer_access_pointer_exchange":
+            return "remote_pointer"
+        if transport == "local_only":
+            return "local"
+        raise ValueError(
+            f"Unsupported transport {transport!r} for allocator {self.name!r}"
+        )
 
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
@@ -491,6 +514,10 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 segment_kind=export.segment_kind,
                 allocator_name=export.allocator_name,
                 transport=export.transport,
+                access_kind=self.peer_import_access_kind(
+                    transport=export.transport,
+                    is_local_rank=False,
+                ),
                 mapped_ptr=mapped_ptr,
                 exported_base_ptr=export.base_ptr,
                 size_bytes=export.size_bytes,
@@ -510,6 +537,10 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 segment_kind=export.segment_kind,
                 allocator_name=export.allocator_name,
                 transport=export.transport,
+                access_kind=self.peer_import_access_kind(
+                    transport=export.transport,
+                    is_local_rank=False,
+                ),
                 mapped_ptr=storage.data_ptr(),
                 exported_base_ptr=export.base_ptr,
                 size_bytes=export.size_bytes,
@@ -528,6 +559,10 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
                 segment_kind=export.segment_kind,
                 allocator_name=export.allocator_name,
                 transport=export.transport,
+                access_kind=self.peer_import_access_kind(
+                    transport=export.transport,
+                    is_local_rank=False,
+                ),
                 mapped_ptr=export.payload,
                 exported_base_ptr=export.base_ptr,
                 size_bytes=export.size_bytes,

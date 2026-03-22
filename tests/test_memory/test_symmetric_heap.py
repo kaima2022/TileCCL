@@ -54,6 +54,24 @@ class _FakeValidationAllocator:
     def primary_segment(self):
         return self._segment
 
+    def peer_import_access_kind(
+        self,
+        *,
+        transport: str,
+        is_local_rank: bool,
+    ) -> str:
+        if is_local_rank:
+            return "local"
+        if transport == "peer_access":
+            return "peer_direct"
+        if transport in {"ctypes_ipc", "pytorch_ipc"}:
+            return "mapped_remote"
+        if transport == "peer_access_pointer_exchange":
+            return "remote_pointer"
+        if transport == "local_only":
+            return "local"
+        raise AssertionError(f"Unhandled transport {transport!r}")
+
 
 def _make_peer_export(
     *,
@@ -91,8 +109,21 @@ def _make_peer_import(
     segment_kind: str = "device_heap",
     allocator_name: str = "torch_bump",
     cleanup_kind: str = "ipc_handle",
+    access_kind: str | None = None,
 ):
     from xtile.memory.allocators import ImportedPeerMemory
+
+    if access_kind is None:
+        if transport == "local_only":
+            access_kind = "local"
+        elif transport == "peer_access":
+            access_kind = "local" if rank == 0 else "peer_direct"
+        elif transport in {"ctypes_ipc", "pytorch_ipc"}:
+            access_kind = "local" if rank == 0 else "mapped_remote"
+        elif transport == "peer_access_pointer_exchange":
+            access_kind = "local" if rank == 0 else "remote_pointer"
+        else:
+            raise AssertionError(f"Unhandled transport {transport!r}")
 
     return ImportedPeerMemory(
         peer_rank=rank,
@@ -100,6 +131,7 @@ def _make_peer_import(
         segment_kind=segment_kind,
         allocator_name=allocator_name,
         transport=transport,
+        access_kind=access_kind,
         mapped_ptr=mapped_ptr,
         exported_base_ptr=exported_base_ptr,
         size_bytes=size,
@@ -389,6 +421,39 @@ class TestSymmetricHeapUnit:
         ]
 
         with pytest.raises(RuntimeError, match="export peer_rank 0"):
+            heap._validate_peer_mapping_state(
+                peer_exports=peer_exports,
+                peer_imports=peer_imports,
+            )
+
+    def test_validate_peer_mapping_state_rejects_access_kind_mismatch(
+        self,
+    ) -> None:
+        """Imported peer records must declare the expected access semantics."""
+        heap = _make_validation_heap()
+
+        peer_exports = [
+            _make_peer_export(rank=0, base_ptr=heap._local_ptr, size=heap._size),
+            _make_peer_export(rank=1, base_ptr=0x2000, size=heap._size),
+        ]
+        peer_imports = [
+            _make_peer_import(
+                rank=0,
+                mapped_ptr=heap._local_ptr,
+                exported_base_ptr=heap._local_ptr,
+                size=heap._size,
+                cleanup_kind="none",
+            ),
+            _make_peer_import(
+                rank=1,
+                mapped_ptr=0x2000,
+                exported_base_ptr=0x2000,
+                size=heap._size,
+                access_kind="peer_direct",
+            ),
+        ]
+
+        with pytest.raises(RuntimeError, match="access_kind"):
             heap._validate_peer_mapping_state(
                 peer_exports=peer_exports,
                 peer_imports=peer_imports,
@@ -744,6 +809,7 @@ class TestSymmetricHeapUnit:
         assert metadata[0]["segment_id"] == "heap"
         assert metadata[0]["segment_kind"] == "device_heap"
         assert metadata[0]["transport"] == "local_only"
+        assert metadata[0]["access_kind"] == "local"
         assert metadata[0]["mapped_ptr"] == symmetric_heap.local_base
         assert metadata[0]["exported_base_ptr"] == symmetric_heap.local_base
         assert metadata[0]["size_bytes"] == symmetric_heap.size
@@ -763,6 +829,7 @@ class TestSymmetricHeapUnit:
         assert imports[0]["peer_rank"] == 0
         assert imports[0]["segment_id"] == "heap"
         assert imports[0]["transport"] == "local_only"
+        assert imports[0]["access_kind"] == "local"
         assert imports[0]["mapped_ptr"] == symmetric_heap.local_base
         assert imports[0]["exported_base_ptr"] == symmetric_heap.local_base
         assert imports[0]["cleanup_kind"] == "none"
@@ -832,6 +899,7 @@ class TestSymmetricHeapUnit:
         assert imported.segment_id == "heap"
         assert imported.segment_kind == "device_heap"
         assert imported.transport == "ctypes_ipc"
+        assert imported.access_kind == "mapped_remote"
         assert imported.mapped_ptr == 0x12345000
         assert imported.exported_base_ptr == symmetric_heap.local_base
         assert imported.cleanup_kind == "ipc_handle"
@@ -863,6 +931,7 @@ class TestSymmetricHeapUnit:
         assert imported.peer_rank == 0
         assert imported.segment_id == "heap"
         assert imported.transport == "peer_access_pointer_exchange"
+        assert imported.access_kind == "remote_pointer"
         assert imported.mapped_ptr == symmetric_heap.local_base
         assert imported.cleanup_kind == "none"
         assert imported.cleanup_resource is None
@@ -932,8 +1001,10 @@ class TestSymmetricHeapMultiGPU:
             assert {entry["segment_id"] for entry in metadata} == {"heap"}
             assert {entry["segment_kind"] for entry in metadata} == {"device_heap"}
             assert {entry["transport"] for entry in metadata} == {"peer_access"}
+            assert {entry["access_kind"] for entry in metadata} == {"local", "peer_direct"}
             assert {entry["transport"] for entry in export_metadata} == {"peer_access"}
             assert {entry["transport"] for entry in imports} == {"peer_access"}
+            assert {entry["access_kind"] for entry in imports} == {"local", "peer_direct"}
             assert all(entry["size_bytes"] == heaps[0].size for entry in metadata)
             assert metadata[0]["is_local_rank"] is True
             assert metadata[1]["is_local_rank"] is False

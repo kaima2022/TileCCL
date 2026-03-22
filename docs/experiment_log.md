@@ -2590,3 +2590,62 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - allocator metadata 现在已经不只暴露 capability flags，也开始暴露更直接的语义模式字段
 - 这一轮依然属于 P0 substrate 收口，不代表 external mapping 已经实现
+
+### Part S: peer import metadata now distinguishes transport from access semantics (2026-03-22)
+
+继续沿着 P0-next 往 canonical substrate 推，这一轮收的是 peer import/map 语义。
+
+此前 runtime metadata 已经有：
+
+- `transport`
+- `cleanup_kind`
+- `segment_id` / `segment_kind`
+
+但它还不能直接表达“这段 peer memory 最终是怎么被访问的”。
+
+本轮完成：
+
+- `ImportedPeerMemory.access_kind`
+- `PeerMemoryMapEntry.access_kind`
+- allocator 新增 `peer_import_access_kind(...)`
+- 当前语义显式化为：
+  - `local`
+  - `peer_direct`
+  - `mapped_remote`
+  - `remote_pointer`
+- `SymmetricHeap._validate_peer_mapping_state(...)` 现在会校验 `access_kind` 是否和 `transport + is_local_rank` 一致
+
+这一步的意义是：
+
+- `transport` 和 `access_kind` 不再混在一个字段里
+- runtime metadata 终于能显式回答“它是怎么 bring-up 的”和“它最终怎么被访问”的区别
+- 这比单纯记录 `transport` 更接近 allocator/export/import/map/access 的 canonical substrate
+
+这一步没有做的事情：
+
+- 没有实现新的 transport
+- 没有放开新的 public support 面
+- 没有实现 FD/DMA-BUF external mapping
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `62 passed in 5.92s`
+- `allgather + gemm_allgather` → `2 passed in 39.52s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 67.09s`
+
+结论：
+
+- peer import/map metadata 现在已经不只描述 transport，还开始描述 access semantics
+- 这一步是往 unified access substrate 靠近的一小步，但离 external mapping / segmented import-map 仍有距离
