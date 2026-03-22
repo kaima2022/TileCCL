@@ -52,6 +52,7 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert heap_metadata["transport_strategy"] == "local_only"
         assert heap_metadata["allocator"]["name"] == "torch_bump"
         assert heap_metadata["allocator"]["capabilities"]["external_mapping"] is False
+        assert heap_metadata["allocator"]["external_tensor_import_mode"] == "copy"
         assert len(heap_metadata["segments"]) == 1
         assert heap_metadata["segments"][0]["segment_id"] == "heap"
         assert len(heap_metadata["peer_exports"]) == 1

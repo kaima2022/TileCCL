@@ -706,6 +706,7 @@ class TestSymmetricHeapUnit:
         assert metadata["capabilities"]["external_mapping"] is False
         assert metadata["capabilities"]["fd_passing"] is False
         assert metadata["capabilities"]["dmabuf_mapping"] is False
+        assert metadata["external_tensor_import_mode"] == "copy"
         assert len(metadata["segments"]) == 1
         assert metadata["segments"][0]["segment_id"] == "heap"
         assert metadata["segments"][0]["segment_kind"] == "device_heap"

@@ -87,6 +87,7 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["has_heap"] is True
         assert payload["heap"]["allocator"]["name"] == "torch_bump"
         assert payload["heap"]["allocator"]["capabilities"]["external_mapping"] is False
+        assert payload["heap"]["allocator"]["external_tensor_import_mode"] == "copy"
         assert payload["heap"]["segments"][0]["segment_id"] == "heap"
         assert payload["heap"]["peer_exports"][0]["peer_rank"] == 0
         assert payload["heap"]["peer_exports"][0]["segment_id"] == "heap"

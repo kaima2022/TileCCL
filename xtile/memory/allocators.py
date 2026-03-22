@@ -254,6 +254,10 @@ class BaseSymmetricAllocator(ABC):
             "dmabuf_mapping": False,
         }
 
+    def external_tensor_import_mode(self) -> str:
+        """Return the current external-tensor import mode."""
+        return "copy"
+
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
@@ -265,6 +269,7 @@ class BaseSymmetricAllocator(ABC):
             "bytes_free": self.bytes_free,
             "segment_count": len(segments),
             "capabilities": self.capabilities(),
+            "external_tensor_import_mode": self.external_tensor_import_mode(),
             "segments": [segment.to_dict() for segment in segments],
         }
 

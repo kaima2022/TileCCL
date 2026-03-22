@@ -422,6 +422,14 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 33 交付物（2026-03-22）
+- [x] external import mode metadata：allocator metadata 现显式带 `external_tensor_import_mode`
+- [x] 当前真实语义落账：`torch_bump` allocator 现在明确声明 `external_tensor_import_mode = "copy"`
+- [x] allocator/context/runtime artifact 回归：`tests/test_memory/test_symmetric_heap.py`、`tests/test_context.py`、`tests/test_benchmark_results.py` 现显式断言该字段
+- [x] substrate/support/CLI 回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `61 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

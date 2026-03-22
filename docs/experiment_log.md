@@ -2534,3 +2534,59 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - peer state 的 host-side 使用现在更少依赖内部表示细节
 - 这一轮继续提升了可维护性，但 canonical backend 本体仍未完成
+
+### Part R: allocator metadata now states the external tensor import mode explicitly (2026-03-22)
+
+继续按最佳实践推进，这一轮收的是 allocator metadata 口径。
+
+之前 runtime metadata 里已经有：
+
+- `external_import_copy = true`
+- `external_mapping = false`
+
+但“当前实际 external tensor import 是按什么模式工作”的信息还需要消费方自己推断。
+
+本轮完成：
+
+- `BaseSymmetricAllocator.external_tensor_import_mode()`
+- allocator metadata 新增 `external_tensor_import_mode`
+- 当前 `torch_bump` allocator 明确返回 `copy`
+- 对应回归已补到：
+  - `tests/test_memory/test_symmetric_heap.py`
+  - `tests/test_context.py`
+  - `tests/test_benchmark_results.py`
+
+这一步的意义是：
+
+- 现在 runtime metadata 可以直接表达“当前 external tensor import 的真实模式”
+- 文档 / artifact / 代码不需要再通过 capability 组合去推断 “copy-based import 已有”
+- 这也为后续如果引入 zero-copy external mapping 留好了更稳定的 schema 演进位置
+
+这一步没有做的事情：
+
+- 没有实现 zero-copy external mapping
+- 没有改变 `external_mapping=false`
+- 没有改变 transport 支持面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `61 passed in 6.15s`
+- `allgather + gemm_allgather` → `2 passed in 36.65s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 62.46s`
+
+结论：
+
+- allocator metadata 现在已经不只暴露 capability flags，也开始暴露更直接的语义模式字段
+- 这一轮依然属于 P0 substrate 收口，不代表 external mapping 已经实现
