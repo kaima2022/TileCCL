@@ -1647,3 +1647,84 @@ python -m tests.benchmarks.bench_gemm_allgather_multiprocess \
   - `fp32`
 
 这组结果不改变“全 transport 矩阵仍然只有 `6/12`”这一事实，但它把当前正式支持面内的证据从“单 shape baseline”推进到了“**双 shape、三 dtype、双 transport selection 的 12/12 通过**”。
+
+### Part D: allocator-owned peer export/import surface (2026-03-22)
+
+为了让 P0 不再停留在“只是抽了 allocator 类”，本轮继续把 multiprocess heap bring-up 往 allocator-first canonical substrate 推进了一步。
+
+新增内容：
+
+- `PeerMemoryExportDescriptor`
+- `ImportedPeerMemory`
+- `BaseSymmetricAllocator.export_peer_memory(...)`
+- `BaseSymmetricAllocator.import_peer_memory(...)`
+- `TorchBumpAllocator` 的三种 transport 导出/导入实现：
+  - `ctypes_ipc`
+  - `pytorch_ipc`
+  - `peer_access_pointer_exchange`
+
+`SymmetricHeap` 的变化：
+
+- `_setup_multiprocess_ctypes_ipc()` 不再自己直接拼 bytes handle all-gather + open
+- `_setup_multiprocess_pytorch_ipc()` 不再自己直接持有 `_share_cuda_()` / `_new_shared_cuda(...)` 细节
+- `_setup_multiprocess_peer_access_pointer_exchange()` 不再自己直接做裸指针 object exchange
+- 三条路径现在统一走：
+  1. allocator `export_peer_memory(...)`
+  2. rank 间交换 `PeerMemoryExportDescriptor`
+  3. allocator `import_peer_memory(...)`
+
+这一步的意义不是“P0 已完成”，而是：
+
+- multiprocess transport 的导出/导入语义已经开始从 `SymmetricHeap` 内部实现细节，收口成 allocator surface
+- 后续如果要继续向 Iris 对齐 `segment metadata / fd passing / dma-buf map/access`，现在已经有明确落点
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_ops.py \
+  tests/test_support.py \
+  tests/test_cli_support.py \
+  tests/test_benchmark_results.py
+```
+
+结果：
+
+- `75 passed in 8.37s`
+
+multiprocess 主路径回归：
+
+```bash
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `allgather + gemm_allgather` → `2 passed in 35.47s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 66.66s`
+
+同时重跑了 `gemm_allgather` 的全 transport 官方矩阵：
+
+```bash
+python -m tests.benchmarks.bench_gemm_allgather_multiprocess \
+  --M 128 --N 256 --K 128 \
+  --warmup 0 --iters 1 \
+  --timeout-sec 180 \
+  --output-json docs/generated/gemm_allgather_multiprocess_matrix.json
+```
+
+结果保持不变：
+
+- `12` cases
+- `6` pass
+- `6` fail
+- `ctypes_ipc` 通过
+- forced `pytorch_ipc / peer_access_pointer_exchange` 仍失败
+
+因此，这一步说明：
+
+- P0 的 allocator-first 不是只停留在 local allocation 层了，已经开始接管 multiprocess peer export/import
+- P1 的 `gemm_allgather` 支持面没有被这次 P0 收口破坏

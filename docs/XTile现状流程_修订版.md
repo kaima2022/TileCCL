@@ -771,6 +771,10 @@ contracts = {
 
 - `xtile.memory.allocators` 已建立 allocator backend 抽象。
 - 默认 allocator backend 已显式命名为 `torch_bump`，而不是继续把分配细节完全藏在 `SymmetricHeap` 私有实现里。
+- multiprocess heap bring-up 已开始通过 allocator-owned export/import surface 收口：
+  - `export_peer_memory(...)`
+  - `import_peer_memory(...)`
+  - `PeerMemoryExportDescriptor`
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
 - support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import` 状态。
@@ -780,7 +784,7 @@ contracts = {
 - **allocator-first 的第一阶段已经实现。**
 - **canonical import/map 还没有实现。**
 
-也就是说，XTile 现在已经具备 allocator boundary 与 external import surface，但还没有做到 Iris 那种 allocator/export/import/map/access 一体化底座。
+也就是说，XTile 现在已经具备 allocator boundary、allocator-owned peer export/import surface 与 external import surface，但还没有做到 Iris 那种 allocator/export/import/map/access 一体化底座。
 
 #### 5. `gemm_allgather(...)` 的第一版基础工作已经完成
 

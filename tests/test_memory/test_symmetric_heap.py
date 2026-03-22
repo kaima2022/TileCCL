@@ -383,6 +383,70 @@ class TestSymmetricHeapUnit:
         external.zero_()
         assert not torch.allclose(imported, external)
 
+    def test_allocator_exports_structured_ctypes_peer_descriptor(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """The allocator should own the structured export/import boundary."""
+
+        class _FakeBackend:
+            def __init__(self) -> None:
+                self.seen_ptr: int | None = None
+                self.opened_handle: bytes | None = None
+
+            def get_ipc_handle(self, ptr: int) -> bytes:
+                self.seen_ptr = ptr
+                return f"ipc:{ptr}".encode()
+
+            def open_ipc_handle(self, handle: bytes) -> int:
+                self.opened_handle = handle
+                return 0x12345000
+
+        backend = _FakeBackend()
+        export = symmetric_heap._allocator.export_peer_memory(
+            transport="ctypes_ipc",
+            backend=backend,  # type: ignore[arg-type]
+        )
+
+        assert backend.seen_ptr == symmetric_heap.local_base
+        assert export.allocator_name == symmetric_heap.allocator_name
+        assert export.transport == "ctypes_ipc"
+        assert export.size_bytes == symmetric_heap.size
+        assert export.base_ptr == symmetric_heap.local_base
+        assert export.to_dict()["payload_type"] == "bytes"
+
+        imported = symmetric_heap._allocator.import_peer_memory(
+            export,
+            backend=backend,  # type: ignore[arg-type]
+        )
+        assert backend.opened_handle == export.payload
+        assert imported.mapped_ptr == 0x12345000
+        assert imported.cleanup_resource == 0x12345000
+
+    def test_allocator_exports_peer_pointer_exchange_descriptor(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """The fallback peer-pointer path should also use allocator descriptors."""
+
+        class _UnusedBackend:
+            pass
+
+        backend = _UnusedBackend()
+        export = symmetric_heap._allocator.export_peer_memory(
+            transport="peer_access_pointer_exchange",
+            backend=backend,  # type: ignore[arg-type]
+        )
+        imported = symmetric_heap._allocator.import_peer_memory(
+            export,
+            backend=backend,  # type: ignore[arg-type]
+        )
+
+        assert export.transport == "peer_access_pointer_exchange"
+        assert export.payload == symmetric_heap.local_base
+        assert imported.mapped_ptr == symmetric_heap.local_base
+        assert imported.cleanup_resource is None
+
 
 # ---------------------------------------------------------------------------
 # Multi-GPU tests (require >= 2 GPUs)

@@ -291,6 +291,16 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] 当前正式支持面 `auto/ctypes_ipc + forced ctypes_ipc` 的 `2 shapes × 3 dtypes × 2 transport selections` 真机结果为 `12/12` 全通过
 - [x] 结构化 artifact：新增 `docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json`
 
+### Phase 19 交付物（2026-03-22）
+- [x] allocator-owned peer export/import surface：新增 `PeerMemoryExportDescriptor` / `ImportedPeerMemory`
+- [x] `BaseSymmetricAllocator` / `TorchBumpAllocator` 新增 `export_peer_memory(...)` / `import_peer_memory(...)`
+- [x] `SymmetricHeap` multiprocess 建堆收口：`ctypes_ipc` / `pytorch_ipc` / `peer_access_pointer_exchange` 的导出/导入不再直接散落在 heap 内部，而是统一走 allocator surface
+- [x] allocator 单测：`tests/test_memory/test_symmetric_heap.py` 新增 structured export/import 回归
+- [x] allocator-first 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_ops.py tests/test_support.py tests/test_cli_support.py tests/test_benchmark_results.py` → `75 passed`
+- [x] multiprocess 主路径回归：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+- [x] `gemm_allgather` 全 transport 官方矩阵复测：`docs/generated/gemm_allgather_multiprocess_matrix.json` 仍保持 `12 cases = 6 pass / 6 fail`，行为与收口前一致
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

@@ -2,6 +2,9 @@
   "benchmark": "gemm_allgather_multiprocess_matrix",
   "cases": [
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all",
       "dtype": "float16",
       "rank_payloads": [
@@ -16,9 +19,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.7884479761123657,
-            "mean_ms": 0.7884479761123657,
-            "min_ms": 0.7884479761123657
+            "max_ms": 0.6063359975814819,
+            "mean_ms": 0.6063359975814819,
+            "min_ms": 0.6063359975814819
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -26,9 +29,9 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 876.9912719726562,
-            "mean_ms": 876.9912719726562,
-            "min_ms": 876.9912719726562
+            "max_ms": 751.3671264648438,
+            "mean_ms": 751.3671264648438,
+            "min_ms": 751.3671264648438
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -44,9 +47,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.7911360263824463,
-            "mean_ms": 0.7911360263824463,
-            "min_ms": 0.7911360263824463
+            "max_ms": 0.5690240263938904,
+            "mean_ms": 0.5690240263938904,
+            "min_ms": 0.5690240263938904
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -54,9 +57,9 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 876.9484252929688,
-            "mean_ms": 876.9484252929688,
-            "min_ms": 876.9484252929688
+            "max_ms": 751.4099731445312,
+            "mean_ms": 751.4099731445312,
+            "min_ms": 751.4099731445312
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -66,18 +69,21 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 876.9912719726562, \"min_ms\": 876.9912719726562, \"max_ms\": 876.9912719726562}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7884479761123657, \"min_ms\": 0.7884479761123657, \"max_ms\": 0.7884479761123657}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 876.9484252929688, \"min_ms\": 876.9484252929688, \"max_ms\": 876.9484252929688}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7911360263824463, \"min_ms\": 0.7911360263824463, \"max_ms\": 0.7911360263824463}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 751.3671264648438, \"min_ms\": 751.3671264648438, \"max_ms\": 751.3671264648438}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6063359975814819, \"min_ms\": 0.6063359975814819, \"max_ms\": 0.6063359975814819}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 751.4099731445312, \"min_ms\": 751.4099731445312, \"max_ms\": 751.4099731445312}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.5690240263938904, \"min_ms\": 0.5690240263938904, \"max_ms\": 0.5690240263938904}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.789792001247406,
+        "high_level_mean_ms_across_ranks": 0.5876800119876862,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.0026880502700805664,
+        "max_rank_skew_ms": 0.03731197118759155,
         "mode": "multiprocess",
-        "plan_mean_ms_across_ranks": 876.9698486328125,
+        "plan_mean_ms_across_ranks": 751.3885498046875,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all --force-transport ctypes_ipc",
       "dtype": "float16",
       "rank_payloads": [
@@ -92,9 +98,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.8245440125465393,
-            "mean_ms": 0.8245440125465393,
-            "min_ms": 0.8245440125465393
+            "max_ms": 0.7335360050201416,
+            "mean_ms": 0.7335360050201416,
+            "min_ms": 0.7335360050201416
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -102,11 +108,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 764.0826416015625,
-            "mean_ms": 764.0826416015625,
-            "min_ms": 764.0826416015625
+            "max_ms": 896.7404174804688,
+            "mean_ms": 896.7404174804688,
+            "min_ms": 896.7404174804688
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         },
         {
@@ -120,9 +126,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.8119680285453796,
-            "mean_ms": 0.8119680285453796,
-            "min_ms": 0.8119680285453796
+            "max_ms": 0.7603200078010559,
+            "mean_ms": 0.7603200078010559,
+            "min_ms": 0.7603200078010559
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -130,11 +136,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 764.1925659179688,
-            "mean_ms": 764.1925659179688,
-            "min_ms": 764.1925659179688
+            "max_ms": 896.75390625,
+            "mean_ms": 896.75390625,
+            "min_ms": 896.75390625
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -142,36 +148,45 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 764.0826416015625, \"min_ms\": 764.0826416015625, \"max_ms\": 764.0826416015625}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.8245440125465393, \"min_ms\": 0.8245440125465393, \"max_ms\": 0.8245440125465393}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 764.1925659179688, \"min_ms\": 764.1925659179688, \"max_ms\": 764.1925659179688}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.8119680285453796, \"min_ms\": 0.8119680285453796, \"max_ms\": 0.8119680285453796}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 896.7404174804688, \"min_ms\": 896.7404174804688, \"max_ms\": 896.7404174804688}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7335360050201416, \"min_ms\": 0.7335360050201416, \"max_ms\": 0.7335360050201416}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 896.75390625, \"min_ms\": 896.75390625, \"max_ms\": 896.75390625}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7603200078010559, \"min_ms\": 0.7603200078010559, \"max_ms\": 0.7603200078010559}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.8182560205459595,
+        "high_level_mean_ms_across_ranks": 0.7469280064105988,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.012575984001159668,
+        "max_rank_skew_ms": 0.026784002780914307,
         "mode": "multiprocess",
-        "plan_mean_ms_across_ranks": 764.1376037597656,
+        "plan_mean_ms_across_ranks": 896.7471618652344,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all --force-transport pytorch_ipc",
       "dtype": "float16",
       "requested_transport": "pytorch_ipc",
       "returncode": 1,
       "status": "failed",
-      "stderr": "W0322 18:03:41.711000 37782 torch/multiprocessing/spawn.py:169] Terminating process 38015 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
+      "stderr": "W0322 19:43:52.930000 377692 torch/multiprocessing/spawn.py:169] Terminating process 377939 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
       "stdout": ""
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all --force-transport peer_access_pointer_exchange",
       "dtype": "float16",
       "requested_transport": "peer_access_pointer_exchange",
       "returncode": 1,
       "status": "failed",
-      "stderr": "W0322 18:03:53.729000 38723 torch/multiprocessing/spawn.py:169] Terminating process 38989 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
+      "stderr": "W0322 19:44:06.686000 378625 torch/multiprocessing/spawn.py:169] Terminating process 378894 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
       "stdout": ""
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all",
       "dtype": "bfloat16",
       "rank_payloads": [
@@ -186,9 +201,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.7348160147666931,
-            "mean_ms": 0.7348160147666931,
-            "min_ms": 0.7348160147666931
+            "max_ms": 0.7050880193710327,
+            "mean_ms": 0.7050880193710327,
+            "min_ms": 0.7050880193710327
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -196,9 +211,9 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 851.5191650390625,
-            "mean_ms": 851.5191650390625,
-            "min_ms": 851.5191650390625
+            "max_ms": 589.337158203125,
+            "mean_ms": 589.337158203125,
+            "min_ms": 589.337158203125
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -214,9 +229,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.744159996509552,
-            "mean_ms": 0.744159996509552,
-            "min_ms": 0.744159996509552
+            "max_ms": 0.7140160202980042,
+            "mean_ms": 0.7140160202980042,
+            "min_ms": 0.7140160202980042
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -224,9 +239,9 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 851.5137329101562,
-            "mean_ms": 851.5137329101562,
-            "min_ms": 851.5137329101562
+            "max_ms": 589.371337890625,
+            "mean_ms": 589.371337890625,
+            "min_ms": 589.371337890625
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -236,18 +251,21 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 851.5191650390625, \"min_ms\": 851.5191650390625, \"max_ms\": 851.5191650390625}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7348160147666931, \"min_ms\": 0.7348160147666931, \"max_ms\": 0.7348160147666931}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 851.5137329101562, \"min_ms\": 851.5137329101562, \"max_ms\": 851.5137329101562}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.744159996509552, \"min_ms\": 0.744159996509552, \"max_ms\": 0.744159996509552}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 589.337158203125, \"min_ms\": 589.337158203125, \"max_ms\": 589.337158203125}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7050880193710327, \"min_ms\": 0.7050880193710327, \"max_ms\": 0.7050880193710327}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 589.371337890625, \"min_ms\": 589.371337890625, \"max_ms\": 589.371337890625}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7140160202980042, \"min_ms\": 0.7140160202980042, \"max_ms\": 0.7140160202980042}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.7394880056381226,
+        "high_level_mean_ms_across_ranks": 0.7095520198345184,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.009343981742858887,
+        "max_rank_skew_ms": 0.008928000926971436,
         "mode": "multiprocess",
-        "plan_mean_ms_across_ranks": 851.5164489746094,
+        "plan_mean_ms_across_ranks": 589.354248046875,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all --force-transport ctypes_ipc",
       "dtype": "bfloat16",
       "rank_payloads": [
@@ -262,9 +280,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.7587839961051941,
-            "mean_ms": 0.7587839961051941,
-            "min_ms": 0.7587839961051941
+            "max_ms": 0.5694079995155334,
+            "mean_ms": 0.5694079995155334,
+            "min_ms": 0.5694079995155334
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -272,11 +290,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 927.2098388671875,
-            "mean_ms": 927.2098388671875,
-            "min_ms": 927.2098388671875
+            "max_ms": 967.4940185546875,
+            "mean_ms": 967.4940185546875,
+            "min_ms": 967.4940185546875
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         },
         {
@@ -290,9 +308,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.757535994052887,
-            "mean_ms": 0.757535994052887,
-            "min_ms": 0.757535994052887
+            "max_ms": 0.6267200112342834,
+            "mean_ms": 0.6267200112342834,
+            "min_ms": 0.6267200112342834
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -300,11 +318,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 927.243896484375,
-            "mean_ms": 927.243896484375,
-            "min_ms": 927.243896484375
+            "max_ms": 967.5077514648438,
+            "mean_ms": 967.5077514648438,
+            "min_ms": 967.5077514648438
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -312,18 +330,21 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 927.2098388671875, \"min_ms\": 927.2098388671875, \"max_ms\": 927.2098388671875}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.7587839961051941, \"min_ms\": 0.7587839961051941, \"max_ms\": 0.7587839961051941}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 927.243896484375, \"min_ms\": 927.243896484375, \"max_ms\": 927.243896484375}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.757535994052887, \"min_ms\": 0.757535994052887, \"max_ms\": 0.757535994052887}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 967.4940185546875, \"min_ms\": 967.4940185546875, \"max_ms\": 967.4940185546875}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.5694079995155334, \"min_ms\": 0.5694079995155334, \"max_ms\": 0.5694079995155334}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 967.5077514648438, \"min_ms\": 967.5077514648438, \"max_ms\": 967.5077514648438}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6267200112342834, \"min_ms\": 0.6267200112342834, \"max_ms\": 0.6267200112342834}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.7581599950790405,
+        "high_level_mean_ms_across_ranks": 0.5980640053749084,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.001248002052307129,
+        "max_rank_skew_ms": 0.05731201171875,
         "mode": "multiprocess",
-        "plan_mean_ms_across_ranks": 927.2268676757812,
+        "plan_mean_ms_across_ranks": 967.5008850097656,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all --force-transport pytorch_ipc",
       "dtype": "bfloat16",
       "requested_transport": "pytorch_ipc",
@@ -333,15 +354,21 @@
       "stdout": ""
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all --force-transport peer_access_pointer_exchange",
       "dtype": "bfloat16",
       "requested_transport": "peer_access_pointer_exchange",
       "returncode": 1,
       "status": "failed",
-      "stderr": "W0322 18:04:48.630000 43169 torch/multiprocessing/spawn.py:169] Terminating process 43358 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
+      "stderr": "W0322 19:45:00.835000 383090 torch/multiprocessing/spawn.py:169] Terminating process 383338 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
       "stdout": ""
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all",
       "dtype": "float32",
       "rank_payloads": [
@@ -356,9 +383,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.6728000044822693,
-            "mean_ms": 0.6728000044822693,
-            "min_ms": 0.6728000044822693
+            "max_ms": 0.8542079925537109,
+            "mean_ms": 0.8542079925537109,
+            "min_ms": 0.8542079925537109
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -366,11 +393,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 938.3626708984375,
-            "mean_ms": 938.3626708984375,
-            "min_ms": 938.3626708984375
+            "max_ms": 696.4912109375,
+            "mean_ms": 696.4912109375,
+            "min_ms": 696.4912109375
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         },
         {
@@ -384,9 +411,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.6678720116615295,
-            "mean_ms": 0.6678720116615295,
-            "min_ms": 0.6678720116615295
+            "max_ms": 0.8169280290603638,
+            "mean_ms": 0.8169280290603638,
+            "min_ms": 0.8169280290603638
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -394,11 +421,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 938.489013671875,
-            "mean_ms": 938.489013671875,
-            "min_ms": 938.489013671875
+            "max_ms": 696.3593139648438,
+            "mean_ms": 696.3593139648438,
+            "min_ms": 696.3593139648438
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -406,18 +433,21 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 938.3626708984375, \"min_ms\": 938.3626708984375, \"max_ms\": 938.3626708984375}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6728000044822693, \"min_ms\": 0.6728000044822693, \"max_ms\": 0.6728000044822693}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 938.489013671875, \"min_ms\": 938.489013671875, \"max_ms\": 938.489013671875}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6678720116615295, \"min_ms\": 0.6678720116615295, \"max_ms\": 0.6678720116615295}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 696.4912109375, \"min_ms\": 696.4912109375, \"max_ms\": 696.4912109375}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.8542079925537109, \"min_ms\": 0.8542079925537109, \"max_ms\": 0.8542079925537109}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 696.3593139648438, \"min_ms\": 696.3593139648438, \"max_ms\": 696.3593139648438}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.8169280290603638, \"min_ms\": 0.8169280290603638, \"max_ms\": 0.8169280290603638}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.6703360080718994,
+        "high_level_mean_ms_across_ranks": 0.8355680108070374,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.004927992820739746,
+        "max_rank_skew_ms": 0.03727996349334717,
         "mode": "multiprocess",
-        "plan_mean_ms_across_ranks": 938.4258422851562,
+        "plan_mean_ms_across_ranks": 696.4252624511719,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all --force-transport ctypes_ipc",
       "dtype": "float32",
       "rank_payloads": [
@@ -432,9 +462,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.6587839722633362,
-            "mean_ms": 0.6587839722633362,
-            "min_ms": 0.6587839722633362
+            "max_ms": 0.6473600268363953,
+            "mean_ms": 0.6473600268363953,
+            "min_ms": 0.6473600268363953
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -442,11 +472,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 755.7670288085938,
-            "mean_ms": 755.7670288085938,
-            "min_ms": 755.7670288085938
+            "max_ms": 765.7891845703125,
+            "mean_ms": 765.7891845703125,
+            "min_ms": 765.7891845703125
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         },
         {
@@ -460,9 +490,9 @@
           "high_level_ok": true,
           "high_level_sample": 12.375,
           "high_level_timing_ms": {
-            "max_ms": 0.6540160179138184,
-            "mean_ms": 0.6540160179138184,
-            "min_ms": 0.6540160179138184
+            "max_ms": 0.647711992263794,
+            "mean_ms": 0.647711992263794,
+            "min_ms": 0.647711992263794
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -470,11 +500,11 @@
           "plan_ok": true,
           "plan_sample": 12.375,
           "plan_timing_ms": {
-            "max_ms": 755.5357666015625,
-            "mean_ms": 755.5357666015625,
-            "min_ms": 755.5357666015625
+            "max_ms": 766.0518798828125,
+            "mean_ms": 766.0518798828125,
+            "min_ms": 766.0518798828125
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -482,47 +512,57 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 755.7670288085938, \"min_ms\": 755.7670288085938, \"max_ms\": 755.7670288085938}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6587839722633362, \"min_ms\": 0.6587839722633362, \"max_ms\": 0.6587839722633362}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 755.5357666015625, \"min_ms\": 755.5357666015625, \"max_ms\": 755.5357666015625}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6540160179138184, \"min_ms\": 0.6540160179138184, \"max_ms\": 0.6540160179138184}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 765.7891845703125, \"min_ms\": 765.7891845703125, \"max_ms\": 765.7891845703125}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.6473600268363953, \"min_ms\": 0.6473600268363953, \"max_ms\": 0.6473600268363953}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 64, \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 12.375, \"plan_timing_ms\": {\"mean_ms\": 766.0518798828125, \"min_ms\": 766.0518798828125, \"max_ms\": 766.0518798828125}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 12.375, \"high_level_timing_ms\": {\"mean_ms\": 0.647711992263794, \"min_ms\": 0.647711992263794, \"max_ms\": 0.647711992263794}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.6563999950885773,
+        "high_level_mean_ms_across_ranks": 0.6475360095500946,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.004767954349517822,
+        "max_rank_skew_ms": 0.00035196542739868164,
         "mode": "multiprocess",
-        "plan_mean_ms_across_ranks": 755.6513977050781,
+        "plan_mean_ms_across_ranks": 765.9205322265625,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all --force-transport pytorch_ipc",
       "dtype": "float32",
       "requested_transport": "pytorch_ipc",
       "returncode": 1,
       "status": "failed",
-      "stderr": "[W322 18:05:31.689268247 CudaIPCTypes.cpp:16] Producer process has been terminated before all shared CUDA tensors released. See Note [Sharing CUDA tensors]\nW0322 18:05:32.640000 46730 torch/multiprocessing/spawn.py:169] Terminating process 46822 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
+      "stderr": "Traceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
       "stdout": ""
     },
     {
+      "K": 128,
+      "M": 128,
+      "N": 256,
       "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allgather_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all --force-transport peer_access_pointer_exchange",
       "dtype": "float32",
       "requested_transport": "peer_access_pointer_exchange",
       "returncode": 1,
       "status": "failed",
-      "stderr": "W0322 18:05:45.241000 47682 torch/multiprocessing/spawn.py:169] Terminating process 47769 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
+      "stderr": "W0322 19:45:55.979000 387554 torch/multiprocessing/spawn.py:169] Terminating process 387648 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 457, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 448, in main\n    mp.spawn(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 340, in spawn\n    return start_processes(fn, args, nprocs, join, daemon, start_method=\"spawn\")\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allgather_multiprocess.py\", line 284, in _worker\n    plan = xtile.ops.build_gemm_allgather_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 765, in build_gemm_allgather_plan\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1596, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allgather(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
       "stdout": ""
     }
   ],
   "command": "/home/makai/XTile/tests/benchmarks/bench_gemm_allgather_multiprocess.py --M 128 --N 256 --K 128 --warmup 0 --iters 1 --timeout-sec 180 --output-json docs/generated/gemm_allgather_multiprocess_matrix.json",
   "environment": {
-    "K": 128,
-    "M": 128,
-    "N": 256,
     "gpu_name": "NVIDIA H100 PCIe",
     "iters": 1,
+    "shapes": [
+      {
+        "K": 128,
+        "M": 128,
+        "N": 256
+      }
+    ],
     "visible_gpus": 2,
     "warmup": 0
   },
-  "generated_at_utc": "2026-03-22T18:05:46.136818+00:00",
+  "generated_at_utc": "2026-03-22T19:45:56.969847+00:00",
   "schema_version": 1,
   "summary": {
     "case_count": 12,

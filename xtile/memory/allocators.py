@@ -11,9 +11,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import math
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from xtile.backends.base import BackendInterface
 
 _ALIGN = 256
 
@@ -31,6 +34,37 @@ class AllocationRecord:
     size: int
     shape: tuple[int, ...]
     dtype: torch.dtype
+
+
+@dataclass(frozen=True, slots=True)
+class PeerMemoryExportDescriptor:
+    """Structured description of one exportable peer-memory region."""
+
+    allocator_name: str
+    transport: str
+    size_bytes: int
+    base_ptr: int
+    device: str
+    payload: object
+
+    def to_dict(self) -> dict[str, object]:
+        """Return structured metadata for docs, diagnostics, and tests."""
+        return {
+            "allocator_name": self.allocator_name,
+            "transport": self.transport,
+            "size_bytes": self.size_bytes,
+            "base_ptr": self.base_ptr,
+            "device": self.device,
+            "payload_type": type(self.payload).__name__,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ImportedPeerMemory:
+    """Result of importing one peer-memory descriptor into the local process."""
+
+    mapped_ptr: int
+    cleanup_resource: object | None = None
 
 
 class BaseSymmetricAllocator(ABC):
@@ -115,6 +149,24 @@ class BaseSymmetricAllocator(ABC):
     def import_external_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
         """Materialize an external tensor inside this allocator's heap."""
 
+    @abstractmethod
+    def export_peer_memory(
+        self,
+        *,
+        transport: str,
+        backend: "BackendInterface",
+    ) -> PeerMemoryExportDescriptor:
+        """Export allocator-managed peer memory for one transport strategy."""
+
+    @abstractmethod
+    def import_peer_memory(
+        self,
+        export: PeerMemoryExportDescriptor,
+        *,
+        backend: "BackendInterface",
+    ) -> ImportedPeerMemory:
+        """Import one peer-memory export produced by another rank."""
+
     def cleanup(self) -> None:
         """Release allocator-owned resources."""
         # The current torch-backed allocator only owns one torch buffer, so
@@ -129,6 +181,7 @@ class BaseSymmetricAllocator(ABC):
             "size_bytes": self.size,
             "bytes_allocated": self.bytes_allocated,
             "bytes_free": self.bytes_free,
+            "segment_count": 1,
         }
 
 
@@ -281,6 +334,74 @@ class TorchBumpAllocator(BaseSymmetricAllocator):
         imported.copy_(tensor)
         return imported
 
+    def export_peer_memory(
+        self,
+        *,
+        transport: str,
+        backend: "BackendInterface",
+    ) -> PeerMemoryExportDescriptor:
+        """Export the allocator's single backing region for peer import."""
+        if transport == "ctypes_ipc":
+            payload: object = backend.get_ipc_handle(self.base_ptr)
+        elif transport == "pytorch_ipc":
+            payload = self.buffer.untyped_storage()._share_cuda_()
+        elif transport == "peer_access_pointer_exchange":
+            payload = self.base_ptr
+        else:
+            raise ValueError(
+                f"Unsupported transport {transport!r} for allocator {self.name!r}"
+            )
+        return PeerMemoryExportDescriptor(
+            allocator_name=self.name,
+            transport=transport,
+            size_bytes=self.size,
+            base_ptr=self.base_ptr,
+            device=str(self.device),
+            payload=payload,
+        )
+
+    def import_peer_memory(
+        self,
+        export: PeerMemoryExportDescriptor,
+        *,
+        backend: "BackendInterface",
+    ) -> ImportedPeerMemory:
+        """Import one peer region described by *export* into the local process."""
+        if export.allocator_name != self.name:
+            raise ValueError(
+                "Allocator import mismatch: "
+                f"local allocator={self.name!r}, export allocator={export.allocator_name!r}"
+            )
+        if export.transport == "ctypes_ipc":
+            if not isinstance(export.payload, bytes):
+                raise TypeError(
+                    "ctypes_ipc exports must carry a raw bytes payload."
+                )
+            mapped_ptr = backend.open_ipc_handle(export.payload)
+            return ImportedPeerMemory(
+                mapped_ptr=mapped_ptr,
+                cleanup_resource=mapped_ptr,
+            )
+        if export.transport == "pytorch_ipc":
+            if not isinstance(export.payload, tuple):
+                raise TypeError(
+                    "pytorch_ipc exports must carry a tuple payload from _share_cuda_()."
+                )
+            storage = torch.UntypedStorage._new_shared_cuda(*export.payload)
+            return ImportedPeerMemory(
+                mapped_ptr=storage.data_ptr(),
+                cleanup_resource=storage,
+            )
+        if export.transport == "peer_access_pointer_exchange":
+            if not isinstance(export.payload, int):
+                raise TypeError(
+                    "peer_access_pointer_exchange exports must carry an integer pointer."
+                )
+            return ImportedPeerMemory(mapped_ptr=export.payload)
+        raise ValueError(
+            f"Unsupported transport {export.transport!r} for allocator {self.name!r}"
+        )
+
     def cleanup(self) -> None:
         """Release the backing buffer and local bookkeeping."""
         self._buffer = None
@@ -306,4 +427,3 @@ def create_allocator(
     raise ValueError(
         f"Unknown allocator_type {allocator_type!r}. Supported: 'torch', 'torch_bump'."
     )
-

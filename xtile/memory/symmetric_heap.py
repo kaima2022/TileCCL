@@ -37,7 +37,11 @@ import torch.distributed as dist
 
 from xtile.backends import get_backend, detect_hardware
 from xtile.backends.base import BackendInterface
-from xtile.memory.allocators import BaseSymmetricAllocator, create_allocator
+from xtile.memory.allocators import (
+    BaseSymmetricAllocator,
+    PeerMemoryExportDescriptor,
+    create_allocator,
+)
 from xtile.utils.feature_gates import (
     FORCE_MULTIPROCESS_TRANSPORT_ENV,
     forced_multiprocess_transport,
@@ -140,6 +144,7 @@ class SymmetricHeap:
         self._remote_ptrs: list[int] = []
         self._heap_bases: Optional[torch.Tensor] = None
         self._ipc_opened: list[Optional[int]] = []
+        self._ipc_storages: list[Optional[torch.UntypedStorage]] = []
         self._peer_buffers: Optional[list[torch.Tensor]] = None
         self._mode: str = "single_process" if _peer_bases is not None or world_size == 1 else "multiprocess"
         self._transport_strategy: str = "local_only" if world_size == 1 else "unknown"
@@ -246,6 +251,7 @@ class SymmetricHeap:
             heap._local_ptr = heap._allocator.base_ptr
             heap._remote_ptrs = list(bases)
             heap._ipc_opened = []
+            heap._ipc_storages = []
             heap._heap_bases = torch.tensor(
                 bases, dtype=torch.int64, device=f"cuda:{rank}",
             )
@@ -262,6 +268,54 @@ class SymmetricHeap:
         return heaps
 
     # ---------------------------------------------------------- multi-process
+
+    def _gather_peer_exports(
+        self,
+        local_export: PeerMemoryExportDescriptor,
+    ) -> list[PeerMemoryExportDescriptor]:
+        """Exchange allocator export descriptors across ranks."""
+        exports: list[PeerMemoryExportDescriptor | None] = [None] * self._world_size
+        dist.all_gather_object(exports, local_export)
+        resolved: list[PeerMemoryExportDescriptor] = []
+        for rank, export in enumerate(exports):
+            if export is None:
+                raise RuntimeError(
+                    f"Rank {self._rank}: missing export descriptor from rank {rank}"
+                )
+            resolved.append(export)
+        return resolved
+
+    def _resolve_imported_peers(
+        self,
+        *,
+        transport: str,
+        gathered_exports: list[PeerMemoryExportDescriptor],
+    ) -> tuple[list[int], list[Optional[int]], list[Optional[torch.UntypedStorage]]]:
+        """Import peer descriptors through the active allocator."""
+        remote_ptrs: list[int] = []
+        ipc_opened: list[Optional[int]] = []
+        ipc_storages: list[Optional[torch.UntypedStorage]] = []
+        for peer_rank, export in enumerate(gathered_exports):
+            if peer_rank == self._rank:
+                remote_ptrs.append(self._local_ptr)
+                ipc_opened.append(None)
+                ipc_storages.append(None)
+                continue
+            imported = self._allocator.import_peer_memory(
+                export,
+                backend=self._backend,
+            )
+            remote_ptrs.append(imported.mapped_ptr)
+            if transport == "ctypes_ipc":
+                ipc_opened.append(int(imported.cleanup_resource))
+                ipc_storages.append(None)
+            elif transport == "pytorch_ipc":
+                ipc_opened.append(None)
+                ipc_storages.append(imported.cleanup_resource)  # type: ignore[arg-type]
+            else:
+                ipc_opened.append(None)
+                ipc_storages.append(None)
+        return remote_ptrs, ipc_opened, ipc_storages
 
     def _setup_multiprocess(self) -> None:
         """Exchange heap pointers across ranks for multi-process mode.
@@ -327,32 +381,18 @@ class SymmetricHeap:
 
     def _setup_multiprocess_ctypes_ipc(self) -> None:
         """Map peer heaps via raw CUDA/HIP IPC handles."""
-        local_handle: bytes = self._backend.get_ipc_handle(self._local_ptr)
-        handle_len = len(local_handle)
-
-        local_t = torch.tensor(
-            list(local_handle), dtype=torch.uint8, device=self._device,
+        local_export = self._allocator.export_peer_memory(
+            transport="ctypes_ipc",
+            backend=self._backend,
         )
-        gathered = [
-            torch.zeros(handle_len, dtype=torch.uint8, device=self._device)
-            for _ in range(self._world_size)
-        ]
-        dist.all_gather(gathered, local_t)
-
-        remote_ptrs: list[int] = []
-        ipc_opened: list[Optional[int]] = []
-        for r in range(self._world_size):
-            if r == self._rank:
-                remote_ptrs.append(self._local_ptr)
-                ipc_opened.append(None)
-            else:
-                handle_bytes = bytes(gathered[r].cpu().tolist())
-                remote_ptr = self._backend.open_ipc_handle(handle_bytes)
-                remote_ptrs.append(remote_ptr)
-                ipc_opened.append(remote_ptr)
-
+        gathered_exports = self._gather_peer_exports(local_export)
+        remote_ptrs, ipc_opened, ipc_storages = self._resolve_imported_peers(
+            transport="ctypes_ipc",
+            gathered_exports=gathered_exports,
+        )
         self._remote_ptrs = remote_ptrs
         self._ipc_opened = ipc_opened
+        self._ipc_storages = ipc_storages
         self._heap_bases = torch.tensor(
             remote_ptrs, dtype=torch.int64, device=self._device,
         )
@@ -371,28 +411,17 @@ class SymmetricHeap:
                 except RuntimeError:
                     pass
 
-        storage = self._buffer.untyped_storage()
-        share_info = storage._share_cuda_()
-
-        all_infos: list[object] = [None] * self._world_size
-        dist.all_gather_object(all_infos, share_info)
-
-        remote_ptrs = []
-        ipc_storages: list[Optional[torch.UntypedStorage]] = []
-        for r in range(self._world_size):
-            if r == self._rank:
-                remote_ptrs.append(self._local_ptr)
-                ipc_storages.append(None)
-            else:
-                remote_storage = torch.UntypedStorage._new_shared_cuda(
-                    *all_infos[r]
-                )
-                remote_ptr = remote_storage.data_ptr()
-                remote_ptrs.append(remote_ptr)
-                ipc_storages.append(remote_storage)
-
+        local_export = self._allocator.export_peer_memory(
+            transport="pytorch_ipc",
+            backend=self._backend,
+        )
+        gathered_exports = self._gather_peer_exports(local_export)
+        remote_ptrs, ipc_opened, ipc_storages = self._resolve_imported_peers(
+            transport="pytorch_ipc",
+            gathered_exports=gathered_exports,
+        )
         self._remote_ptrs = remote_ptrs
-        self._ipc_opened = []
+        self._ipc_opened = ipc_opened
         self._ipc_storages = ipc_storages
         self._heap_bases = torch.tensor(
             remote_ptrs, dtype=torch.int64, device=self._device,
@@ -416,18 +445,21 @@ class SymmetricHeap:
                 except RuntimeError:
                     pass
 
-        local_base = torch.tensor(
-            [self._local_ptr], dtype=torch.int64, device=self._device,
+        local_export = self._allocator.export_peer_memory(
+            transport="peer_access_pointer_exchange",
+            backend=self._backend,
         )
-        all_bases = [
-            torch.zeros(1, dtype=torch.int64, device=self._device)
-            for _ in range(self._world_size)
-        ]
-        dist.all_gather(all_bases, local_base)
-
-        self._remote_ptrs = [int(b.item()) for b in all_bases]
-        self._heap_bases = torch.cat(all_bases).to(device=self._device)
-        self._ipc_opened = []
+        gathered_exports = self._gather_peer_exports(local_export)
+        remote_ptrs, ipc_opened, ipc_storages = self._resolve_imported_peers(
+            transport="peer_access_pointer_exchange",
+            gathered_exports=gathered_exports,
+        )
+        self._remote_ptrs = remote_ptrs
+        self._heap_bases = torch.tensor(
+            remote_ptrs, dtype=torch.int64, device=self._device,
+        )
+        self._ipc_opened = ipc_opened
+        self._ipc_storages = ipc_storages
         self._transport_strategy = "peer_access_pointer_exchange"
         dist.barrier()
         logger.info("Rank %d: peer-access pointer exchange complete", self._rank)
@@ -632,6 +664,7 @@ class SymmetricHeap:
         self._heap_bases = None
         self._remote_ptrs = []
         self._ipc_opened = []
+        self._ipc_storages = []
         self._peer_buffers = None
         self._alloc_records.clear()
         self._bump_offset = 0

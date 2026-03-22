@@ -203,9 +203,10 @@ def describe_runtime_support(
         ),
         "symmetric_heap_allocator_first_import_map": SupportStatus(
             "partial" if has_heap else "unsupported",
-            "Allocator-backed heap runtime is implemented with a torch_bump backend "
-            "plus copy-based external import/as_symmetric materialization. "
-            "Canonical segmented peer import/map is still not implemented."
+            "Allocator-backed heap runtime is implemented with a torch_bump backend, "
+            "allocator-owned peer export/import descriptors, and copy-based external "
+            "import/as_symmetric materialization. Canonical segmented peer import/map "
+            "is still not implemented."
             if has_heap
             else "Allocator-first canonical import/map layer requires an attached heap.",
         ),
