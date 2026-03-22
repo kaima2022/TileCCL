@@ -871,6 +871,10 @@ class SymmetricHeap:
         """Return the rank-visible peer export descriptors for this heap."""
         return tuple(self._peer_exports)
 
+    def peer_export_metadata(self) -> list[dict[str, object]]:
+        """Return peer-export metadata in JSON-friendly form."""
+        return [export.to_dict() for export in self._peer_exports]
+
     def peer_imports(self) -> tuple[ImportedPeerMemory, ...]:
         """Return the structured peer-import records for this heap."""
         return tuple(self._peer_imports)
@@ -900,7 +904,7 @@ class SymmetricHeap:
             "transport_strategy": self._transport_strategy,
             "allocator": self.allocator_metadata(),
             "segments": self.segment_metadata(),
-            "peer_exports": [export.to_dict() for export in self._peer_exports],
+            "peer_exports": self.peer_export_metadata(),
             "peer_imports": self.peer_import_metadata(),
             "peer_memory_map": self.peer_memory_map_metadata(),
         }

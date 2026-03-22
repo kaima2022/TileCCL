@@ -659,10 +659,12 @@ class TestSymmetricHeapUnit:
         """Single-rank heaps should still expose one structured mapping entry."""
         metadata = symmetric_heap.peer_memory_map_metadata()
         exports = symmetric_heap.peer_export_descriptors()
+        export_metadata = symmetric_heap.peer_export_metadata()
         imports = symmetric_heap.peer_import_metadata()
 
         assert len(metadata) == 1
         assert len(exports) == 1
+        assert len(export_metadata) == 1
         assert len(imports) == 1
         assert metadata[0]["peer_rank"] == 0
         assert metadata[0]["segment_id"] == "heap"
@@ -678,6 +680,11 @@ class TestSymmetricHeapUnit:
         assert exports[0].segment_kind == "device_heap"
         assert exports[0].transport == "local_only"
         assert exports[0].base_ptr == symmetric_heap.local_base
+        assert export_metadata[0]["peer_rank"] == 0
+        assert export_metadata[0]["segment_id"] == "heap"
+        assert export_metadata[0]["segment_kind"] == "device_heap"
+        assert export_metadata[0]["transport"] == "local_only"
+        assert export_metadata[0]["base_ptr"] == symmetric_heap.local_base
         assert imports[0]["peer_rank"] == 0
         assert imports[0]["segment_id"] == "heap"
         assert imports[0]["transport"] == "local_only"
@@ -827,17 +834,21 @@ class TestSymmetricHeapMultiGPU:
         try:
             metadata = heaps[0].peer_memory_map_metadata()
             exports = heaps[0].peer_export_descriptors()
+            export_metadata = heaps[0].peer_export_metadata()
             imports = heaps[0].peer_import_metadata()
 
             assert len(metadata) == world_size
             assert len(exports) == world_size
+            assert len(export_metadata) == world_size
             assert len(imports) == world_size
             assert {entry["peer_rank"] for entry in metadata} == {0, 1}
             assert {export.peer_rank for export in exports} == {0, 1}
+            assert {entry["peer_rank"] for entry in export_metadata} == {0, 1}
             assert {entry["peer_rank"] for entry in imports} == {0, 1}
             assert {entry["segment_id"] for entry in metadata} == {"heap"}
             assert {entry["segment_kind"] for entry in metadata} == {"device_heap"}
             assert {entry["transport"] for entry in metadata} == {"peer_access"}
+            assert {entry["transport"] for entry in export_metadata} == {"peer_access"}
             assert {entry["transport"] for entry in imports} == {"peer_access"}
             assert all(entry["size_bytes"] == heaps[0].size for entry in metadata)
             assert metadata[0]["is_local_rank"] is True

@@ -775,7 +775,7 @@ contracts = {
   - `export_peer_memory(...)`
   - `import_peer_memory(...)`
   - `PeerMemoryExportDescriptor`
-- `SymmetricHeap.peer_export_descriptors()` / `peer_memory_map()` / `peer_memory_map_metadata()` 已接入，peer import/map 元数据不再只能靠调试器看内部状态。
+- `SymmetricHeap.peer_export_descriptors()` / `peer_export_metadata()` / `peer_memory_map()` / `peer_memory_map_metadata()` 已接入，peer export/import/map 元数据不再只能靠调试器看内部状态。
 - `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_imports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
 - `ImportedPeerMemory`、`SymmetricHeap.peer_imports()` / `peer_import_metadata()` 已接入，peer import state 不再只是 `mapped_ptr + cleanup resource` 的内部临时结构，而是正式结构化 surface。
 - `PeerMemoryExportDescriptor` / `ImportedPeerMemory` 现都显式带 `peer_rank`；peer export/import records 不再只靠列表位置隐式表达 rank。

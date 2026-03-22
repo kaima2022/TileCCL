@@ -2331,3 +2331,54 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - peer import/export records 已经从“结构化”进一步推进到“自描述”
 - 这一步仍然属于 P0 substrate 收口，不代表 external mapping / segmented import-map 已经完成
+
+### Part N: peer export metadata gets a canonical JSON-friendly surface (2026-03-22)
+
+继续沿着 P0-next 收口，这一轮不碰 transport 和 allocator backend，只补 runtime/export surface 的对称性。
+
+本轮完成：
+
+- `SymmetricHeap.peer_export_metadata()`
+- `peer_exports` 现在和：
+  - `segment_metadata()`
+  - `peer_import_metadata()`
+  - `peer_memory_map_metadata()`
+  一样，具备直接可序列化、可写 artifact、可写文档的 surface
+- `SymmetricHeap.metadata()` 现在统一通过 `peer_export_metadata()` 生成 `peer_exports`
+
+这一步的意义是：
+
+- export/import/map 三个层次的 runtime metadata 终于是对称的
+- benchmark/context/docs 不需要再在外层手写 `[export.to_dict() for export in ...]`
+- 这让后续如果还要继续扩 export/import canonical substrate，surface 形状更稳定
+
+这一步没有做的事情：
+
+- 没有改变 transport 支持面
+- 没有新增 allocator backend
+- 没有改变 collectives 的 public contract
+
+回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py
+pytest -q tests/test_context.py tests/test_benchmark_results.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py` → `41 passed in 6.17s`
+- `tests/test_context.py tests/test_benchmark_results.py` → `8 passed in 6.65s`
+- `allgather + gemm_allgather` → `2 passed in 37.37s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 64.17s`
+
+结论：
+
+- `peer_exports` 现在已经具备 canonical JSON-friendly metadata surface
+- 这进一步降低了 runtime artifact / docs / benchmark 层对内部 dataclass 细节的耦合

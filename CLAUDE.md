@@ -388,6 +388,14 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 29 交付物（2026-03-22）
+- [x] export metadata symmetry：`SymmetricHeap.peer_export_metadata()` 已接入，peer export 现在与 `segment_metadata()` / `peer_import_metadata()` / `peer_memory_map_metadata()` 一样有直接可序列化 surface
+- [x] heap metadata 收口：`SymmetricHeap.metadata()["peer_exports"]` 现统一走 `peer_export_metadata()`，避免 artifact / docs 侧再手写 `to_dict()` 展开
+- [x] 定向回归：`pytest -q tests/test_memory/test_symmetric_heap.py` → `41 passed`
+- [x] context/benchmark metadata 回归：`pytest -q tests/test_context.py tests/test_benchmark_results.py` → `8 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
