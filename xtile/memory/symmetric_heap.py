@@ -40,6 +40,7 @@ from xtile.backends import get_backend, detect_hardware
 from xtile.backends.base import BackendInterface
 from xtile.memory.allocators import (
     AllocatorMemoryModelDescriptor,
+    AllocatorSegmentLayoutDescriptor,
     BaseSymmetricAllocator,
     ImportedPeerMemory,
     MemorySegmentDescriptor,
@@ -925,6 +926,14 @@ class SymmetricHeap:
         """Return allocator memory-model metadata in JSON-friendly form."""
         return self._allocator.memory_model()
 
+    def segment_layout_descriptor(self) -> AllocatorSegmentLayoutDescriptor:
+        """Return the allocator's structured exportable segment-layout descriptor."""
+        return self._allocator.segment_layout_descriptor()
+
+    def segment_layout(self) -> dict[str, object]:
+        """Return allocator segment-layout metadata in JSON-friendly form."""
+        return self._allocator.segment_layout()
+
     def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
         """Return the local allocator-owned segment descriptors."""
         return self._allocator.segment_descriptors()
@@ -992,6 +1001,7 @@ class SymmetricHeap:
             "mode": self._mode,
             "transport_strategy": self._transport_strategy,
             "allocator": self.allocator_metadata(),
+            "segment_layout": self.segment_layout(),
             "segments": self.segment_metadata(),
             "peer_exports": self.peer_export_metadata(),
             "peer_imports": self.peer_import_metadata(),

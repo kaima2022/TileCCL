@@ -773,6 +773,15 @@ class TestSymmetricHeapUnit:
         assert metadata["capabilities"]["dmabuf_mapping"] is False
         assert metadata["external_tensor_import_mode"] == "copy"
         assert metadata["external_mapping_mode"] == "none"
+        assert metadata["segment_layout"] == {
+            "allocator_name": "torch_bump",
+            "layout_kind": "single_exportable_segment",
+            "segment_count": 1,
+            "exportable_segment_count": 1,
+            "primary_segment_id": "heap",
+            "exportable_segment_ids": ["heap"],
+            "multi_segment": False,
+        }
         assert metadata["peer_transport_modes"] == [
             "ctypes_ipc",
             "pytorch_ipc",
@@ -809,6 +818,23 @@ class TestSymmetricHeapUnit:
         assert segments[0]["size_bytes"] == symmetric_heap.size
         assert segments[0]["owner_rank"] == symmetric_heap.rank
         assert segments[0]["is_local_rank"] is True
+
+    def test_segment_layout_accessor_reports_structured_schema(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Heap should expose the allocator segment-layout accessor directly."""
+        descriptor = symmetric_heap.segment_layout_descriptor()
+        layout = symmetric_heap.segment_layout()
+
+        assert descriptor.allocator_name == symmetric_heap.allocator_name
+        assert descriptor.layout_kind == "single_exportable_segment"
+        assert descriptor.segment_count == 1
+        assert descriptor.exportable_segment_count == 1
+        assert descriptor.primary_segment_id == "heap"
+        assert descriptor.exportable_segment_ids == ("heap",)
+        assert descriptor.multi_segment is False
+        assert layout == descriptor.to_dict()
 
     def test_allocator_memory_model_accessor_reports_structured_schema(
         self,

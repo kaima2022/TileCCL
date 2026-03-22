@@ -89,6 +89,8 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["heap"]["allocator"]["capabilities"]["external_mapping"] is False
         assert payload["heap"]["allocator"]["external_tensor_import_mode"] == "copy"
         assert payload["heap"]["allocator"]["external_mapping_mode"] == "none"
+        assert payload["heap"]["segment_layout"]["primary_segment_id"] == "heap"
+        assert payload["heap"]["segment_layout"]["exportable_segment_ids"] == ["heap"]
         assert payload["heap"]["allocator"]["peer_transport_modes"] == [
             "ctypes_ipc",
             "pytorch_ipc",

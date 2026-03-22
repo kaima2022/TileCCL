@@ -2803,3 +2803,62 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - allocator `memory_model` 现在已成为正式 heap-level surface
 - 这一轮继续提升可维护性，但 external mapping / segmented import-map 仍未实现
+
+### Part W: segment layout is now a first-class runtime surface (2026-03-22)
+
+继续沿着 P0-next 推，这一轮针对的是 segmented import-map 的准备接口。
+
+此前虽然 allocator 已有：
+
+- `segment_descriptors()`
+- `segment_metadata()`
+
+但“当前 exportable segment layout 到底是什么”仍然需要消费方自己从 `segments` 猜。
+
+本轮完成：
+
+- `AllocatorSegmentLayoutDescriptor`
+- allocator metadata 新增 `segment_layout`
+- `SymmetricHeap.segment_layout_descriptor()` / `segment_layout()`
+- support matrix 新增 `memory["symmetric_heap.segment_layout"]`
+
+当前 `torch_bump` runtime 现在能显式表达：
+
+- `layout_kind = "single_exportable_segment"`
+- `primary_segment_id = "heap"`
+- `exportable_segment_ids = ["heap"]`
+
+这一步的意义是：
+
+- 当前“单 segment”现状不再只是隐式事实，而成为正式 schema
+- 未来如果接 multi-segment allocator / segmented import-map，优先在 `segment_layout` 上扩展即可
+- 这比单纯暴露 `segment_count=1` 更接近 canonical backend 的工程做法
+
+这一步没有做的事情：
+
+- 没有实现 multi-segment allocator
+- 没有实现 segmented import-map
+- 没有改变 public support 面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/memory/symmetric_heap.py xtile/support.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `64 passed in 6.63s`
+- `allgather + gemm_allgather` → `2 passed in 35.90s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 66.52s`
+
+结论：
+
+- `segment_layout` 现在已成为正式 runtime surface
+- 这一步是 segmented import-map 的准备层，不代表 multi-segment backend 已经实现

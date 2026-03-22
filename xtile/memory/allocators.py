@@ -83,6 +83,31 @@ class AllocatorMemoryModelDescriptor:
 
 
 @dataclass(frozen=True, slots=True)
+class AllocatorSegmentLayoutDescriptor:
+    """Structured description of the allocator's exportable segment layout."""
+
+    allocator_name: str
+    layout_kind: str
+    segment_count: int
+    exportable_segment_count: int
+    primary_segment_id: str
+    exportable_segment_ids: tuple[str, ...]
+    multi_segment: bool
+
+    def to_dict(self) -> dict[str, object]:
+        """Return JSON-friendly segment-layout metadata."""
+        return {
+            "allocator_name": self.allocator_name,
+            "layout_kind": self.layout_kind,
+            "segment_count": self.segment_count,
+            "exportable_segment_count": self.exportable_segment_count,
+            "primary_segment_id": self.primary_segment_id,
+            "exportable_segment_ids": list(self.exportable_segment_ids),
+            "multi_segment": self.multi_segment,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PeerMemoryExportDescriptor:
     """Structured description of one exportable peer-memory region."""
 
@@ -215,9 +240,13 @@ class BaseSymmetricAllocator(ABC):
     def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
         """Return the allocator-owned memory segments."""
 
+    def exportable_segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
+        """Return the allocator segments exportable through the current runtime."""
+        return self.segment_descriptors()
+
     def primary_segment(self) -> MemorySegmentDescriptor:
         """Return the single exportable segment supported by the current runtime."""
-        segments = self.segment_descriptors()
+        segments = self.exportable_segment_descriptors()
         if len(segments) != 1:
             raise RuntimeError(
                 "The current SymmetricHeap runtime only supports one exportable "
@@ -291,6 +320,10 @@ class BaseSymmetricAllocator(ABC):
         """Return how allocator-owned local memory segments are laid out."""
         return "single_contiguous_device_heap"
 
+    def segment_layout_kind(self) -> str:
+        """Return the current exportable segment-layout model."""
+        return "single_exportable_segment"
+
     def peer_import_model(self) -> str:
         """Return how peer imports are represented after transport setup."""
         return "per_rank_transport_resolved_imports"
@@ -352,6 +385,26 @@ class BaseSymmetricAllocator(ABC):
         """Return JSON-friendly allocator memory-model metadata."""
         return self.memory_model_descriptor().to_dict()
 
+    def segment_layout_descriptor(self) -> AllocatorSegmentLayoutDescriptor:
+        """Return the allocator's structured exportable segment-layout descriptor."""
+        segments = self.segment_descriptors()
+        exportable_segments = self.exportable_segment_descriptors()
+        return AllocatorSegmentLayoutDescriptor(
+            allocator_name=self.name,
+            layout_kind=self.segment_layout_kind(),
+            segment_count=len(segments),
+            exportable_segment_count=len(exportable_segments),
+            primary_segment_id=self.primary_segment().segment_id,
+            exportable_segment_ids=tuple(
+                segment.segment_id for segment in exportable_segments
+            ),
+            multi_segment=len(segments) > 1,
+        )
+
+    def segment_layout(self) -> dict[str, object]:
+        """Return JSON-friendly exportable segment-layout metadata."""
+        return self.segment_layout_descriptor().to_dict()
+
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
@@ -365,6 +418,7 @@ class BaseSymmetricAllocator(ABC):
             "capabilities": self.capabilities(),
             "external_tensor_import_mode": self.external_tensor_import_mode(),
             "external_mapping_mode": self.external_mapping_mode(),
+            "segment_layout": self.segment_layout(),
             "peer_transport_modes": list(self.peer_transport_modes()),
             "peer_import_access_kinds": list(self.peer_import_access_kinds()),
             "memory_model": self.memory_model(),

@@ -791,6 +791,7 @@ contracts = {
 - allocator metadata 现还显式带 `peer_transport_modes` 与 `peer_import_access_kinds`；这表示 allocator surface 自身能表达的 peer 语义目录，不等同于 public support matrix 的验证结论。
 - allocator metadata 现已新增结构化 `memory_model`，把 `local_segment_layout`、`peer_import_model`、`peer_mapping_model`、`external_tensor_import_mode`、`external_mapping_mode` 收口到统一 schema。
 - `SymmetricHeap.allocator_memory_model_descriptor()` / `allocator_memory_model()` 已接入，allocator `memory_model` 不再只能通过嵌套 metadata 间接读取。
+- allocator metadata / heap surface 现已新增结构化 `segment_layout`；当前单 exportable segment 的现状已能通过 `layout_kind`、`primary_segment_id`、`exportable_segment_ids` 正式表达。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
