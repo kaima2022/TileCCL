@@ -697,8 +697,12 @@ class SymmetricHeap:
         self._refresh_heap_bases()
 
     def _peer_base_ptrs(self) -> list[int]:
-        """Return mapped base pointers derived from the peer-import state."""
-        return [imported.mapped_ptr for imported in self._peer_imports]
+        """Return primary-segment mapped base pointers for each visible rank."""
+        primary_segment_id = self.primary_segment_descriptor().segment_id
+        return [
+            self.peer_import_segment(rank, primary_segment_id).mapped_ptr
+            for rank in range(self._world_size)
+        ]
 
     def _validate_rank_argument(self, *, rank: int, label: str = "rank") -> None:
         """Validate one public rank argument against the heap world size."""

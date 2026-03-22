@@ -779,7 +779,7 @@ contracts = {
 - `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_imports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
 - `ImportedPeerMemory`、`SymmetricHeap.peer_imports()` / `peer_import_metadata()` 已接入，peer import state 不再只是 `mapped_ptr + cleanup resource` 的内部临时结构，而是正式结构化 surface。
 - `PeerMemoryExportDescriptor` / `ImportedPeerMemory` 现都显式带 `peer_rank`；peer export/import records 不再只靠列表位置隐式表达 rank。
-- `peer_imports` 现在已经是 `SymmetricHeap` import-map 的单一真实状态源；`heap_bases`、`translate()`、`peer_memory_map()` 现在都直接从它派生，不再额外维护 `_remote_ptrs` / `_peer_map` 这类并行派生缓存。
+- `peer_imports` 现在已经是 `SymmetricHeap` import-map 的单一真实状态源；当前 `translate()` 通过 primary `segment_id` 走 `peer_import_segment(...)`，`heap_bases` 也已改为从 primary-segment import catalog 派生，`peer_memory_map()` 则继续从结构化 peer import records 构建，不再额外维护 `_remote_ptrs` / `_peer_map` 这类并行派生缓存。
 - `heap_bases` 的刷新链路也已经收口到 `_refresh_heap_bases()`；`create_all(...)`、single-rank init 与 multiprocess transport setup 不再各自手工覆写 `_heap_bases`。
 - `SymmetricHeap._validate_peer_mapping_state(...)` 已接入；`peer_exports` / `peer_imports` 现在在发布前会校验 world-size、segment metadata、export/import 对齐关系，以及 local-rank import 是否仍精确指向 `local_base`。
 - `SymmetricHeap._apply_peer_mapping_state(...)` 现在会先按 `peer_rank` 归一化 incoming peer records，再进行校验与发布；内部 contract 不再要求调用方手工先按 rank 排序。
@@ -800,6 +800,7 @@ contracts = {
 - `SymmetricHeap` 现还维护 segment-scoped peer export/import catalog：`peer_export_segments(rank)` / `peer_export_segment(rank, segment_id)` / `peer_import_segments(rank)` / `peer_import_segment(rank, segment_id)` 已接入，host-side peer state 不再只能按 flat list 消费。
 - 现有 `peer_export_descriptor(rank)` / `peer_import(rank)` 也已经改为通过 primary `segment_id` 走 segment-scoped catalog；当前仍是单 exportable segment runtime，但 host-side access shape 已不再把“一 rank 一条记录”写死成唯一形式。
 - heap metadata 现已新增 `peer_export_catalog` / `peer_import_catalog` 两个 grouped surface；context、benchmark artifact 与 support matrix 现都能显式消费 segment-scoped peer catalog。
+- `heap_bases` 的刷新链路也已进一步收口：当前地址表不再直接扫 flat `peer_imports`，而是显式从每个 rank 的 primary-segment peer import catalog 派生。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
 - `XTileContext.heap_metadata()` / `runtime_metadata()` 已接入，runtime / heap / peer-map 现在有统一结构化出口。

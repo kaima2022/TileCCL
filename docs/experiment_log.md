@@ -3073,3 +3073,52 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - XTile 现在已经不只暴露 flat peer records，也暴露了 segment-scoped peer catalog
 - 这一步让 canonical substrate 的 host-side 访问层更接近 future segmented import-map，但 backend 本体仍未完成
+
+### Part AB: heap_bases now derives from the primary-segment import catalog (2026-03-22)
+
+继续沿着 P0-next 往前收一小步。这一轮没有新增 public API，而是把一条真正关键的内部主路径改掉了：`heap_bases` 不再直接假设 “flat peer_imports 的第 i 项就是 rank i 唯一可用基址”。
+
+本轮完成：
+
+- `SymmetricHeap._peer_base_ptrs()` 现改为：
+  - 先取 `primary_segment_descriptor().segment_id`
+  - 再按 rank 调 `peer_import_segment(rank, primary_segment_id)`
+  - 最后生成 `heap_bases`
+- 新增回归：
+  - 单 rank heap：`get_heap_bases()` 必须等于 primary-segment peer import catalog
+  - `create_all(...)` multi-GPU heap：`get_heap_bases()` 也必须等于按 rank 读取到的 primary-segment peer import catalog
+
+这一步的意义是：
+
+- `heap_bases` 这条最核心的地址表派生链，已经从 flat record 假设切到了 primary-segment catalog 假设
+- future segmented import-map 到来时，primary address table 不需要再推倒重来
+- 这一步虽然小，但是真正触到了未来最容易被旧模型卡住的内核启动输入
+
+这一步没有做的事情：
+
+- 没有实现 multi-segment publish/apply path
+- 没有改变当前 heap kernel 仍使用 primary segment base table 的事实
+- 没有放大 multiprocess transport public support 面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `71 passed in 5.51s`
+- `allgather + gemm_allgather` → `2 passed in 32.33s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 58.02s`
+
+结论：
+
+- `heap_bases` 现在已经显式建立在 primary-segment import catalog 之上
+- 这一步进一步降低了 future segmented import-map 对现有地址翻译主链的侵入风险

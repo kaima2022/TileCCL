@@ -1027,6 +1027,9 @@ class TestSymmetricHeapUnit:
         assert import_catalog[0]["segment_count"] == 1
         assert import_catalog[0]["segment_ids"] == ["heap"]
         assert import_catalog[0]["segments"][0]["segment_id"] == "heap"
+        assert symmetric_heap.get_heap_bases().cpu().tolist() == [
+            symmetric_heap.peer_import_segment(0, "heap").mapped_ptr
+        ]
 
     def test_import_external_tensor_materializes_heap_copy(self, symmetric_heap) -> None:
         """import_external_tensor should copy data onto the symmetric heap."""
@@ -1241,6 +1244,10 @@ class TestSymmetricHeapMultiGPU:
             assert {tuple(entry["segment_ids"]) for entry in export_catalog} == {("heap",)}
             assert {tuple(entry["segment_ids"]) for entry in import_catalog} == {("heap",)}
             assert all(entry["size_bytes"] == heaps[0].size for entry in metadata)
+            assert heaps[0].get_heap_bases().cpu().tolist() == [
+                heaps[0].peer_import_segment(rank, "heap").mapped_ptr
+                for rank in range(world_size)
+            ]
             assert metadata[0]["is_local_rank"] is True
             assert metadata[1]["is_local_rank"] is False
             assert metadata[0]["cleanup_kind"] == "none"

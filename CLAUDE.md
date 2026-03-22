@@ -508,6 +508,14 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed in 32.75s`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed in 61.38s`
 
+### Phase 43 交付物（2026-03-22）
+- [x] `heap_bases` 派生链路继续收口：`_peer_base_ptrs()` 现不再直接扫 flat `peer_imports`，而是显式通过 primary `segment_id` 走 `peer_import_segment(rank, ...)`
+- [x] primary-segment address table 语义锁定：新增回归显式断言 `get_heap_bases()` 与 primary-segment peer import catalog 一致
+- [x] segmented-import-map 预备收口：即使 future 每个 rank 拥有多个 imported segments，`heap_bases` 这条核心地址表也已经不再被“一 rank 一条记录”假设绑死
+- [x] substrate/support/CLI 回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `71 passed in 5.51s`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed in 32.33s`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed in 58.02s`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
