@@ -88,6 +88,17 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["heap"]["allocator"]["name"] == "torch_bump"
         assert payload["heap"]["allocator"]["capabilities"]["external_mapping"] is False
         assert payload["heap"]["allocator"]["external_tensor_import_mode"] == "copy"
+        assert payload["heap"]["allocator"]["peer_transport_modes"] == [
+            "ctypes_ipc",
+            "pytorch_ipc",
+            "peer_access_pointer_exchange",
+        ]
+        assert payload["heap"]["allocator"]["peer_import_access_kinds"] == [
+            "local",
+            "peer_direct",
+            "mapped_remote",
+            "remote_pointer",
+        ]
         assert payload["heap"]["segments"][0]["segment_id"] == "heap"
         assert payload["heap"]["peer_exports"][0]["peer_rank"] == 0
         assert payload["heap"]["peer_exports"][0]["segment_id"] == "heap"

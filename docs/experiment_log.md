@@ -2649,3 +2649,57 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - peer import/map metadata 现在已经不只描述 transport，还开始描述 access semantics
 - 这一步是往 unified access substrate 靠近的一小步，但离 external mapping / segmented import-map 仍有距离
+
+### Part T: allocator metadata now carries a peer transport/access catalog (2026-03-22)
+
+继续沿着 P0-next 推，这一轮不新增 transport，而是把 allocator 自己能表达的 peer 语义目录显式化。
+
+本轮完成：
+
+- `BaseSymmetricAllocator.peer_transport_modes()`
+- `BaseSymmetricAllocator.peer_import_access_kinds()`
+- allocator metadata 新增：
+  - `peer_transport_modes`
+  - `peer_import_access_kinds`
+
+当前 `torch_bump` allocator 显式声明：
+
+- `peer_transport_modes = ["ctypes_ipc", "pytorch_ipc", "peer_access_pointer_exchange"]`
+- `peer_import_access_kinds = ["local", "peer_direct", "mapped_remote", "remote_pointer"]`
+
+这一步的意义是：
+
+- artifact / doc / context 现在可以直接读取 allocator 自己能表达的 peer 语义目录
+- 这和 public support matrix 是两层不同语义：
+  - allocator surface: “代码层实现了什么导出/导入/访问语义”
+  - support matrix: “当前真实 public contract 被验证支持到什么程度”
+- 这比之前只暴露 capability booleans 更利于后续扩 allocator backend
+
+这一步没有做的事情：
+
+- 没有把 `pytorch_ipc` / `peer_access_pointer_exchange` 重新提升成 public-supported transport
+- 没有改变 `ctypes_ipc only` 的 multiprocess device-safe 结论
+- 没有实现 external mapping
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `62 passed in 5.47s`
+- `allgather + gemm_allgather` → `2 passed in 36.96s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 66.44s`
+
+结论：
+
+- allocator metadata 现在开始接近一个可扩展的 peer semantics catalog
+- 这仍然只是 canonical substrate 的准备层，不代表 external mapping / segmented import-map 已经落地

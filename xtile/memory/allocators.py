@@ -260,6 +260,14 @@ class BaseSymmetricAllocator(ABC):
         """Return the current external-tensor import mode."""
         return "copy"
 
+    def peer_transport_modes(self) -> tuple[str, ...]:
+        """Return the allocator-supported peer transport modes."""
+        return (
+            "ctypes_ipc",
+            "pytorch_ipc",
+            "peer_access_pointer_exchange",
+        )
+
     def peer_import_access_kind(
         self,
         *,
@@ -281,6 +289,15 @@ class BaseSymmetricAllocator(ABC):
             f"Unsupported transport {transport!r} for allocator {self.name!r}"
         )
 
+    def peer_import_access_kinds(self) -> tuple[str, ...]:
+        """Return the access semantics currently expressible by this allocator."""
+        return (
+            "local",
+            "peer_direct",
+            "mapped_remote",
+            "remote_pointer",
+        )
+
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
@@ -293,6 +310,8 @@ class BaseSymmetricAllocator(ABC):
             "segment_count": len(segments),
             "capabilities": self.capabilities(),
             "external_tensor_import_mode": self.external_tensor_import_mode(),
+            "peer_transport_modes": list(self.peer_transport_modes()),
+            "peer_import_access_kinds": list(self.peer_import_access_kinds()),
             "segments": [segment.to_dict() for segment in segments],
         }
 

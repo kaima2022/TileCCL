@@ -772,6 +772,17 @@ class TestSymmetricHeapUnit:
         assert metadata["capabilities"]["fd_passing"] is False
         assert metadata["capabilities"]["dmabuf_mapping"] is False
         assert metadata["external_tensor_import_mode"] == "copy"
+        assert metadata["peer_transport_modes"] == [
+            "ctypes_ipc",
+            "pytorch_ipc",
+            "peer_access_pointer_exchange",
+        ]
+        assert metadata["peer_import_access_kinds"] == [
+            "local",
+            "peer_direct",
+            "mapped_remote",
+            "remote_pointer",
+        ]
         assert len(metadata["segments"]) == 1
         assert metadata["segments"][0]["segment_id"] == "heap"
         assert metadata["segments"][0]["segment_kind"] == "device_heap"

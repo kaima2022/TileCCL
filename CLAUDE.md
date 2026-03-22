@@ -439,6 +439,14 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 35 交付物（2026-03-22）
+- [x] allocator peer semantics catalog：allocator metadata 现显式带 `peer_transport_modes` 与 `peer_import_access_kinds`
+- [x] allocator surface 与 public support 解耦：runtime artifact 现在能表达“allocator 实现了哪些 transport/access semantics”，但不把这自动等同于 public-supported transport matrix
+- [x] allocator/context/runtime artifact 回归：`tests/test_memory/test_symmetric_heap.py`、`tests/test_context.py`、`tests/test_benchmark_results.py` 已显式断言这两个字段
+- [x] substrate/support/CLI 回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `62 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

@@ -788,6 +788,7 @@ contracts = {
 - `SymmetricHeap.peer_export_descriptor(rank)` / `peer_import(rank)` 已接入；host-side peer lookup 现已有显式 rank-addressed accessor，不必再直接依赖内部列表下标。
 - allocator metadata 现已不只暴露 capability flags，还显式带 `external_tensor_import_mode`；当前 `torch_bump` 的真实语义已明确写成 `copy`。
 - `ImportedPeerMemory` / `peer_memory_map` 现已显式带 `access_kind`；当前 runtime 已能区分 `transport`（建立路径）与 `access_kind`（local / peer_direct / mapped_remote / remote_pointer 的访问语义）。
+- allocator metadata 现还显式带 `peer_transport_modes` 与 `peer_import_access_kinds`；这表示 allocator surface 自身能表达的 peer 语义目录，不等同于 public support matrix 的验证结论。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
