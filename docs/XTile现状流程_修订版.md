@@ -114,7 +114,7 @@ plan.execute(A, B, C)
 | 自动检测后端 `backend="auto"` | `xtile.init()` 默认就是 `backend="auto"` | 这一项已集成 |
 | `xtile.init()` 返回的 ctx 可直接执行 pattern | `xtile.init(..., heap=...)` / `heap_size=...` / `init_local(...)` 都可直接返回可运行 pattern 的真实 ctx | runtime ctx 主路径已统一 |
 | benchmark / tests / CLI 与 runtime 入口一致 | 已统一到 `XTileContext` | 这一项已打通 |
-| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` 已接入，并统一走显式 `plan` 主链 | `gemm_reducescatter(...)` 与 mixed layout wrapper 仍待补齐 |
+| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` / `xtile.ops.reduce_scatter(...)` 已接入，并统一走显式 `plan` 主链 | `gemm_reducescatter(...)` 仍待补齐；`full/shard` 已由 host wrapper 打通，而 `shard/full` 已确认不应继续塞进 `gemm_allscatter(...)`，应转入 future `gemm_allgather` 风格 contract |
 | full-shape correctness path 与 benchmark shard path | 两者都存在，但都已开始通过显式 contract + plan builder 收敛 | 仍需把更多调用点统一迁到高层 op API，并继续弱化直接 `pattern.execute(...)` 的 public 角色 |
 
 ---
@@ -413,77 +413,87 @@ def create_all(cls, size, world_size, backend):
     return heaps
 ```
 
-### 模式 B：多进程 — _setup_multiprocess（三级 fallback）
+### 模式 B：多进程 — _setup_multiprocess（device-safe auto path + forced diagnostics）
 
 ```python
 # xtile/memory/symmetric_heap.py
 
 def _setup_multiprocess(self):
-    """多进程模式，三级 fallback："""
+    """Exchange heap pointers across ranks for multi-process mode.
+
+    Auto mode now tries only device-safe transports. Other strategies are
+    kept for forced diagnostics, not normal runtime fallback.
+    """
     self._backend.init_ipc()
+    forced_strategy = forced_multiprocess_transport()
+    strategies = (
+        [forced_strategy]
+        if forced_strategy is not None
+        else [
+            "ctypes_ipc",
+        ]
+    )
+    errors = []
 
-    # --- 策略 1: ctypes IPC handle 交换 ---
-    # cudaIpcGetMemHandle + cudaIpcOpenMemHandle
-    # 需要 ptrace_scope=0，否则 error 201
-    try:
-        local_handle = self._backend.get_ipc_handle(self._local_ptr)
-        # ... dist.all_gather 交换 handle，open_ipc_handle 打开 ...
-        return
-    except RuntimeError:
-        pass  # 继续尝试策略 2
-
-    # --- 策略 2: PyTorch IPC（文件描述符共享）---
-    # storage._share_cuda_() + _new_shared_cuda()
-    # 使用 Unix domain socket 传递 fd，绕过 ptrace_scope ✅
-    try:
-        storage = self._buffer.untyped_storage()
-        share_info = storage._share_cuda_()
-
-        all_infos = [None] * self._world_size
-        dist.all_gather_object(all_infos, share_info)
-
-        remote_ptrs = []
-        for r in range(self._world_size):
-            if r == self._rank:
-                remote_ptrs.append(self._local_ptr)
+    for strategy in strategies:
+        try:
+            if strategy == "ctypes_ipc":
+                self._setup_multiprocess_ctypes_ipc()
+            elif strategy == "pytorch_ipc":
+                self._setup_multiprocess_pytorch_ipc()
             else:
-                remote_storage = torch.UntypedStorage._new_shared_cuda(*all_infos[r])
-                remote_ptrs.append(remote_storage.data_ptr())
+                self._setup_multiprocess_peer_access_pointer_exchange()
+            return
+        except Exception as exc:
+            errors.append((strategy, exc))
+            if forced_strategy is not None:
+                break
 
-        self._heap_bases = torch.tensor(remote_ptrs, dtype=torch.int64, device=self._device)
-        return
-    except Exception:
-        pass  # 继续尝试策略 3
-
-    # --- 策略 3: peer access 指针交换（同节点 fallback）---
-    # dist.all_gather 交换 raw data_ptr()
-    local_base = torch.tensor([self._local_ptr], dtype=torch.int64, device=self._device)
-    all_bases = [torch.zeros(1, dtype=torch.int64, device=self._device)
-                 for _ in range(self._world_size)]
-    dist.all_gather(all_bases, local_base)
-    self._heap_bases = torch.cat(all_bases)
+    raise RuntimeError(f"All multiprocess transport strategies failed: {errors}")
 ```
 
 ### IPC 诊断实测结果
 
-跨进程测试（`torch.multiprocessing.spawn`，2× H100，ptrace_scope=1）：
+【新增状态更新 2026-03-21 第四轮核对】跨进程测试（`torch.multiprocessing.spawn`，2× H100，`ptrace_scope=1`）现在的真实状态需要进一步写严：
 
-| 方法 | 结果 | 原理 |
-|------|------|------|
-| peer access (非 IPC) | ✅ PASS | cudaDeviceEnablePeerAccess，单进程直接寻址 |
-| ctypes IPC (Structure) | ❌ FAIL | cudaIpcOpenMemHandle 被 ptrace_scope=1 阻止 |
-| **PyTorch IPC** (_share_cuda_) | ✅ **PASS** | Unix domain socket fd 共享，不受 ptrace_scope 限制 |
+| transport / 场景 | host-side IPC bring-up | 最小 Triton remote load/store | multiprocess reduce_scatter(device) | 当前定位 |
+|------|------|------|------|------|
+| `ctypes_ipc` | ✅ PASS | ✅ PASS | ✅ PASS | 当前唯一通过真实 device-side 矩阵的 multiprocess transport |
+| `pytorch_ipc` | ✅ PASS | ❌ FAIL (`CUDA illegal memory access`) | ❌ FAIL (`CUDA illegal memory access`) | 只能保留为 forced diagnostic / host-side bring-up 对照 |
+| `peer_access_pointer_exchange` | ❌ FAIL (`cudaMemcpy err=1`) | ❌ FAIL (`CUDA illegal memory access`) | ❌ FAIL | 只能保留为 forced diagnostic，不是有效 public transport |
+
+真实命令与结果：
+
+- `python -m tests.test_e2e._run_ipc_test`
+  - 结果：`ALL MULTI-GPU IPC TESTS PASSED`
+- `XTILE_FORCE_MULTIPROCESS_TRANSPORT=pytorch_ipc python -u -m tests.test_e2e._run_ipc_test`
+  - 结果：`ALL MULTI-GPU IPC TESTS PASSED`
+- `XTILE_FORCE_MULTIPROCESS_TRANSPORT=peer_access_pointer_exchange python -u -m tests.test_e2e._run_ipc_test`
+  - 结果：失败，`cudaMemcpy err=1`
+- `PYTHONPATH=. python -u tests/benchmarks/bench_triton_remote_access_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/triton_remote_access_multiprocess_matrix.json`
+  - 结果：`12` 个 case 中 `6` 个通过、`6` 个失败；只有 `auto/ctypes_ipc` 在 `fp16/bf16/fp32` 上通过最小 Triton remote load/store 矩阵
+- `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_reduce_scatter_multiprocess`
+  - 结果：`rank0=4.0 / rank1=6.0`，primitive 与高层 API 都与期望一致
+- `python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --force-transport pytorch_ipc --operation both`
+  - 结果：失败，`CUDA error: an illegal memory access was encountered`
+- `python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --force-transport peer_access_pointer_exchange --operation both`
+  - 结果：失败，`CUDA error: an illegal memory access was encountered`
+
+【修订】这说明当前问题已经不再只是“heap / IPC bring-up 会不会崩”，而是更精确的：
+- `pytorch_ipc` 在当前机器上 **host-side 可读**
+- 但它 **不是 Triton device-side remote dereference 可用 transport**
+- 所以它不能继续作为 XTile multiprocess device path 的自动 fallback
 
 ### 与设想的对比
 
 | 设想 | 现状 | 状态 |
 |------|------|------|
 | cudaIpcGetMemHandle + Open | ctypes Structure by-value 修复 | ✅ 调用约定已修正 |
-| IPC 在 ptrace_scope=1 下工作 | PyTorch IPC fallback 绕行 | ✅ 已解决 |
-| 多进程模式（torchrun） | 三级 fallback 完整实现 | ✅ 可用 |
+| IPC 在 ptrace_scope=1 下工作 | 当前真实环境下 `ctypes_ipc` 已复测通过 | ✅ 已解决 |
+| 多进程模式（torchrun） | auto path 已收窄为 `ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 仅保留 forced diagnostics | ✅ 已收口 |
 | 跨节点 IPC | 不支持 | ⚠️ 需 UCX/GDR |
 
-**与 Iris 的区别（修订）**：不能再简单写成“Iris 仅使用 HIP IPC 单一路径”。当前 Iris 的主实现已经演进到 allocator + fd passing + DMA-BUF 映射；XTile 的特点是显式实现了 ctypes IPC → PyTorch IPC → peer access 三层 fallback。
+**与 Iris 的区别（修订）**：不能再简单写成“Iris 仅使用 HIP IPC 单一路径”。当前 Iris 的主实现已经演进到 allocator + fd passing + DMA-BUF 映射；XTile 的特点也不应再表述成“三条 transport 同等可用”。更准确的表述是：XTile 显式实现了 `ctypes_ipc` / `pytorch_ipc` / `peer_access_pointer_exchange` 三条 bring-up 策略，并且已经通过真实矩阵确认只有 `ctypes_ipc` 可作为当前 multiprocess device path 的 auto transport。
 
 ### 【新增状态更新 2026-03-21】Iris 与 XTile 的实质差异、优劣与对齐方向
 
@@ -493,7 +503,7 @@ def _setup_multiprocess(self):
 |------|------|------|
 | 主抽象 | `SymmetricHeap` + allocator backend | `SymmetricHeap` + mode/fallback |
 | 内存来源 | `TorchAllocator` / `VMemAllocator` 可切换 | 当前主要是 `torch.empty(uint8)` bump allocator |
-| 远端映射主路径 | FD passing + DMA-BUF export/import + VA map/access | ctypes IPC → PyTorch IPC → peer access fallback |
+| 远端映射主路径 | FD passing + DMA-BUF export/import + VA map/access | auto=`ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 仅保留 forced diagnostics |
 | 地址空间观念 | 更像“统一保留虚拟地址区间，再把 peer segment 映射进去” | 更像“先拿到能访问的远端 base，再暴露给 Triton 做 translate_ptr” |
 | 多进程一致性 | 更强，路径更像 canonical import/map | 更务实，优先保证当前环境能跑起来 |
 | 单进程 bring-up | 不如 XTile 直接 | 很直接，`create_all()` 非常适合单节点 benchmark |
@@ -508,10 +518,10 @@ def _setup_multiprocess(self):
    - 更适合把“跨进程、跨设备、连续 VA 语义”长期做深
 
 2. **XTile 更像“一个现实可用的生存路径体系”**
-   - 同一接口下优先尝试最直接的 ctypes IPC
-   - 不行就退到 PyTorch IPC
-   - 再不行就退到单节点 peer access
-   - 对当前 NVIDIA bring-up 和 benchmark 迭代更友好
+   - 同一接口下先把 transport 分层实现清楚
+   - auto path 只保留当前真实通过 device-side 矩阵的 `ctypes_ipc`
+   - 其他 transport 继续保留为 forced diagnostics / bring-up 对照
+   - 对当前 NVIDIA bring-up、实验收口和风险控制更友好
 
 **哪个更好？**
 
@@ -522,7 +532,7 @@ def _setup_multiprocess(self):
 
 总纲不变，但详细动作已经并入下文 `【新增状态更新 2026-03-21】未统一点推进状态与下一步计划`。核心原则只有三条：
 
-1. 保留 XTile 当前 `ctypes IPC → PyTorch IPC → peer access` 的现实 fallback，不牺牲 NVIDIA bring-up 成功率。
+1. 保留 XTile 当前“多 transport 显式实现 + 受控强制诊断”的工程优势，但 auto path 继续只走已验证的 device-safe transport。
 2. 吸收 Iris 的 allocator-first / export-import-map canonical path，把 allocator、segment metadata、FD/DMA-BUF 映射能力做成底层后端抽象。
 3. 对上统一为稳定 public contract：逻辑 shape、layout metadata、heap ownership、external import 语义不能再跟具体 fallback 路径绑死。
 
@@ -540,7 +550,7 @@ translated_ptr 指向 GPU2 的 HBM 地址
 H100 NVLink 硬件自动路由：
   GPU0 SM → tl.store → L2 miss → NVLink (NV12, 300 GB/s) → GPU2 HBM
 
-【新增核对】P2P benchmark 显示 best read ≈ 248.70 GB/s、best write ≈ 248.14 GB/s；scatter 更相关的是写带宽，量级约 82.7%–82.9% 峰值。
+【新增核对】P2P benchmark 最新 canonical serial rerun 显示 best read ≈ 248.74 GB/s、best write ≈ 248.43 GB/s；scatter 更相关的是写带宽，量级约 82.8%–82.9% 峰值。
 ```
 
 ### 与设想的差距
@@ -588,7 +598,7 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 ### 与设想的差距
 
 **基本一致（修订）**，但需要补两点：
-- 当前支持的 op 名是 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`，不是 `gemm_scatter`。
+- `auto_select(...)` 当前识别的 op 名包括 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`，不是 `gemm_scatter`；但真实“完全支持”的仍主要是 `gemm_allscatter`。
 - 对本例 `N=4608, world_size=4`，`n_per_rank = 1152`，不会命中 `fused_sequential` 的 `< 1024` 分支，而会更接近 `producer_consumer` 分支。
 - 当前实现还带 `compute_intensity` 与 `N > 4096` 的补充分支，不再只是最初那三条简单规则。
 
@@ -617,8 +627,8 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 2. **P1：文档、benchmark、plot 同源**
    - 目标：所有 headline 都能回溯到结构化结果和环境元数据。
 
-3. **P2：补齐剩余高层 op 与 mixed layout wrapper**
-   - 目标：减少直接 `pattern.execute(...)` 的 public 暴露面。
+3. **P2：补齐剩余高层 op，并把错误归类的 mixed layout 需求重命名**
+   - 目标：减少直接 `pattern.execute(...)` 的 public 暴露面；把真正属于 `gemm_allgather` 的需求从 `gemm_allscatter` 路线上拆出来。
 
 4. **P3：heap canonical backend 对齐 Iris**
    - 目标：把当前现实可用 fallback 收敛进 allocator-first canonical layer。
@@ -630,20 +640,21 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 1. `xtile/patterns/contracts.py` 已新增 `PatternExecutionSpec`，不再让 pattern 从裸 tensor shape 猜逻辑语义。
 2. 4 个主 pattern 都先走 `resolve_execution(...)` / `resolve_pattern_execution(...)`，benchmark 路径已经显式传 `full_N + b_layout + c_layout`。
 3. `scatter_tile_to_peer(...)` 已改成显式消费 `src_col_offset / valid_cols / dst_leading_dim / dst_col_offset`。
-4. contract 校验会拒绝未实现的 mixed multi-rank layout，而不是继续“猜着跑”。
+4. contract 校验不再“猜着跑”：`full/shard` 已升级为显式 host wrapper；剩余未完成的 mixed multi-rank layout 仍会被明确拒绝。
 
 【修订】因此，原文里“U1/U2/U3 未统一”这句现在已经不准确。更准确的状态应该是：
 - **主链已统一**
 - **边界场景仍有限制**
 
 当前还没做完的边界，不属于主链未统一，而属于下一阶段扩展：
-- mixed `full/shard` multi-rank contract 目前仍直接拒绝
+- mixed `full/shard` multi-rank contract 已由高层 host wrapper 打通
+- mixed `shard/full` multi-rank contract 仍直接拒绝
 - correctness path 与 benchmark path 仍同时存在，只是已经共享同一套 contract
 - public API 还没有把“逻辑 full 语义”和“内部 shard 执行计划”完全包装成一层
 
 ### U4：高层 op API 第一阶段【已完成，第二阶段部分推进】
 
-【新增状态更新 2026-03-21】`xtile.ops.gemm_allscatter(...)` 已经接入，并且这轮已经把它继续收口成显式 plan 主链。与此同时，`xtile.ops.allgather(...)` 也已经落地到同样的“build plan → execute plan”模式。当前真实实现已经是：
+【新增状态更新 2026-03-21】`xtile.ops.gemm_allscatter(...)` 已经接入，并且这轮已经把它继续收口成显式 plan 主链。与此同时，`xtile.ops.allgather(...)` 与 `xtile.ops.reduce_scatter(...)` 也已经落地到同样的“build plan → execute plan”模式。当前真实实现已经是：
 - 解析上下文
 - GEMM 路径解析 public layout contract，collective 路径校验 heap/shape contract
 - build `GemmAllScatterPlan` / `AllGatherPlan`
@@ -657,15 +668,22 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 - `xtile.ops.AllGatherPlan`
 - `xtile.ops.build_allgather_plan(...)`
 - `xtile.ops.allgather(...)`
+- `xtile.ops.ReduceScatterPlan`
+- `xtile.ops.build_reduce_scatter_plan(...)`
+- `xtile.ops.reduce_scatter(...)`
 - `tests/benchmarks/bench_patterns.py` 改走 plan builder
 - `xtile.patterns.auto_select.benchmark_all_patterns(...)` 改走 plan builder
 
 所以，原来“高层 op API 缺失”这个说法也需要改成更准确的版本：
-- **`gemm_allscatter(...)` 已完成并可用**
-- **`allgather(...)` 已完成并可用**
+- **`gemm_allscatter(...)` 已完成单进程主路径；multiprocess 现已完成 `ctypes_ipc` 下 public `full/full + full/shard` 的 2-GPU baseline correctness，并补齐 representative `auto` pattern coverage，但 broader stress/performance/world-size 闭环仍未完成**
+- **`allgather(...)` 已完成单进程主路径；multiprocess `ctypes_ipc` 已通过 2-GPU 真机验证，但当前仍保守记为 `partial`**
+- **`reduce_scatter(...)` 已完成单进程 reference 主路径并可用**
 - **`gemm_reducescatter(...)` 仍未完成**
 
-当前阶段的结论不是“没有高层 API”，而是“高层 API 第一阶段已完成，而且已经开始从‘直接 execute pattern’收口到‘build plan → execute plan’；第二阶段只剩 `gemm_reducescatter(...)` 与 mixed-layout host wrapper 还没补齐”。
+当前阶段的结论不是“没有高层 API”，而是“高层 API 第一阶段已完成，而且已经开始从‘直接 execute pattern’收口到‘build plan → execute plan’；第二阶段主要剩 `gemm_reducescatter(...)`，以及把错误归类到 `gemm_allscatter(...)` 名下的 `shard/full` 需求转成独立 contract”。
+【新增状态更新 2026-03-21 第三轮核对】这里需要进一步收紧：`mixed-layout host wrapper` 已经不是“完全没做”，而是：
+- `full/shard` 已完成，并由高层 API 自动 materialize heap-backed full output 后再返回本 rank shard
+- `shard/full` 仍未完成，而且今天的真实诊断已经证明问题不只是“少一层 allgather wrapper”，而是它根本不应继续作为 `gemm_allscatter(...)` 的逆向补丁
 
 ### U5：benchmark 数据管线与图表口径【已完成（当前范围）】
 
@@ -675,9 +693,13 @@ def auto_select(op, M, N, K, world_size, ctx=None):
   - `bench_patterns.py` 会输出 `figures/data/pattern_overlap_latest.json`
   - `bench_gemm.py` 会输出 `figures/data/gemm_latest.json`
   - `bench_p2p_translate.py` 会输出 `figures/data/p2p_latest.json`
+  - 3 类 benchmark JSON 现都开始携带 `runtime_support` 快照
   - `fig1_gemm_performance` / `fig2_p2p_bandwidth` / `fig3_pattern_overlap` 已优先从 JSON 自动加载
   - `fig5_roofline` 已改为消费同一份 GEMM benchmark 数据，而不是继续吃独立人工常量
+  - `scripts/plot_figures.py` 现会把 `runtime_support` 摘要直接写入 figure footer
+  - `scripts/export_benchmark_summary.py` 现会把 canonical benchmark JSON 导出为 `docs/generated/benchmark_runtime_summary.md`
   - quick run 不再污染正式图
+  - 写入 `figures/data/` 的 canonical benchmark 现已由 repo-global lock 串行保护，避免并发实验污染正式 benchmark 产物
   - JSON 元数据已记录 `heap_mode`、`transport_strategy`、`layout_mode`、`repeats`、`aggregation`
   - `experiment_log.md` 与 `docs/四项目全栈差异分析_20260320.md` 的旧 overlap headline 已按最新结果修正
 
@@ -687,264 +709,211 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 【新增状态更新 2026-03-21】这项目前还是未完成，不能粉饰：
 
-- XTile 当前强项是 `ctypes IPC → PyTorch IPC → peer access` 三层 fallback 的现实可用性
+- XTile 当前强项是把 multiprocess transport 显式分层，并且已经用真实矩阵把“可 host bring-up”和“可 Triton device remote access”区分开了
 - Iris 当前强项是 allocator + fd passing + DMA-BUF 映射这一类 canonical import/map 路线
 - XTile 还没有把 allocator abstraction、external import、segment map/access 做成统一底层语义
 
 所以这项当前仍应明确写成：**未完成**。
 
+### 【新增状态更新 2026-03-21 第二轮核对】P4：runtime support / capability matrix【第一阶段已完成】
+
+【新增状态更新 2026-03-21】这项此前只写在“下一阶段计划”里，但代码里没有统一出口，导致文档容易继续漂。现在已经先落了一版真实 runtime support matrix：
+
+- 新增 `xtile.describe_runtime_support(ctx)`
+- 新增 `ctx.support_matrix()`
+- 新增 `xtile/support.py`
+- 新增 `tests/test_support.py`
+- 新增 `xtile support --json`
+
+当前真实源码摘录：
+
+```python
+gemm_allscatter_status = _describe_gemm_allscatter_support(
+    has_heap=has_heap,
+    heap_mode=heap_mode,
+    transport_strategy=transport_strategy,
+)
+allgather_status = _describe_allgather_support(
+    has_heap=has_heap,
+    heap_mode=heap_mode,
+    transport_strategy=transport_strategy,
+)
+
+ops = {
+    "gemm_allscatter": gemm_allscatter_status,
+    "allgather": allgather_status,
+    "reduce_scatter": SupportStatus(
+        reduce_scatter_state,
+        reduce_scatter_detail,
+    ),
+    "gemm_reducescatter": SupportStatus(
+        "unsupported",
+        "Public high-level API is still a placeholder; no stable fused contract yet.",
+    ),
+}
+```
+
+【修订】这意味着“support / capability matrix 完全未开始”这个说法现在也不准确了。更准确的状态应该是：
+
+- **runtime support matrix 第一阶段已完成，并已有 CLI / 测试出口**
+- **benchmark 结构化 JSON 已开始内嵌这份矩阵**
+- **plot / 文档导出主链现在也已统一消费 `runtime_support` 字段**
+- **而且状态已经开始反映 heap / mode / transport 条件，而不是只看有没有 API 入口**
+
 ### 当前弱项
 
 【新增状态更新 2026-03-21】基于当前代码和文档复核，真正值得继续推进的弱项是下面这些，而不是重复写已经完成的 U1-U4 主链：
 
-1. **整体报告元数据展示还不够统一**
-   - benchmark JSON 已统一，但图注里的日期、命令、聚合口径还没有形成统一模板。
-2. **高层 op 集合还不完整**
+1. **高层 op 集合还不完整**
    - `xtile.ops.gemm_reducescatter(...)` 仍是 `NotImplementedError`。
-3. **直接 `pattern.execute(...)` 仍然是显式可见的 expert surface**
+   - 当前已经补了 `ReduceScatterPlan` + `xtile.ops.reduce_scatter(...)`，并且 **2-GPU multiprocess/device correctness 已通过真实验收**；但进一步矩阵实验已经确认：目前真正通过的 transport 只有 `ctypes_ipc`，`pytorch_ipc` / `peer_access_pointer_exchange` 仍未通过，因此 `gemm_reducescatter(...)` 仍不能被当成“立刻可公开”的完成项。
+2. **直接 `pattern.execute(...)` 仍然是显式可见的 expert surface**
    - 这对底层调优有价值，但对公共语义收口仍然偏宽。
-4. **mixed layout host wrapper 还没实现**
-   - 现在 contract 会拒绝 mixed multi-rank layout，这保证了正确性，但也说明 wrapper 还没补上。
-5. **SymmetricHeap 还没有 allocator-first canonical layer**
+   - 这轮虽然已经补了 multiprocess unsupported transport 的 host-side 守卫，不再直接掉进 Triton illegal memory access；但它仍属于 expert/internal surface，不应替代高层 op 的稳定 contract。
+3. **mixed layout host wrapper 只完成了一半**
+   - `full/shard` 已实现并经过 2-GPU 真实回归与重复调用 workspace 复用验证。
+   - `shard/full` 仍保持显式拒绝。今天新增的真实 2-GPU 诊断表明，当前 `gemm_allscatter_sharded(...)` 在 multi-rank 下暴露的是 peer-scatter ownership contract，而不是“每个 rank 先稳定产出自己的 local shard”。在 `bulk_sync` 诊断中，`rank0` 相对本地 `A @ B_shard0` 参考的 `max_abs_diff = 35.5`，而 `rank1` 仅约 `4.88e-4`，说明这条链不能直接拿来做 full-output assembly 的基石。
+4. **SymmetricHeap 还没有 allocator-first canonical layer**
    - 目前依然更像“务实 fallback 系统”，还不是 Iris 风格的统一 allocator/import-map 框架。
-6. **性能闭环仍未完成**
+5. **性能闭环仍未完成**
    - P2P 仍只有约 82.8%–83.0% 峰值，离 `>=95%` 目标明显有差距。
-   - 8192³ GEMM 仍只有 80.8%–83.4% of cuBLAS，未达 `>=90%` 目标。
+   - 8192³ GEMM 最新 canonical serial rerun 仍只有 83.0%–83.5% of cuBLAS，未达 `>=90%` 目标。
 
 ### 下一阶段计划
 
-【新增状态更新 2026-03-21】下一阶段不再重复做 U1-U4，而是针对上述弱项推进：
+【新增状态更新 2026-03-21 第二轮核对】下一阶段计划需要比上一版更严格，因为这次核对后能确认一件事：`gemm_reducescatter(...)` 不是“下一步直接补一个 plan object”这么简单，它前面有明确前置依赖。
 
-1. **P0-2：继续完成 API 收口**
-   - 让更多默认调用点经由 `build_*_plan(...)`
-   - 为 `gemm_reducescatter` 设计对应 plan object
-   - 继续把 `pattern.execute(...)` 定位为 expert/internal surface，而不是默认 public 入口
+因此，下一阶段计划收敛为下面 4 项，并按依赖顺序推进：
 
-2. **P1：补 mixed layout wrapper**
-   - 把当前“直接拒绝 mixed contract”推进成“由 host wrapper 显式规范化”
-   - 保持 pattern 内核继续只消费已经解歧义的 execution spec
+1. **P0-A：把 support matrix 接入正式状态出口、结构化结果、plot 与文档导出【已完成】**
+   - 已完成：
+     - `xtile.describe_runtime_support(ctx)`
+     - `ctx.support_matrix()`
+     - `tests/test_support.py`
+     - `xtile support --json`
+     - `tests/test_benchmark_results.py`
+     - GEMM / P2P / pattern benchmark JSON 现已内嵌 `runtime_support`
+     - 写入 `figures/data/` 的 canonical benchmark 现已由全局锁串行保护
+     - `scripts/plot_figures.py` 现已消费 `runtime_support` 并写入 figure footer
+     - `scripts/export_benchmark_summary.py` 现已导出 `docs/generated/benchmark_runtime_summary.md`
+     - canonical benchmark 已重跑：
+       - `PYTHONPATH=. python tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json`
+       - `PYTHONPATH=. python tests/benchmarks/bench_p2p_translate.py --output-json figures/data/p2p_latest.json`
+       - `PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json figures/data/pattern_overlap_latest.json`
+     - `python scripts/plot_figures.py`
+     - `python scripts/export_benchmark_summary.py`
+     - 最新聚焦回归（含 benchmark lock / reporting）：
+       - `pytest -q tests/test_benchmark_results.py tests/test_benchmark_reporting.py tests/test_export_benchmark_summary.py tests/test_collectives_host.py tests/test_cli_support.py tests/test_support.py tests/test_ops.py tests/test_patterns/test_contracts.py tests/test_context.py`
+       - `32 passed`
+   - 验收标准：
+     - 文档状态不再手工罗列与代码不一致的支持面
+     - 正式 CLI 可直接输出 support matrix
+     - benchmark 结构化结果可回放当次运行的支持面快照
+     - 图和 Markdown 导出都能直接引用同一份 support snapshot
 
-3. **P2：向 Iris 的 canonical heap 路线对齐**
+2. **P0-B：把 reduce_scatter host contract 从 baseline launcher 推进到稳定 public contract，再谈 `gemm_reducescatter(...)`【第二阶段进行中】**
+   - 原因：
+     - 当前已有 `tile_reduce_scatter` kernel + baseline `reduce_scatter(...)` host launcher
+     - 现在已补 `ReduceScatterPlan` + `xtile.ops.reduce_scatter(...)`
+     - 当前 2-GPU multiprocess/device correctness 已打通，但这条路径仍未完成稳定 public/performance contract 所需的更大验证面，因此仍不足以直接公开 fused `gemm_reducescatter(...)`
+   - 本轮实验核对：
+     - `python -m xtile.cli support --backend cuda --world-size 2 --heap-size-mb 64 --json` 实测输出：
+       - `ops.reduce_scatter = supported`
+       - `collectives.reduce_scatter_launcher = supported`
+     - 真实 2 GPU 高层 API 校验：
+       - `xtile.ops.reduce_scatter(...)` 实测 `rank0=12.0, rank1=14.0`
+       - 期望 `[12.0, 14.0]`
+     - 定向回归：
+       - `pytest -q tests/test_benchmark_results.py tests/test_collectives_host.py tests/test_cli_support.py tests/test_support.py tests/test_ops.py tests/test_patterns/test_contracts.py tests/test_context.py`
+       - `24 passed`
+     - 风险收口：
+       - `reduce_scatter(..., implementation="device")` 在 `single_process` 2-GPU 下实测会给出错误值
+       - 现在已把这一分支改成显式 `ValueError`，只保留已验证的 `reference/auto` 主路径
+     - 第四轮真实诊断 + 第五轮修复验收：
+       - `tests/test_backend_ipc.py` 已确认 `get_ipc_handle()` 现返回完整 64-byte payload
+       - `python -m tests.test_e2e._run_ipc_test` 现已真实通过，结果含 `ALL MULTI-GPU IPC TESTS PASSED`
+       - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_reduce_scatter_multiprocess` 现已真实通过
+       - multiprocess/device `reduce_scatter` 的 primitive 与高层 API 结果均为：
+         - `rank0 = 4.0`
+         - `rank1 = 6.0`
+       - `tile_reduce_scatter` 当前实现已改成 **只远端读 peer chunk、只本地写 output** 的 correctness-first device 路径，避免 peer 覆盖未归约本地 chunk 的 data race
+       - 因此 multiprocess/device path 现已新增默认 gate：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES`
+       - 默认 public 行为仍保持**显式拒绝** multiprocess `auto/device`
+       - 只有显式设置该环境变量时，support matrix 才会把 multiprocess device path 表示为 experimental `partial`
+       - opt-in 回归：
+         - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_backend_ipc.py tests/test_ops.py tests/test_support.py tests/test_collectives_host.py tests/test_reduce_scatter_multiprocess.py tests/test_cli_support.py tests/test_context.py tests/test_patterns/test_contracts.py`
+         - `33 passed`
+     - 第六轮真实矩阵 + transport 收口：
+       - `PYTHONPATH=. XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -u tests/benchmarks/bench_reduce_scatter_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/reduce_scatter_multiprocess_matrix.json`
+       - 结果汇总：`12` 个 case 中 `6` 个通过、`6` 个失败
+       - 通过面：
+         - `auto` / `ctypes_ipc`
+         - `dtype = fp16 / bf16 / fp32`
+         - 实际 transport 均为 `ctypes_ipc`
+       - 未通过面：
+         - `pytorch_ipc`
+         - `peer_access_pointer_exchange`
+       - 因此 gate 已进一步改成 **transport-aware**
+         - 当前即便显式打开 experimental gate，也只允许 `transport_strategy='ctypes_ipc'`
+         - 其他 transport 会在 host 侧提前抛 `ValueError`
+       - 相关回归：
+         - `pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_ops.py tests/test_backend_ipc.py`
+         - `29 passed`
+         - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py`
+         - `3 passed`
+     - 因此当前可以把**单进程 reference 路径**写成 `supported`，并把 **multiprocess/device correctness** 写成“已通过 2-GPU `ctypes_ipc` 矩阵验证但仍为 experimental”
+     - 但这依然不等于 fused `gemm_reducescatter(...)` 前置条件已全部完成
+   - 下一步：
+     - 当前环境下 `dtype(fp16/bf16/f32)` 与 transport 第一轮矩阵已经完成；下一步优先级改成：
+       - 继续修 `pytorch_ipc` / `peer_access_pointer_exchange` 的 device-side remote access 正确性；在修好前保持 `ctypes_ipc only`
+       - 在有更多 GPU 的机器上补 `world_size>2` 真实验收
+       - 继续补 benchmark / stress 证据，再决定是否把 multiprocess/device 从 experimental gate 提升为正式 public contract
+     - 在 public/performance gate 完成前，`gemm_reducescatter(...)` 仍不直接公开
+   - 验收标准：
+      - single-process reference 路径保持真实可验并纳入 support matrix
+      - multiprocess/device 路径状态继续由真实 gate + 实验日志决定，而不是靠文档口径人工判断
+      - 至少完成 `ctypes_ipc` 之外 transport 的真实修复证据，以及更大验证矩阵与 benchmark/stress 证据后，再决定是否公开
+      - 再决定是否公开 `xtile.ops.gemm_reducescatter(...)`
+
+3. **P0-C：把 multiprocess `allgather` / `gemm_allscatter` public surface 与真实 transport 证据对齐【本轮已推进，下一阶段继续】**
+   - 本轮已完成：
+     - `allgather` 新增 2-GPU multiprocess 真机诊断与矩阵
+     - `auto/ctypes_ipc` 在 `fp16/bf16/fp32` 的 primitive / kernel / high-level API 全通过
+     - forced `pytorch_ipc` / `peer_access_pointer_exchange` 现在会在 host 侧明确拒绝
+     - support matrix 已改成 mode/transport 感知，`gemm_allscatter` 无 heap 时不再写成 `supported`
+     - `gemm_allscatter` 现已补上 2-GPU multiprocess 真机诊断与矩阵
+     - `auto/ctypes_ipc` 在 `full/full + full/shard × fp16/bf16/fp32` 的 plan / high-level API 已全通过
+     - forced `pytorch_ipc` / `peer_access_pointer_exchange` 也已确认是 host-side 明确拒绝，而不是 kernel crash
+   - 当前仍未闭环：
+     - `gemm_allscatter` 虽然已经补齐 representative `auto` pattern 面，但更大 shape、更多 world-size 和更长时间 performance/stress 还没有完成
+     - 因此它当前仍应保守写成 `partial`，而不是直接升级成 `supported`
+   - 下一步：
+     - 扩到更大 shape / 更长时间 stress / 条件变化后的稳定性验证
+     - 在当前 2-GPU 之外补更大 world-size 真机证据
+     - 在 representative correctness 之外，再补 public performance contract 所需证据
+   - 验收标准：
+     - `allgather` 与 `gemm_allscatter` 的 support 状态都必须能回溯到真实脚本和结构化 artifact
+     - unsupported transport 必须保持 host-side 明确拒绝
+     - `gemm_allscatter` 只有在拿到更大 shape / world-size / stress / performance 真机证据后才允许升级状态
+
+4. **P1：把 `shard/full` 从“补 wrapper”改成“定义独立 public contract”**
+   - `full/shard` 已完成，但 `shard/full` 经过真实 2-GPU 诊断后，已经确认不应继续作为 `gemm_allscatter(...)` 的逆向补丁。
+   - 下一步应单独定义 `gemm_allgather` 风格 contract：先明确 local-output ownership，再决定是否复用现有 pattern、还是走“local GEMM + allgather” 的高层组合路径。
+   - 验收标准不再是“能跑起来”，而是“local shard ownership、heap contract、full-output assembly 语义都能被测试稳定证明”。
+
+5. **P2：向 Iris 的 canonical heap 路线对齐**
    - 引入 allocator abstraction
    - 补 `import_external_tensor(...)` / `as_symmetric(...)` 等价能力
    - 把 `create_all()` 与 multiprocess path 收敛到统一状态机
-
-4. **P3：补性能闭环**
-   - 继续攻关 P2P `>=95%` 峰值目标
-   - 继续攻关 8192³ GEMM `>=90%` of cuBLAS
-   - 保持所有优化先通过结构化 benchmark 验收，禁止“好看但不稳定”的 headline 回流
-
-5. **P4：补统一 capability / test matrix**
-   - 明确单进程、多进程、外部导入、future DMA-BUF backend 的支持矩阵
-   - 让 heap backend / transport strategy / layout mode 的回归测试更系统
-
-## 【新增状态更新 2026-03-21】我到底改了什么？是不是负优化？
-
-先说结论：
-
-- **不能把当前 headline 变差简单解释成“负优化”**。
-- 更准确的说法是：**runtime / benchmark /图表口径被收紧以后，之前那个最好看的 `1.067×` 不再能当稳定结论**。
-- 目前证据更支持“以前的 pattern headline 带有单尺寸单轮次偏乐观成分”，而不是“我把 pattern kernel 真正优化坏了”。
-
-### 这轮我实际做过的修改与优化
-
-1. **runtime context 统一**
-   - `XTileContext` 现在持有 `backend`、可选 `heap`、`heap_bases`
-   - `xtile.init(..., heap=...)`、`xtile.init(..., heap_size=...)`、`xtile.init_local(...)` 打通
-   - `ctx.empty/zeros/randn/barrier/auto_select_pattern` 已补齐
-
-2. **tests / CLI / benchmark 切到真实 runtime 入口**
-   - pattern tests 不再手工塞 `_Ctx`
-   - `bench_patterns.py` 改走 `xtile.init_local(...)`
-   - CLI `xtile bench pattern` 支持 `--warmup/--iters/--heap-size-mb`
-
-3. **pattern benchmark 从“能跑”改到“更可复现”**
-   - 不再写死 `512 MiB` heap
-   - 改成根据 `(M, N, K)` 自动估算每 rank 对称堆需求
-   - 这修掉了大尺寸 benchmark 直接失败的问题（原 `P5-003`）
-
-4. **pattern 辅助开销削减**
-   - `ProducerConsumerPattern` 复用 lock buffer 与 streams
-   - `WGSpecializedPattern` 复用 lock buffer
-   - 这是主机侧辅助路径优化，不是 fused kernel 算法本身的大改
-
-5. **GEMM benchmark 口径修正**
-   - `xtile.kernels.gemm.gemm(...)` 现在显式支持 `num_warps` / `num_stages`
-   - 避免以前 benchmark 看起来在调参，实际 wrapper 并没真的吃到这些参数
-
-6. **绘图脚本修正**
-   - 原来 `scripts/plot_figures.py` 里 `fig3_pattern_overlap` 直接把 `1.067×` 写死
-   - 现在已经改成优先读取结构化 benchmark JSON，并只在“非 quick / 完整 6 尺寸”条件下更新正式图
-
-7. **API 收口第一阶段**
-   - 新增 `xtile.ops.GemmAllScatterPlan`
-   - 新增 `xtile.ops.build_gemm_allscatter_plan(...)`
-   - 新增 `xtile.ops.gemm_allscatter_sharded(...)`
-   - `bench_patterns.py` 与 `benchmark_all_patterns(...)` 开始共享同一条 plan-builder 主链
-
-### 【新增状态更新 2026-03-21】为什么结果后来又明显变好了？
-
-关键原因不是“pattern kernel 突然被单独优化了一大轮”，而是 **U1/U2/U3 落地后，benchmark 的 shape/layout contract 被真正修正了**：
-
-1. **旧 benchmark path 的 `N` 语义确实不统一**
-   - benchmark 传的是 `B(K, N_per_rank)` / `C(M, N_per_rank)`
-   - 但 pattern host 侧又普遍把 `B.shape[1]` 当成 full `N`
-   - 然后再算一轮 `N_per_rank = N // world_size`
-   - 这会让 scatter / tile decomposition 在 benchmark path 下隐式“再缩一次”
-
-2. **显式 contract 修正后，benchmark 才真正执行了预期的 shard/shard 语义**
-   - 现在 benchmark 路径显式传：
-     - `full_N=N`
-     - `b_layout="shard"`
-     - `c_layout="shard"`
-   - pattern 不再靠 `B.shape[1]` 猜 full-vs-shard
-   - full 6-size rerun 当前结果变成：
-     - best speedup vs `bulk_sync` = **`1.619×`**
-     - 最优点：`wg_specialized` on `8192×8192×30720`
-
-3. **这说明旧的 `1.004×` 结论也不是“最终真相”**
-   - 它更像是“旧 benchmark contract 未统一时的稳定结果”
-   - 不是新 contract 下的正式结论
-
-4. **图表口径也终于和 benchmark 数据源绑定了**
-   - `bench_patterns.py` 会输出结构化 JSON
-   - `plot_figures.py` 只在完整 6 尺寸、非 quick 的正式结果下刷新 `fig3`
-   - quick smoke run 不再污染正式图表
-
-### 那有没有真实的正向改进？
-
-有，而且这次已经不仅是工程主路径，也包括 overlap 结论本身：
-
-- `XTileContext` 主路径统一了，这是真的正向工程改进
-- pattern benchmark 大尺寸能稳定跑完了，这是真的正向改进
-- pattern 的 multi-GPU shape/layout contract 被显式化了，这修掉了 benchmark 语义层面的历史问题
-- pattern overlap 当前正式 full 6-size rerun 已达到 **`1.619×`**
-- GEMM 8192³ 的 `bench_gemm.py --repeats 3` 中位数现在约：
-  - fp16: `83.4%`
-  - bf16: `80.8%`
-- 相比此前文档里混用的旧口径，现在至少 headline、图表和结构化 benchmark 已经统一到同一条数据源
-
-### 当前最准确的现状判断
-
-- **不是“XTile 被我做坏了”**
-- **而是“runtime / benchmark contract 被收敛后，pattern overlap 的真实表现被重新测准了”**
-- 现在 XTile 真正已经站稳的是：
-  - transparent primitive 路线
-  - unified runtime context
-  - dynamic symmetric heap benchmark path
-  - explicit pattern execution contract（full/shard 不再隐式猜）
-  - explicit high-level plan path（build plan → execute plan）
-  - `xtile.ops.gemm_allscatter(...)` 高层入口
-  - 4096³ GEMM 达标
-- 现在仍然没站稳的是：
-  - 8192³ GEMM ≥ 90%
-  - `gemm_reducescatter` / mixed layout wrapper 还没全部接上
-  - symmetric heap canonical allocator/import-map 路线还没完成
-
-### 【新增核对 2026-03-21】当前 5 张图的数据来源是否都来自真实实验环境？
-
-需要分成三类看，不能混写成“全部都是自动实验图”：
-
-1. **Fig 1: GEMM Performance**
-   - 来源：本机真实 `bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json`
-   - 结论：**真实实验结果，且已经 benchmark → JSON → plot 自动联动**
-   - 额外核对：图中百分比标注直接由柱子的 `xtile_tflops / cublas_tflops` 动态计算；标题里的聚合口径也由 JSON 元数据驱动
-
-2. **Fig 2: P2P Bandwidth**
-   - 来源：本机真实 `bench_p2p_translate.py --output-json figures/data/p2p_latest.json`
-   - 结论：**真实实验结果，且已经 benchmark → JSON → plot 自动联动**
-   - 可核对到 JSON 中 `best_read` / `best_write` 与 `float32_by_size` 汇总
-
-3. **Fig 3: Pattern Overlap**
-   - 来源：本机真实 `bench_patterns.py --warmup 3 --iters 10` 生成的结构化 JSON
-   - 当前文件：`figures/data/pattern_overlap_latest.json`
-   - 元数据确认：
-     - GPU: `NVIDIA H100 PCIe`
-     - world_size: `2`
-     - heap_mode: `single_process`
-     - transport_strategy: `peer_access`
-     - quick_mode: `False`
-     - size_count: `6`
-   - 结论：**真实实验结果，且已经自动联动**
-   - 本次额外修正：
-     - 注释箭头改为指向真实最优柱子（`wg_specialized`, `8192×4608×36864`）
-     - y 轴上界改为按最大值动态留白，不再压着顶部
-
-   【新增核对】这部分现在已经能直接对上真实源码，下面分别是 benchmark 写 JSON 与 plot 读 JSON 的当前实现摘录：
-
-```python
-payload = {
-    "schema_version": 1,
-    "benchmark": "pattern_overlap",
-    "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-    "command": " ".join(sys.argv),
-    "environment": {
-        "gpu_name": torch.cuda.get_device_name(0),
-        "visible_gpus": torch.cuda.device_count(),
-        "world_size": world_size,
-        "backend": sample_ctx.backend_name if sample_ctx is not None else "unknown",
-        "allocator_backend": "torch_bump",
-        "heap_mode": sample_heap.mode if sample_heap is not None else "unknown",
-        "transport_strategy": sample_heap.transport_strategy if sample_heap is not None else "unknown",
-        "layout_mode": "shard",
-        "b_layout": "shard",
-        "c_layout": "shard",
-        "dtype": "float16",
-        "quick_mode": args.quick,
-        "warmup": args.warmup,
-        "iters": args.iters,
-    },
-    "sizes": size_payloads,
-    "summary": {
-        "best_speedup_vs_bulk": best_speedup,
-        "size_count": len(size_payloads),
-    },
-}
-output_path = write_json(Path(args.output_json), payload)
-```
-
-```python
-def _load_pattern_speedups():
-    if not PATTERN_BENCHMARK_JSON.exists():
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
-
-    with PATTERN_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
-    environment = payload.get("environment", {})
-    if environment.get("quick_mode") or len(payload.get("sizes", [])) < 6:
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
-
-    sizes = []
-    series = {
-        "bulk_sync": [],
-        "fused_sequential": [],
-        "producer_consumer": [],
-        "wg_specialized": [],
-    }
-```
-
-4. **Fig 4: Architecture**
-   - 来源：架构示意图
-   - 结论：**非实验图**
-
-5. **Fig 5: Roofline**
-   - 来源：理论 roofline + 与 Fig 1 同源的 GEMM JSON（fp16 点）
-   - 结论：**派生图，但实验点已经与 Fig 1 共用同一份结构化结果**
-
-**因此，当前最准确的口径是**：
-- Fig 1 / Fig 2 / Fig 3：真实实验数据，且已做到 benchmark → JSON → plot 自动联动
-- Fig 4：示意图
-- Fig 5：理论 + 与 Fig 1 同源实验点的派生分析图
 
 ### 核心路径：完全实现
 
 | 组件 | 设想 | 现状 | 状态 |
 |------|------|------|------|
 | translate_ptr (5 指令) | 匹配 Iris | ✅ 100% 匹配 | 完成 |
-| SymmetricHeap | IPC/peer access | ✅ 三级 fallback (ctypes IPC → PyTorch IPC → peer access) | 完成 |
+| SymmetricHeap | IPC/peer access | ✅ 单进程 `peer_access` + 多进程 auto=`ctypes_ipc`；其余 transport 保留 forced diagnostics | 完成 |
 | 4 种 overlap pattern | kernel 实现 | ✅ 全部实现 | 完成 |
-| GEMM kernel | ≥ 90% cuBLAS | ✅ 4096³：fp16 97.8%，bf16 92.0%（`bench_gemm.py --repeats 3` 中位数） | 完成 |
+| GEMM kernel | ≥ 90% cuBLAS | ✅ 4096³：fp16 94.9%，bf16 91.1%（latest canonical rerun） | 完成 |
 | Auto-select | 硬件感知 | ✅ 启发式已实现，且已与统一 `XTileContext` 主路径打通 | 基本完成 |
 | tile 级 collective | ring allreduce 等 | ⚠️ 代码已实现，但当前结果里至少 allreduce collective benchmark 仍报 `invalid resource handle` | 部分完成 |
 | 跨平台 HAL | CUDA + HIP | ✅ 代码就绪 | 待 AMD 硬件 |
@@ -953,9 +922,9 @@ def _load_pattern_speedups():
 
 | 组件 | 设想 | 现状 | 原因 |
 |------|------|------|------|
-| P2P ≥ 95% | 285 GB/s | ❌ 当前约 82.8%–83.0% 峰值 | Triton/PTX 路径与协议开销 |
+| P2P ≥ 95% | 285 GB/s | ❌ 当前约 82.9% 峰值 | Triton/PTX 路径与协议开销 |
 | 一键 API | `xtile.fused_gemm_scatter(...)` | ⚠️ `xtile.ops.gemm_allscatter(...)` / `xtile.ops.allgather(...)` 已接入，但 `gemm_reducescatter(...)` 仍未完成 | 高层 API 正在补齐 |
-| 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 当前约 80.8%–83.4% | 仍需更深 kernel-level 优化 |
-| Pattern ≥ 1.3× overlap | 多 GPU overlap | ✅ 当前 full 6-size rerun best = 1.619× | contract 修正后已达标 |
+| 8192³ GEMM ≥ 90% | kernel 优化 | ❌ 当前约 83.0%–83.5% | 仍需更深 kernel-level 优化 |
+| Pattern ≥ 1.3× overlap | 多 GPU overlap | ✅ 当前 full 6-size rerun best = 1.667× | contract 修正后已达标 |
 | 跨节点 IPC | UCX/GDR | ❌ 待实现 | 需跨机通信基础设施 |
 | AMD 实测 | MI300X 验证 | ❌ 待硬件 | 无 AMD GPU |

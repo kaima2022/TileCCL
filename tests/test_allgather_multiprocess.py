@@ -1,0 +1,55 @@
+"""Real multiprocess validation for allgather."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+
+import pytest
+
+
+@pytest.mark.multigpu
+@pytest.mark.parametrize("dtype_name", ["float32"])
+def test_allgather_multiprocess_default_transport(
+    skip_no_multigpu,
+    dtype_name: str,
+) -> None:
+    """The default multiprocess allgather path should be correct on the current runtime."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tests.test_e2e._run_allgather_multiprocess",
+            "--dtype",
+            dtype_name,
+            "--warmup",
+            "2",
+            "--iters",
+            "4",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise AssertionError(
+            "Multiprocess allgather validation failed.\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+    payloads = [
+        json.loads(line)
+        for line in result.stdout.splitlines()
+        if line.strip().startswith("{")
+    ]
+    assert payloads, f"No JSON payloads found in stdout:\n{result.stdout}"
+    for payload in payloads:
+        assert payload["dtype"] == dtype_name
+        assert payload["mode"] == "multiprocess"
+        assert payload["transport_strategy"] == "ctypes_ipc"
+        assert payload["primitive_ok"] is True
+        assert payload["high_level_ok"] is True
+        assert payload["kernel_ok"] is True

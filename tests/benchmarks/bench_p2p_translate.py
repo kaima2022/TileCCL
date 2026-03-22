@@ -33,7 +33,12 @@ import triton.language as tl
 
 from xtile.memory.symmetric_heap import SymmetricHeap
 from xtile.memory.translation import translate_ptr
-from xtile.utils.benchmark_results import default_p2p_benchmark_path, write_json
+from xtile.utils.benchmark_results import (
+    canonical_benchmark_run,
+    default_p2p_benchmark_path,
+    describe_runtime_support_snapshot,
+    write_json,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -285,6 +290,7 @@ def _p2p_payload(
     link: str,
     theoretical_peak: float,
     heaps: list[SymmetricHeap],
+    runtime_support: dict[str, object],
 ) -> dict[str, object]:
     """Build a structured P2P benchmark payload."""
     best_read = max((r for r in results if r.direction == "read"), key=lambda item: item.bandwidth_gbps)
@@ -304,6 +310,7 @@ def _p2p_payload(
             "transport_strategy": heaps[0].transport_strategy,
             "quick_mode": quick,
         },
+        "runtime_support": runtime_support,
         "results": [
             {
                 "direction": result.direction,
@@ -426,160 +433,160 @@ def main():
 
     args = _parse_args(sys.argv[1:])
     quick = args.quick
+    with canonical_benchmark_run(args.output_json):
+        link = "unknown"
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["nvidia-smi", "topo", "-m"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.split("\n"):
+                if "GPU0" in line and "NV" in line:
+                    parts = line.split()
+                    for p in parts:
+                        if p.startswith("NV"):
+                            link = p
+                            break
+        except Exception:
+            pass
 
-    # Get topology info
-    link = "unknown"
-    try:
-        import subprocess
-        result = subprocess.run(
-            ["nvidia-smi", "topo", "-m"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for line in result.stdout.split("\n"):
-            if "GPU0" in line and "NV" in line:
-                parts = line.split()
-                for p in parts:
-                    if p.startswith("NV"):
-                        link = p
-                        break
-    except Exception:
-        pass
+        theoretical_peak = 300.0  # GB/s
+        print(f"=== XTile P2P Bandwidth Benchmark (Optimized) ===")
+        print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
+        print(f"Link: {link}")
+        print(f"Theoretical peak: {theoretical_peak:.1f} GB/s (per direction)")
+        print()
 
-    # H100 PCIe NV12: 12 × 25 GB/s = 300 GB/s per direction
-    theoretical_peak = 300.0  # GB/s
-    print(f"=== XTile P2P Bandwidth Benchmark (Optimized) ===")
-    print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
-    print(f"Link: {link}")
-    print(f"Theoretical peak: {theoretical_peak:.1f} GB/s (per direction)")
-    print()
+        heap_size = 256 * 1024 * 1024  # 256 MB
+        heaps = SymmetricHeap.create_all(size=heap_size, world_size=2)
+        try:
+            runtime_support = describe_runtime_support_snapshot(
+                backend=getattr(heaps[0], "_backend_name", "auto"),
+                rank=heaps[0].rank,
+                world_size=heaps[0].world_size,
+                heap=heaps[0],
+                force_backend=True,
+            )
 
-    # Heap size: enough for largest test
-    heap_size = 256 * 1024 * 1024  # 256 MB
-    heaps = SymmetricHeap.create_all(size=heap_size, world_size=2)
+            num_sms = torch.cuda.get_device_properties(0).multi_processor_count
+            results: list[BenchResult] = []
 
-    num_sms = torch.cuda.get_device_properties(0).multi_processor_count
-    results: list[BenchResult] = []
+            if quick:
+                sizes_mb = [128]
+                block_sizes = [4096]
+                grid_scales = [1]
+                dtypes = [torch.float32]
+                read_variants = ["baseline", "cg", "evict_first"]
+                write_variants = ["baseline", "wt", "wt+evict"]
+            else:
+                sizes_mb = [1, 4, 16, 64, 128]
+                block_sizes = [1024, 2048, 4096, 8192]
+                grid_scales = [1, 2]
+                dtypes = [torch.float32, torch.float16]
+                read_variants = ["baseline", "cg", "evict_first"]
+                write_variants = ["baseline", "wt", "wt+evict"]
 
-    # ---- Systematic sweep ----
+            best_read = None
+            best_write = None
 
-    if quick:
-        # Quick: just large transfers with best settings
-        sizes_mb = [128]
-        block_sizes = [4096]
-        grid_scales = [1]
-        dtypes = [torch.float32]
-        read_variants = ["baseline", "cg", "evict_first"]
-        write_variants = ["baseline", "wt", "wt+evict"]
-    else:
-        sizes_mb = [1, 4, 16, 64, 128]
-        block_sizes = [1024, 2048, 4096, 8192]
-        grid_scales = [1, 2]  # num_sms * scale
-        dtypes = [torch.float32, torch.float16]
-        read_variants = ["baseline", "cg", "evict_first"]
-        write_variants = ["baseline", "wt", "wt+evict"]
+            for dtype in dtypes:
+                el_size = torch.tensor([], dtype=dtype).element_size()
+                print(f"--- dtype={dtype} ---")
 
-    best_read = None
-    best_write = None
+                for size_mb in sizes_mb:
+                    n_elements = size_mb * 1024 * 1024 // el_size
 
-    for dtype in dtypes:
-        el_size = torch.tensor([], dtype=dtype).element_size()
-        print(f"--- dtype={dtype} ---")
+                    for bs in block_sizes:
+                        for grid_scale in grid_scales:
+                            gs = num_sms * grid_scale
 
-        for size_mb in sizes_mb:
-            n_elements = size_mb * 1024 * 1024 // el_size
+                            for variant in read_variants:
+                                for h in heaps:
+                                    h._bump_offset = 0
+                                    h._alloc_records.clear()
 
-            for bs in block_sizes:
-                for grid_scale in grid_scales:
-                    gs = num_sms * grid_scale
+                                r = benchmark_p2p(
+                                    heaps, n_elements, bs, dtype,
+                                    direction="read", variant=variant,
+                                    warmup=5, iters=50,
+                                    num_sms=gs,
+                                )
+                                results.append(r)
+                                pct = r.bandwidth_gbps / theoretical_peak * 100
+                                if best_read is None or r.bandwidth_gbps > best_read.bandwidth_gbps:
+                                    if r.size_bytes >= 16e6:
+                                        best_read = r
+                                print(
+                                    f"  read  | {variant:14s} | {r.dtype:7s} | "
+                                    f"{r.size_bytes/1e6:7.1f} MB | "
+                                    f"BS={r.block_size:5d} | grid={gs:4d} | "
+                                    f"{r.bandwidth_gbps:7.2f} GB/s | "
+                                    f"{pct:5.1f}% peak | "
+                                    f"{r.time_us:8.1f} us"
+                                )
 
-                    # Read sweep
-                    for variant in read_variants:
-                        for h in heaps:
-                            h._bump_offset = 0
-                            h._alloc_records.clear()
+                            for variant in write_variants:
+                                for h in heaps:
+                                    h._bump_offset = 0
+                                    h._alloc_records.clear()
 
-                        r = benchmark_p2p(
-                            heaps, n_elements, bs, dtype,
-                            direction="read", variant=variant,
-                            warmup=5, iters=50,
-                            num_sms=gs,
-                        )
-                        results.append(r)
-                        pct = r.bandwidth_gbps / theoretical_peak * 100
-                        if best_read is None or r.bandwidth_gbps > best_read.bandwidth_gbps:
-                            if r.size_bytes >= 16e6:
-                                best_read = r
-                        print(
-                            f"  read  | {variant:14s} | {r.dtype:7s} | "
-                            f"{r.size_bytes/1e6:7.1f} MB | "
-                            f"BS={r.block_size:5d} | grid={gs:4d} | "
-                            f"{r.bandwidth_gbps:7.2f} GB/s | "
-                            f"{pct:5.1f}% peak | "
-                            f"{r.time_us:8.1f} us"
-                        )
+                                r = benchmark_p2p(
+                                    heaps, n_elements, bs, dtype,
+                                    direction="write", variant=variant,
+                                    warmup=5, iters=50,
+                                    num_sms=gs,
+                                )
+                                results.append(r)
+                                pct = r.bandwidth_gbps / theoretical_peak * 100
+                                if best_write is None or r.bandwidth_gbps > best_write.bandwidth_gbps:
+                                    if r.size_bytes >= 16e6:
+                                        best_write = r
+                                print(
+                                    f"  write | {variant:14s} | {r.dtype:7s} | "
+                                    f"{r.size_bytes/1e6:7.1f} MB | "
+                                    f"BS={r.block_size:5d} | grid={gs:4d} | "
+                                    f"{r.bandwidth_gbps:7.2f} GB/s | "
+                                    f"{pct:5.1f}% peak | "
+                                    f"{r.time_us:8.1f} us"
+                                )
 
-                    # Write sweep
-                    for variant in write_variants:
-                        for h in heaps:
-                            h._bump_offset = 0
-                            h._alloc_records.clear()
+            print()
+            print("=" * 80)
+            print("=== Summary ===")
+            if best_read:
+                pct = best_read.bandwidth_gbps / theoretical_peak * 100
+                print(
+                    f"Best read:  {best_read.bandwidth_gbps:.2f} GB/s ({pct:.1f}% peak) "
+                    f"[{best_read.variant}, BS={best_read.block_size}, "
+                    f"grid={best_read.num_sms}, {best_read.dtype}]"
+                )
+            if best_write:
+                pct = best_write.bandwidth_gbps / theoretical_peak * 100
+                print(
+                    f"Best write: {best_write.bandwidth_gbps:.2f} GB/s ({pct:.1f}% peak) "
+                    f"[{best_write.variant}, BS={best_write.block_size}, "
+                    f"grid={best_write.num_sms}, {best_write.dtype}]"
+                )
 
-                        r = benchmark_p2p(
-                            heaps, n_elements, bs, dtype,
-                            direction="write", variant=variant,
-                            warmup=5, iters=50,
-                            num_sms=gs,
-                        )
-                        results.append(r)
-                        pct = r.bandwidth_gbps / theoretical_peak * 100
-                        if best_write is None or r.bandwidth_gbps > best_write.bandwidth_gbps:
-                            if r.size_bytes >= 16e6:
-                                best_write = r
-                        print(
-                            f"  write | {variant:14s} | {r.dtype:7s} | "
-                            f"{r.size_bytes/1e6:7.1f} MB | "
-                            f"BS={r.block_size:5d} | grid={gs:4d} | "
-                            f"{r.bandwidth_gbps:7.2f} GB/s | "
-                            f"{pct:5.1f}% peak | "
-                            f"{r.time_us:8.1f} us"
-                        )
+            target_met = False
+            if best_read and best_write:
+                target_met = (best_read.bandwidth_gbps >= 285.0 and
+                              best_write.bandwidth_gbps >= 285.0)
+            print(f"\nTarget (≥95% = 285 GB/s): {'MET' if target_met else 'NOT MET'}")
 
-    # Summary
-    print()
-    print("=" * 80)
-    print("=== Summary ===")
-    if best_read:
-        pct = best_read.bandwidth_gbps / theoretical_peak * 100
-        print(
-            f"Best read:  {best_read.bandwidth_gbps:.2f} GB/s ({pct:.1f}% peak) "
-            f"[{best_read.variant}, BS={best_read.block_size}, "
-            f"grid={best_read.num_sms}, {best_read.dtype}]"
-        )
-    if best_write:
-        pct = best_write.bandwidth_gbps / theoretical_peak * 100
-        print(
-            f"Best write: {best_write.bandwidth_gbps:.2f} GB/s ({pct:.1f}% peak) "
-            f"[{best_write.variant}, BS={best_write.block_size}, "
-            f"grid={best_write.num_sms}, {best_write.dtype}]"
-        )
-
-    target_met = False
-    if best_read and best_write:
-        target_met = (best_read.bandwidth_gbps >= 285.0 and
-                      best_write.bandwidth_gbps >= 285.0)
-    print(f"\nTarget (≥95% = 285 GB/s): {'MET' if target_met else 'NOT MET'}")
-
-    output_path = write_json(Path(args.output_json), _p2p_payload(
-        results=results,
-        quick=quick,
-        link=link,
-        theoretical_peak=theoretical_peak,
-        heaps=heaps,
-    ))
-    print(f"Structured results written to: {output_path}")
-
-    for h in heaps:
-        h.cleanup()
+            output_path = write_json(Path(args.output_json), _p2p_payload(
+                results=results,
+                quick=quick,
+                link=link,
+                theoretical_peak=theoretical_peak,
+                heaps=heaps,
+                runtime_support=runtime_support,
+            ))
+            print(f"Structured results written to: {output_path}")
+        finally:
+            for h in heaps:
+                h.cleanup()
 
 
 if __name__ == "__main__":

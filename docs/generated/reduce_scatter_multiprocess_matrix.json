@@ -1,0 +1,482 @@
+{
+  "benchmark": "reduce_scatter_multiprocess_matrix",
+  "cases": [
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128",
+      "dtype": "float16",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "expected": 4.0,
+          "forced_transport": "auto",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.13705599308013916,
+            "mean_ms": 0.09806079864501953,
+            "min_ms": 0.08118399977684021
+          },
+          "high_level_value": 4.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08675199747085571,
+            "mean_ms": 0.07466239780187607,
+            "min_ms": 0.0663679987192154
+          },
+          "primitive_value": 4.0,
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "expected": 6.0,
+          "forced_transport": "auto",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.19465599954128265,
+            "mean_ms": 0.10637439936399459,
+            "min_ms": 0.081216000020504
+          },
+          "high_level_value": 6.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08044800162315369,
+            "mean_ms": 0.06808320060372353,
+            "min_ms": 0.06115199998021126
+          },
+          "primitive_value": 6.0,
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"expected\": 4.0, \"primitive_value\": 4.0, \"high_level_value\": 4.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"primitive_timing_ms\": {\"mean_ms\": 0.07466239780187607, \"min_ms\": 0.0663679987192154, \"max_ms\": 0.08675199747085571}, \"high_level_timing_ms\": {\"mean_ms\": 0.09806079864501953, \"min_ms\": 0.08118399977684021, \"max_ms\": 0.13705599308013916}}\n{\"rank\": 1, \"expected\": 6.0, \"primitive_value\": 6.0, \"high_level_value\": 6.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"primitive_timing_ms\": {\"mean_ms\": 0.06808320060372353, \"min_ms\": 0.06115199998021126, \"max_ms\": 0.08044800162315369}, \"high_level_timing_ms\": {\"mean_ms\": 0.10637439936399459, \"min_ms\": 0.081216000020504, \"max_ms\": 0.19465599954128265}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.10221759900450705,
+        "max_rank_skew_ms": 0.008313600718975064,
+        "mode": "multiprocess",
+        "primitive_mean_ms_across_ranks": 0.07137279920279979,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --force-transport ctypes_ipc",
+      "dtype": "float16",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "expected": 6.0,
+          "forced_transport": "ctypes_ipc",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.09241600334644318,
+            "mean_ms": 0.08599040061235427,
+            "min_ms": 0.07654400169849396
+          },
+          "high_level_value": 6.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.07753600180149078,
+            "mean_ms": 0.0646976001560688,
+            "min_ms": 0.05897599831223488
+          },
+          "primitive_value": 6.0,
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "expected": 4.0,
+          "forced_transport": "ctypes_ipc",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.09200000017881393,
+            "mean_ms": 0.08159359842538834,
+            "min_ms": 0.07487999647855759
+          },
+          "high_level_value": 4.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08643200248479843,
+            "mean_ms": 0.0679744005203247,
+            "min_ms": 0.05984000116586685
+          },
+          "primitive_value": 4.0,
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"expected\": 6.0, \"primitive_value\": 6.0, \"high_level_value\": 6.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"primitive_timing_ms\": {\"mean_ms\": 0.0646976001560688, \"min_ms\": 0.05897599831223488, \"max_ms\": 0.07753600180149078}, \"high_level_timing_ms\": {\"mean_ms\": 0.08599040061235427, \"min_ms\": 0.07654400169849396, \"max_ms\": 0.09241600334644318}}\n{\"rank\": 0, \"expected\": 4.0, \"primitive_value\": 4.0, \"high_level_value\": 4.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"primitive_timing_ms\": {\"mean_ms\": 0.0679744005203247, \"min_ms\": 0.05984000116586685, \"max_ms\": 0.08643200248479843}, \"high_level_timing_ms\": {\"mean_ms\": 0.08159359842538834, \"min_ms\": 0.07487999647855759, \"max_ms\": 0.09200000017881393}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.08379199951887131,
+        "max_rank_skew_ms": 0.004396802186965934,
+        "mode": "multiprocess",
+        "primitive_mean_ms_across_ranks": 0.06633600033819675,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --force-transport pytorch_ipc",
+      "dtype": "float16",
+      "requested_transport": "pytorch_ipc",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "W0321 22:20:16.966000 379327 torch/multiprocessing/spawn.py:169] Terminating process 379595 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 299, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 284, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 155, in _worker\n    primitive_timing = _timed_collective(\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 77, in _timed_collective\n    fn()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 156, in <lambda>\n    lambda: primitive_reduce_scatter(\n  File \"/home/makai/XTile/xtile/primitives/collectives.py\", line 733, in reduce_scatter\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='pytorch_ipc'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --force-transport peer_access_pointer_exchange",
+      "dtype": "float16",
+      "requested_transport": "peer_access_pointer_exchange",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "W0321 22:20:29.029000 380302 torch/multiprocessing/spawn.py:169] Terminating process 380583 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 299, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 284, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 155, in _worker\n    primitive_timing = _timed_collective(\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 77, in _timed_collective\n    fn()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 156, in <lambda>\n    lambda: primitive_reduce_scatter(\n  File \"/home/makai/XTile/xtile/primitives/collectives.py\", line 733, in reduce_scatter\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='peer_access_pointer_exchange'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128",
+      "dtype": "bfloat16",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "expected": 6.0,
+          "forced_transport": "auto",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.09696000069379807,
+            "mean_ms": 0.08313599973917007,
+            "min_ms": 0.07606399804353714
+          },
+          "high_level_value": 6.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08240000158548355,
+            "mean_ms": 0.06947840005159378,
+            "min_ms": 0.06252799928188324
+          },
+          "primitive_value": 6.0,
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "expected": 4.0,
+          "forced_transport": "auto",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.1483519971370697,
+            "mean_ms": 0.12963200062513353,
+            "min_ms": 0.11929599940776825
+          },
+          "high_level_value": 4.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.2430720031261444,
+            "mean_ms": 0.19756800234317778,
+            "min_ms": 0.17177599668502808
+          },
+          "primitive_value": 4.0,
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"expected\": 6.0, \"primitive_value\": 6.0, \"high_level_value\": 6.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"primitive_timing_ms\": {\"mean_ms\": 0.06947840005159378, \"min_ms\": 0.06252799928188324, \"max_ms\": 0.08240000158548355}, \"high_level_timing_ms\": {\"mean_ms\": 0.08313599973917007, \"min_ms\": 0.07606399804353714, \"max_ms\": 0.09696000069379807}}\n{\"rank\": 0, \"expected\": 4.0, \"primitive_value\": 4.0, \"high_level_value\": 4.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"primitive_timing_ms\": {\"mean_ms\": 0.19756800234317778, \"min_ms\": 0.17177599668502808, \"max_ms\": 0.2430720031261444}, \"high_level_timing_ms\": {\"mean_ms\": 0.12963200062513353, \"min_ms\": 0.11929599940776825, \"max_ms\": 0.1483519971370697}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.1063840001821518,
+        "max_rank_skew_ms": 0.04649600088596345,
+        "mode": "multiprocess",
+        "primitive_mean_ms_across_ranks": 0.13352320119738578,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --force-transport ctypes_ipc",
+      "dtype": "bfloat16",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "expected": 6.0,
+          "forced_transport": "ctypes_ipc",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.08934400230646133,
+            "mean_ms": 0.08157439976930618,
+            "min_ms": 0.07791999727487564
+          },
+          "high_level_value": 6.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08243200182914734,
+            "mean_ms": 0.06828800067305565,
+            "min_ms": 0.06230400130152702
+          },
+          "primitive_value": 6.0,
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "expected": 4.0,
+          "forced_transport": "ctypes_ipc",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.0912960022687912,
+            "mean_ms": 0.08013439923524857,
+            "min_ms": 0.07423999905586243
+          },
+          "high_level_value": 4.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.07900799810886383,
+            "mean_ms": 0.0681599996984005,
+            "min_ms": 0.062272001057863235
+          },
+          "primitive_value": 4.0,
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"expected\": 6.0, \"primitive_value\": 6.0, \"high_level_value\": 6.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"primitive_timing_ms\": {\"mean_ms\": 0.06828800067305565, \"min_ms\": 0.06230400130152702, \"max_ms\": 0.08243200182914734}, \"high_level_timing_ms\": {\"mean_ms\": 0.08157439976930618, \"min_ms\": 0.07791999727487564, \"max_ms\": 0.08934400230646133}}\n{\"rank\": 0, \"expected\": 4.0, \"primitive_value\": 4.0, \"high_level_value\": 4.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"primitive_timing_ms\": {\"mean_ms\": 0.0681599996984005, \"min_ms\": 0.062272001057863235, \"max_ms\": 0.07900799810886383}, \"high_level_timing_ms\": {\"mean_ms\": 0.08013439923524857, \"min_ms\": 0.07423999905586243, \"max_ms\": 0.0912960022687912}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.08085439950227738,
+        "max_rank_skew_ms": 0.0014400005340576144,
+        "mode": "multiprocess",
+        "primitive_mean_ms_across_ranks": 0.06822400018572808,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --force-transport pytorch_ipc",
+      "dtype": "bfloat16",
+      "requested_transport": "pytorch_ipc",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "W0321 22:21:09.147000 383200 torch/multiprocessing/spawn.py:169] Terminating process 383285 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 299, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 284, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 155, in _worker\n    primitive_timing = _timed_collective(\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 77, in _timed_collective\n    fn()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 156, in <lambda>\n    lambda: primitive_reduce_scatter(\n  File \"/home/makai/XTile/xtile/primitives/collectives.py\", line 733, in reduce_scatter\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='pytorch_ipc'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --force-transport peer_access_pointer_exchange",
+      "dtype": "bfloat16",
+      "requested_transport": "peer_access_pointer_exchange",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "W0321 22:21:21.407000 384175 torch/multiprocessing/spawn.py:169] Terminating process 384259 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 299, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 284, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 155, in _worker\n    primitive_timing = _timed_collective(\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 77, in _timed_collective\n    fn()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 156, in <lambda>\n    lambda: primitive_reduce_scatter(\n  File \"/home/makai/XTile/xtile/primitives/collectives.py\", line 733, in reduce_scatter\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='peer_access_pointer_exchange'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128",
+      "dtype": "float32",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "expected": 6.0,
+          "forced_transport": "auto",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.0926399976015091,
+            "mean_ms": 0.08744959980249405,
+            "min_ms": 0.08137600123882294
+          },
+          "high_level_value": 6.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08352000266313553,
+            "mean_ms": 0.07035520076751708,
+            "min_ms": 0.06268800050020218
+          },
+          "primitive_value": 6.0,
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "expected": 4.0,
+          "forced_transport": "auto",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.09795200079679489,
+            "mean_ms": 0.08421119898557664,
+            "min_ms": 0.07807999849319458
+          },
+          "high_level_value": 4.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.11958400160074234,
+            "mean_ms": 0.08173440098762512,
+            "min_ms": 0.06319999694824219
+          },
+          "primitive_value": 4.0,
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"expected\": 6.0, \"primitive_value\": 6.0, \"high_level_value\": 6.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"primitive_timing_ms\": {\"mean_ms\": 0.07035520076751708, \"min_ms\": 0.06268800050020218, \"max_ms\": 0.08352000266313553}, \"high_level_timing_ms\": {\"mean_ms\": 0.08744959980249405, \"min_ms\": 0.08137600123882294, \"max_ms\": 0.0926399976015091}}\n{\"rank\": 0, \"expected\": 4.0, \"primitive_value\": 4.0, \"high_level_value\": 4.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"primitive_timing_ms\": {\"mean_ms\": 0.08173440098762512, \"min_ms\": 0.06319999694824219, \"max_ms\": 0.11958400160074234}, \"high_level_timing_ms\": {\"mean_ms\": 0.08421119898557664, \"min_ms\": 0.07807999849319458, \"max_ms\": 0.09795200079679489}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.08583039939403533,
+        "max_rank_skew_ms": 0.003238400816917411,
+        "mode": "multiprocess",
+        "primitive_mean_ms_across_ranks": 0.0760448008775711,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --force-transport ctypes_ipc",
+      "dtype": "float32",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "expected": 6.0,
+          "forced_transport": "ctypes_ipc",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.09001599997282028,
+            "mean_ms": 0.07966720014810562,
+            "min_ms": 0.07526399940252304
+          },
+          "high_level_value": 6.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.11683200299739838,
+            "mean_ms": 0.07448960021138192,
+            "min_ms": 0.06022400036454201
+          },
+          "primitive_value": 6.0,
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "expected": 4.0,
+          "forced_transport": "ctypes_ipc",
+          "high_level_ok": true,
+          "high_level_timing_ms": {
+            "max_ms": 0.09334400296211243,
+            "mean_ms": 0.08094080090522766,
+            "min_ms": 0.0748480036854744
+          },
+          "high_level_value": 4.0,
+          "iters": 5,
+          "mode": "multiprocess",
+          "primitive_ok": true,
+          "primitive_timing_ms": {
+            "max_ms": 0.08835200220346451,
+            "mean_ms": 0.06945920139551162,
+            "min_ms": 0.05984000116586685
+          },
+          "primitive_value": 4.0,
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"expected\": 6.0, \"primitive_value\": 6.0, \"high_level_value\": 6.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"primitive_timing_ms\": {\"mean_ms\": 0.07448960021138192, \"min_ms\": 0.06022400036454201, \"max_ms\": 0.11683200299739838}, \"high_level_timing_ms\": {\"mean_ms\": 0.07966720014810562, \"min_ms\": 0.07526399940252304, \"max_ms\": 0.09001599997282028}}\n{\"rank\": 0, \"expected\": 4.0, \"primitive_value\": 4.0, \"high_level_value\": 4.0, \"primitive_ok\": true, \"high_level_ok\": true, \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"primitive_timing_ms\": {\"mean_ms\": 0.06945920139551162, \"min_ms\": 0.05984000116586685, \"max_ms\": 0.08835200220346451}, \"high_level_timing_ms\": {\"mean_ms\": 0.08094080090522766, \"min_ms\": 0.0748480036854744, \"max_ms\": 0.09334400296211243}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.08030400052666664,
+        "max_rank_skew_ms": 0.0012736007571220453,
+        "mode": "multiprocess",
+        "primitive_mean_ms_across_ranks": 0.07197440080344678,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --force-transport pytorch_ipc",
+      "dtype": "float32",
+      "requested_transport": "pytorch_ipc",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "W0321 22:22:02.220000 387071 torch/multiprocessing/spawn.py:169] Terminating process 387341 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 299, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 284, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 155, in _worker\n    primitive_timing = _timed_collective(\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 77, in _timed_collective\n    fn()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 156, in <lambda>\n    lambda: primitive_reduce_scatter(\n  File \"/home/makai/XTile/xtile/primitives/collectives.py\", line 733, in reduce_scatter\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='pytorch_ipc'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_reduce_scatter_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --force-transport peer_access_pointer_exchange",
+      "dtype": "float32",
+      "requested_transport": "peer_access_pointer_exchange",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "W0321 22:22:15.705000 388051 torch/multiprocessing/spawn.py:169] Terminating process 388293 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 299, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 284, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 155, in _worker\n    primitive_timing = _timed_collective(\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 77, in _timed_collective\n    fn()\n  File \"/home/makai/XTile/tests/test_e2e/_run_reduce_scatter_multiprocess.py\", line 156, in <lambda>\n    lambda: primitive_reduce_scatter(\n  File \"/home/makai/XTile/xtile/primitives/collectives.py\", line 733, in reduce_scatter\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='peer_access_pointer_exchange'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
+      "stdout": ""
+    }
+  ],
+  "command": "tests/benchmarks/bench_reduce_scatter_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/reduce_scatter_multiprocess_matrix.json",
+  "environment": {
+    "block_size": 128,
+    "gpu_name": "NVIDIA H100 PCIe",
+    "iters": 5,
+    "visible_gpus": 2,
+    "warmup": 2
+  },
+  "generated_at_utc": "2026-03-21T22:22:16.538097+00:00",
+  "schema_version": 1,
+  "summary": {
+    "case_count": 12,
+    "failed_cases": 6,
+    "passed_cases": 6
+  }
+}

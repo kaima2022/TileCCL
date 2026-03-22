@@ -33,6 +33,11 @@ import abc
 import time
 from typing import Any, Dict, TYPE_CHECKING
 
+from xtile.utils.feature_gates import (
+    multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_transport_supported,
+)
+
 if TYPE_CHECKING:
     import torch
     from xtile.patterns.contracts import PatternExecutionSpec
@@ -159,6 +164,22 @@ class Pattern(abc.ABC):
             b_layout=b_layout,
             c_layout=c_layout,
             storage_kind=storage_kind,
+        )
+
+    def require_device_remote_access_runtime(self, *, operation: str) -> None:
+        """Fail fast when the attached runtime cannot safely run remote Triton access."""
+        heap = self.ctx.require_heap()
+        if heap.mode != "multiprocess":
+            return
+        if multiprocess_device_remote_access_transport_supported(
+            heap.transport_strategy
+        ):
+            return
+        raise ValueError(
+            multiprocess_device_remote_access_detail(
+                transport_strategy=heap.transport_strategy,
+                operation=operation,
+            )
         )
 
 

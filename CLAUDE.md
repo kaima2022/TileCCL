@@ -55,6 +55,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 10. **benchmark / figures 共享结构化数据源**：
    - pattern / GEMM / P2P benchmark 分别输出到 `figures/data/pattern_overlap_latest.json`、`gemm_latest.json`、`p2p_latest.json`
    - 图表脚本优先读取这些 JSON；quick smoke run 不应污染正式 figures
+   - 写入 `figures/data/` 的 canonical benchmark 必须经由全局锁串行执行，禁止并发 official rerun 污染基线
 
 ## 关键参考实现
 - **Iris** (github.com/ROCm/iris): 核心算法参考（Listing 1/3/4/5），本地副本 `/home/makai/iris`
@@ -77,7 +78,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 ---
 
 ## 当前阶段
-**Phase 0→6 完成**
+**Phase 0→9 完成**
 
 ### Phase 0 交付物（已完成 2026-03-19）
 - [x] 项目脚手架（~8800 行）
@@ -149,7 +150,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] Pattern overlap 重测（fused_sequential 首次达到正向 overlap）
 - [x] P2P 83% 天花板诊断（Iris 无法运行，translate_ptr 实现一致，确认硬件天花板）
 - [ ] GEMM 8192³ 达到 ≥90%（当前 79%，kernel 本身瓶颈，需 PTX-level 优化）
-- [x] Pattern overlap ≥1.3×（2026-03-21 显式 contract 修正后 full 6-size rerun best = 1.619×）
+- [x] Pattern overlap ≥1.3×（2026-03-21 latest canonical rerun best = 1.667×）
 
 ### Phase 6 交付物（2026-03-19）
 - [x] 6 幅科研绘图（`figures/` PDF + PNG，Nature/Science 风格）
@@ -188,14 +189,77 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] GEMM / P2P benchmark 结构化 JSON 输出：`figures/data/gemm_latest.json` / `figures/data/p2p_latest.json`
 - [x] `scripts/plot_figures.py` 改为优先读取结构化 benchmark 数据，并过滤 quick smoke run
 - [x] `SymmetricHeap.mode` / `transport_strategy` 元数据暴露给 benchmark 结果
-- [x] Pattern overlap full 6-size rerun 重跑：best speedup vs bulk_sync = **1.619×**
+- [x] Pattern overlap full 6-size rerun 重跑：best speedup vs bulk_sync = **1.667×**
+
+### Phase 9 交付物（2026-03-21）
+- [x] runtime support matrix：新增 `xtile.describe_runtime_support(ctx)` / `ctx.support_matrix()`
+- [x] support matrix 测试：新增 `tests/test_support.py`
+- [x] 文档计划收紧：`gemm_reducescatter(...)` 不再被写成“可直接补齐”，而是明确依赖 stable `reduce_scatter` host contract
+- [x] baseline `reduce_scatter(...)` host launcher：新增 `xtile.primitives.reduce_scatter(...)` + `tests/test_collectives_host.py`
+- [x] 高层 `reduce_scatter` API：新增 `xtile.ops.ReduceScatterPlan` / `build_reduce_scatter_plan(...)` / `xtile.ops.reduce_scatter(...)`
+- [x] 正式状态出口：新增 `xtile support --json`
+- [x] benchmark 结构化结果内嵌 `runtime_support` 快照：新增 `tests/test_benchmark_results.py`
+- [x] plot / Markdown 导出统一消费 `runtime_support`：新增 `scripts/_benchmark_reporting.py` / `scripts/export_benchmark_summary.py`
+- [x] `reduce_scatter(..., implementation="device")` 在 `single_process` 模式下显式拒绝，避免暴露未验证错误路径
+- [x] canonical benchmark 全局锁：写入 `figures/data/` 的 benchmark 现在会自动串行化，避免并发污染正式 artifact
+
+### Phase 10 交付物（2026-03-21）
+- [x] `gemm_allscatter(full/shard)` host wrapper：高层 API 现可自动 materialize heap-backed full output，再返回本 rank shard
+- [x] `XTileContext.workspace(...)`：新增可复用 heap-backed scratch buffer，避免 mixed wrapper 重复调用导致 bump allocator 持续增长
+- [x] support matrix 更新：`gemm_allscatter.full/shard` 从 unsupported 调整为 supported
+- [x] mixed-layout multigpu 回归：`tests/test_ops.py` 新增 full/shard 真实 2-GPU 校验
+- [x] 连续两次真实调用验收：确认 workspace 复用，`after_first_bytes == after_second_bytes`
+- [x] `gemm_allscatter.shard/full` 保持显式拒绝：真实 2-GPU 诊断确认当前 shard/shard gemm_allscatter 输出是 peer-scatter ownership contract，不是稳定 local-shard basis，因此该方向应转入 future `gemm_allgather` 风格 API，而不是继续伪装成 allscatter wrapper
+
+### Phase 11 交付物（2026-03-21）
+- [x] CUDA / HIP IPC handle 序列化修复：`get_ipc_handle()` 现在返回完整 64-byte payload，而不是被 `bytes(c_char_array)` 截断
+- [x] multiprocess `reduce_scatter(device)` 真实诊断：新增 `tests/test_e2e/_run_reduce_scatter_multiprocess.py`
+- [x] multiprocess device collective 默认 gate：新增 `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES`
+- [x] public 路径安全收口：multiprocess `reduce_scatter` 默认不再自动落到未验证甚至会崩进程的 device path
+- [x] backend / support 回归：新增 `tests/test_backend_ipc.py`，并补 multiprocess gate 相关单测
+
+### Phase 12 交付物（2026-03-21）
+- [x] `tile_reduce_scatter` multiprocess correctness 修复：device 路径改为只远端读 peer chunk、只本地写 output 的 correctness-first 实现，避免 peer 覆盖未归约本地 chunk 的 data race
+- [x] multiprocess IPC bring-up 复测闭环：`python -m tests.test_e2e._run_ipc_test` 真实通过
+- [x] multiprocess `reduce_scatter(device)` 2-GPU 真机验收：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_reduce_scatter_multiprocess` 真实通过，`rank0=4.0`、`rank1=6.0`
+- [x] 分布式诊断脚本硬化：`init_process_group(..., device_id=torch.device("cuda", rank))`，消除 NCCL barrier 设备未知警告
+- [x] opt-in multiprocess 回归：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_backend_ipc.py tests/test_ops.py tests/test_support.py tests/test_collectives_host.py tests/test_reduce_scatter_multiprocess.py tests/test_cli_support.py tests/test_context.py tests/test_patterns/test_contracts.py` → `33 passed`
+
+### Phase 13 交付物（2026-03-21）
+- [x] multiprocess transport forcing：新增 `XTILE_FORCE_MULTIPROCESS_TRANSPORT`，用于受控诊断 `ctypes_ipc` / `pytorch_ipc` / `peer_access_pointer_exchange`
+- [x] `SymmetricHeap._setup_multiprocess()` 重构：拆成按 transport 分派的独立 helper，默认行为不变，但实验可控性显著提高
+- [x] multiprocess reduce_scatter 矩阵 benchmark：新增 `tests/benchmarks/bench_reduce_scatter_multiprocess.py`，产出 `docs/generated/reduce_scatter_multiprocess_matrix.json`
+- [x] 2-GPU dtype × transport 真机矩阵：`auto/ctypes_ipc` 在 `fp16/bf16/fp32` 全通过；`pytorch_ipc` / `peer_access_pointer_exchange` 当前全部失败
+- [x] transport-aware gate：experimental device reduce_scatter 现仅允许 `transport_strategy='ctypes_ipc'`，其他 transport 在 host 侧提前显式拒绝
+- [x] transport-aware 回归：`pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_ops.py tests/test_backend_ipc.py` → `29 passed`
+
+### Phase 14 交付物（2026-03-21）
+- [x] 最小 multiprocess Triton remote-access 诊断：新增 `tests/test_e2e/_run_triton_remote_access_multiprocess.py`
+- [x] 最小 transport 矩阵 benchmark：新增 `tests/benchmarks/bench_triton_remote_access_multiprocess.py`，产出 `docs/generated/triton_remote_access_multiprocess_matrix.json`
+- [x] 2-GPU 最小 remote load/store 真机矩阵：`auto/ctypes_ipc` 在 `fp16/bf16/fp32` 全通过；`pytorch_ipc` / `peer_access_pointer_exchange` 全部失败
+- [x] auto multiprocess transport 收窄：`SymmetricHeap._setup_multiprocess()` 默认只尝试 `ctypes_ipc`；其他 transport 仅保留 forced diagnostics
+- [x] support matrix 新增 `memory["symmetric_heap.device_remote_access"]`，显式暴露“当前 transport 是否真能被 Triton device-side 远端解引用”
+- [x] 收口回归：`pytest -q tests/test_feature_gates.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_ops.py` → `57 passed`
+
+### Phase 15 交付物（2026-03-21）
+- [x] multiprocess `allgather` 真机诊断：新增 `tests/test_e2e/_run_allgather_multiprocess.py`
+- [x] multiprocess `allgather` 矩阵 benchmark：新增 `tests/benchmarks/bench_allgather_multiprocess.py`，产出 `docs/generated/allgather_multiprocess_matrix.json`
+- [x] 2-GPU allgather 真机矩阵：`auto/ctypes_ipc` 在 `fp16/bf16/fp32` 的 primitive / kernel / high-level API 全通过
+- [x] multiprocess `gemm_allscatter` 真机诊断：新增 `tests/test_e2e/_run_gemm_allscatter_multiprocess.py`
+- [x] multiprocess `gemm_allscatter` 矩阵 benchmark：新增 `tests/benchmarks/bench_gemm_allscatter_multiprocess.py`，产出 `docs/generated/gemm_allscatter_multiprocess_matrix.json`
+- [x] 2-GPU `gemm_allscatter` public baseline：`auto/ctypes_ipc` 在 `full/full + full/shard × fp16/bf16/fp32` 的 plan / high-level API 全通过；forced `pytorch_ipc` / `peer_access_pointer_exchange` 都在 host 侧明确拒绝
+- [x] multiprocess `gemm_allscatter` auto pattern coverage：新增 `tests/benchmarks/bench_gemm_allscatter_multiprocess_auto_patterns.py`，产出 `docs/generated/gemm_allscatter_multiprocess_auto_patterns.json`
+- [x] 2-GPU `gemm_allscatter` representative auto correctness：`auto/ctypes_ipc` 已覆盖 `bulk_sync / fused_sequential / producer_consumer / wg_specialized` 四个分支，且 `full/full + full/shard` 全通过
+- [x] public surface 收口：`xtile.primitives.allgather/allreduce/broadcast`、`xtile.ops.build_allgather_plan(...)`、`xtile.ops.build_gemm_allscatter_plan(...)`、4 个 pattern `execute(...)` 现都会在 unsupported multiprocess transport 下 host 侧提前失败
+- [x] support matrix 收紧：`gemm_allscatter` 无 heap 时不再宣称 `supported`；multiprocess `allgather/gemm_allscatter` 改为 mode/transport 感知状态
+- [x] 回归：`pytest -q tests/test_feature_gates.py tests/test_collectives_host.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_ops.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_allgather_multiprocess.py tests/test_gemm_allscatter_multiprocess.py tests/test_gemm_allscatter_auto_patterns_multiprocess.py` → `80 passed`
 
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
 | P1-001 | torch.from_blob 不可用 | ✅ 已解决 |
 | P1-002 | CUDA IPC ctypes 调用约定 | ✅ 已修复（Structure by-value） |
-| P1-002b | CUDA IPC 系统级限制 (ptrace_scope=1) | ✅ PyTorch IPC fallback 绕行 |
+| P1-002b | CUDA IPC 系统级限制 (ptrace_scope=1) | ✅ 历史问题已由 64B handle 修复 + fallback 双重收口；当前 H100 复测下 `ctypes_ipc` 也已恢复可用 |
 | P1-003 | mp.spawn pickle 局部函数 | ✅ 已修复（→ create_all 单进程模式） |
 | P1-004 | CUDA backend total_mem 属性名错误 | ✅ 已修复（→ total_memory） |
 | P1-005 | Triton 不支持 continue 语句 | ✅ 已修复（→ if != 守卫） |
@@ -203,24 +267,28 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P1-007 | Collective benchmark 死锁 | ✅ 已修复（并发 stream） |
 | P4-001 | tl.multiple_of on 2D load ptr 性能倒退 | ⚠️ 绕行（仅 offset hint） |
 | P4-002 | 小矩阵 (≤2048) GEMM 42-46% | ⚠️ kernel launch 开销限制 |
-| P5-001 | 8192³ GEMM 仍仅 84-86% of cuBLAS（3 次 official helper 复测中位数） | ⚠️ 仍需 kernel-level 优化 |
+| P5-001 | 8192³ GEMM 仍仅 83.0-83.5% of cuBLAS（latest canonical rerun） | ⚠️ 仍需 kernel-level 优化 |
 | P5-002 | P2P 83% — Triton-on-H100-NVLink 天花板 | ⚠️ 可能需 inline PTX |
 | P5-003 | Pattern benchmark heap_size=512MB 不够大尺寸 | ✅ 已修复（动态估算 + CLI override） |
 | P8-001 | pattern `execute()` 曾依赖 `B.shape[1]` 隐式猜 full/shard 语义 | ✅ 已修复（显式 execution contract） |
 | P8-002 | plot_figures 可能被 quick benchmark 最新结果污染 | ✅ 已修复（结构化 metadata + canonical result gate） |
 | P8-003 | pattern benchmark shard path 曾把 `N` 语义隐式缩两次，导致 overlap 结论失真 | ✅ 已修复（显式 `full_N + shard/full layout` contract） |
+| P9-001 | `reduce_scatter(...)` 的 single_process reference 与 2-GPU multiprocess/device correctness 已闭环，但 multiprocess public/performance contract 仍未正式放开 | ⚠️ 当前真实支持面已精确收窄为 `ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 尚未通过 device-collective 矩阵，因此默认 gate 仍关闭，仅保留 transport-aware experimental opt-in |
+| P13-001 | multiprocess/device 传输面目前只在 `ctypes_ipc` 上通过真实矩阵，其他 transport 仍未修复 | ⚠️ auto contract 已正式收窄为 `ctypes_ipc only`；下一优先级是修 `pytorch_ipc` / `peer_access_pointer_exchange` 的最小 Triton remote-access 正确性，再决定是否重新放开 |
+| P10-001 | `gemm_allscatter.shard/full` 仍未完成；真实 2-GPU 诊断显示当前 shard/shard gemm_allscatter 输出是 peer-scatter ownership contract，而不是 local-shard basis | ⚠️ 不应继续硬补 allscatter wrapper，需单独定义 `gemm_allgather` 风格 public contract |
+| P15-001 | multiprocess `gemm_allscatter` 已完成 2-GPU `ctypes_ipc` public baseline correctness，并补齐 representative auto-selected coverage（4 个 pattern、`full/full + full/shard`），但 broader larger-shape / world-size / stress / performance contract 仍未闭环 | ⚠️ 继续保持 `partial`；下一优先级转为更大 shape、长时压力和 world-size 扩展验证 |
 
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |
 |------|--------|--------|------|
-| P2P read (134MB, f32) | 248.83 GB/s (82.9%) | ≥ 95% | ❌ 未达标 |
-| P2P write (134MB, f32) | 248.39 GB/s (82.8%) | ≥ 95% | ❌ 未达标 |
+| P2P read (134MB, f32) | 248.74 GB/s (82.9%) | ≥ 95% | ❌ 未达标 |
+| P2P write (134MB, f32) | 248.43 GB/s (82.8%) | ≥ 95% | ❌ 未达标 |
 | Collective 归一化带宽 | N/A (tile级原语) | ≥ 90% | ⚠️ 不适用 |
-| GEMM vs cuBLAS (4096³ fp16) | **97.8%** (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ✅ |
-| GEMM vs cuBLAS (4096³ bf16) | **92.0%** (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ✅ |
-| GEMM vs cuBLAS (8192³ fp16) | 83.4% (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ⚠️ 未达标 |
-| GEMM vs cuBLAS (8192³ bf16) | 80.8% (`bench_gemm.py --repeats 3` 中位数) | ≥ 90% | ⚠️ 未达标 |
-| Pattern overlap (full 6-size rerun) | **1.619×** best speedup（`wg_specialized`, 8192×8192×30720） | ≥ 1.3× | ✅ contract 修正后已达标 |
+| GEMM vs cuBLAS (4096³ fp16) | **94.9%** (latest canonical rerun) | ≥ 90% | ✅ |
+| GEMM vs cuBLAS (4096³ bf16) | **91.1%** (latest canonical rerun) | ≥ 90% | ✅ |
+| GEMM vs cuBLAS (8192³ fp16) | 83.0% (latest canonical rerun) | ≥ 90% | ⚠️ 未达标 |
+| GEMM vs cuBLAS (8192³ bf16) | 83.5% (latest canonical rerun) | ≥ 90% | ⚠️ 未达标 |
+| Pattern overlap (full 6-size rerun) | **1.667×** best speedup（`wg_specialized`, 8192×4608×36864） | ≥ 1.3× | ✅ contract 修正后已达标 |
 
 ## 重要约束
 - **不** 包装 xSHMEM/NVSHMEM 为不透明字节码

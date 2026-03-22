@@ -12,8 +12,9 @@ Output: figures/ directory — PDF (vector) + PNG (300 DPI)
 """
 
 import os
-import json
 from pathlib import Path
+import sys
+import textwrap
 
 import matplotlib
 matplotlib.use("Agg")
@@ -54,6 +55,11 @@ plt.rcParams.update({
 OUTDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 os.makedirs(OUTDIR, exist_ok=True)
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from _benchmark_reporting import benchmark_footer_text, load_json_payload
+
 GEMM_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "gemm_latest.json"
 P2P_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "p2p_latest.json"
 PATTERN_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "pattern_overlap_latest.json"
@@ -93,7 +99,7 @@ _FALLBACK_GEMM_ROOFLINE = {
 _FALLBACK_P2P_CURVE = {
     "sizes_mb": [1.0, 4.2, 16.8, 67.1, 134.2],
     "read_bw": [30.454, 105.789, 230.862, 245.914, 248.832],
-    "write_bw": [31.969, 106.303, 233.536, 246.347, 248.389],
+    "write_bw": [31.969, 106.303, 233.536, 246.347, 248.566],
     "best_read_gbps": 248.832,
 }
 
@@ -110,10 +116,14 @@ _FALLBACK_PATTERN_SPEEDUPS = {
         "2048×16384\n×8192",
     ],
     "bulk_sync": [1.000, 1.000, 1.000, 1.000, 1.000, 1.000],
-    "fused_sequential": [1.082, 1.151, 1.216, 1.202, 1.157, 1.186],
-    "producer_consumer": [0.877, 1.461, 1.080, 1.488, 1.031, 1.045],
-    "wg_specialized": [0.997, 1.616, 1.180, 1.619, 1.114, 1.126],
+    "fused_sequential": [1.083, 1.123, 1.201, 1.214, 1.158, 1.190],
+    "producer_consumer": [0.944, 1.535, 1.068, 1.489, 1.033, 1.048],
+    "wg_specialized": [1.027, 1.660, 1.166, 1.607, 1.116, 1.126],
 }
+
+GEMM_PAYLOAD = load_json_payload(GEMM_BENCHMARK_JSON)
+P2P_PAYLOAD = load_json_payload(P2P_BENCHMARK_JSON)
+PATTERN_PAYLOAD = load_json_payload(PATTERN_BENCHMARK_JSON)
 
 
 def _format_size_label(M, N, K):
@@ -123,12 +133,9 @@ def _format_size_label(M, N, K):
 
 
 def _load_gemm_bars():
-    if not GEMM_BENCHMARK_JSON.exists():
+    if not GEMM_PAYLOAD:
         return _FALLBACK_GEMM_BARS, {}
-
-    with GEMM_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
+    payload = GEMM_PAYLOAD
     results = payload.get("results", [])
     if len(results) < 8:
         return _FALLBACK_GEMM_BARS, {}
@@ -148,12 +155,9 @@ def _load_gemm_bars():
 
 
 def _load_gemm_roofline_points():
-    if not GEMM_BENCHMARK_JSON.exists():
+    if not GEMM_PAYLOAD:
         return _FALLBACK_GEMM_ROOFLINE
-
-    with GEMM_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
+    payload = GEMM_PAYLOAD
     results = [
         item for item in payload.get("results", [])
         if item.get("dtype") == "fp16"
@@ -170,12 +174,9 @@ def _load_gemm_roofline_points():
 
 
 def _load_p2p_curve():
-    if not P2P_BENCHMARK_JSON.exists():
+    if not P2P_PAYLOAD:
         return _FALLBACK_P2P_CURVE, {}
-
-    with P2P_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
+    payload = P2P_PAYLOAD
     environment = payload.get("environment", {})
     if environment.get("quick_mode"):
         return _FALLBACK_P2P_CURVE, environment
@@ -194,15 +195,17 @@ def _load_p2p_curve():
 
 
 def _load_pattern_speedups():
-    if not PATTERN_BENCHMARK_JSON.exists():
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
-
-    with PATTERN_BENCHMARK_JSON.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
+    fallback_best_speedup = max(
+        max(_FALLBACK_PATTERN_SPEEDUPS["fused_sequential"]),
+        max(_FALLBACK_PATTERN_SPEEDUPS["producer_consumer"]),
+        max(_FALLBACK_PATTERN_SPEEDUPS["wg_specialized"]),
+    )
+    if not PATTERN_PAYLOAD:
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": fallback_best_speedup}
+    payload = PATTERN_PAYLOAD
     environment = payload.get("environment", {})
     if environment.get("quick_mode") or len(payload.get("sizes", [])) < 6:
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": fallback_best_speedup}
 
     sizes = []
     series = {
@@ -221,7 +224,7 @@ def _load_pattern_speedups():
             series[pattern_name].append(float(result_map.get(pattern_name, 0.0)))
 
     if not sizes:
-        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": 1.619}
+        return _FALLBACK_PATTERN_SPEEDUPS, {"best_speedup_vs_bulk": fallback_best_speedup}
 
     return {
         "sizes": sizes,
@@ -252,6 +255,22 @@ def _save(fig, name):
     print(f"  Saved {name}.pdf + {name}.png")
 
 
+def _save_with_footer(fig, name, footer: str | None):
+    if footer:
+        wrapped = textwrap.fill(footer, width=90)
+        fig.text(
+            0.5,
+            0.012,
+            wrapped,
+            ha="center",
+            va="bottom",
+            fontsize=6.2,
+            color="#555555",
+        )
+        fig.tight_layout(rect=(0, 0.08, 1, 1))
+    _save(fig, name)
+
+
 # ===================================================================
 # Figure 1: GEMM — XTile vs cuBLAS (current state)
 # ===================================================================
@@ -272,21 +291,30 @@ def fig1_gemm_performance():
            edgecolor="white", linewidth=0.5)
 
     # Annotate ratio above XTile bars
+    max_bar = max(max(cublas), max(xtile), 1.0)
+    label_offset = max_bar * 0.03
     for i, r in enumerate(ratio):
         color = COLORS[2] if r >= 90 else "#888888"
         weight = "bold" if r >= 90 else "normal"
-        ax.text(x[i] + w / 2, xtile[i] + 12, f"{r:.0f}%",
+        ax.text(x[i] + w / 2, xtile[i] + label_offset, f"{r:.0f}%",
                 ha="center", va="bottom", fontsize=7, color=color, fontweight=weight)
 
     ax.set_ylabel("TFLOPS")
     ax.set_title(f"GEMM Performance: XTile vs cuBLAS ({_gemm_aggregation_label()})")
     ax.set_xticks(x)
     ax.set_xticklabels(sizes, fontsize=8)
-    ax.set_ylim(0, 580)
+    ax.set_ylim(0, max_bar * 1.22)
     ax.legend(loc="upper left")
 
-    fig.tight_layout()
-    _save(fig, "fig1_gemm_performance")
+    _save_with_footer(
+        fig,
+        "fig1_gemm_performance",
+        benchmark_footer_text(
+            GEMM_PAYLOAD,
+            source_name="gemm_latest.json",
+            include_command=False,
+        ),
+    )
 
 
 # ===================================================================
@@ -328,8 +356,16 @@ def fig2_p2p_bandwidth():
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v:.0f}" if v >= 1 else f"{v:.1f}"))
     ax.legend(loc="center right")
 
-    fig.tight_layout()
-    _save(fig, "fig2_p2p_bandwidth")
+    _save_with_footer(
+        fig,
+        "fig2_p2p_bandwidth",
+        benchmark_footer_text(
+            P2P_PAYLOAD,
+            source_name="p2p_latest.json",
+            highlight_ops=("reduce_scatter",),
+            include_command=False,
+        ),
+    )
 
 
 # ===================================================================
@@ -384,7 +420,7 @@ def fig3_pattern_overlap():
     legend_anchor = (0.01, 0.99) if best_on_right else (0.99, 0.99)
 
     ax.annotate(
-        f"best stable\n{PATTERN_SUMMARY.get('best_speedup_vs_bulk', 1.619):.3f}×",
+        f"best stable\n{best_value:.3f}×",
         xy=(x[best_idx] + best_offset, best_value),
         xytext=(label_x, label_y),
         fontsize=8,
@@ -404,8 +440,16 @@ def fig3_pattern_overlap():
     ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
     ax.legend(loc=legend_loc, bbox_to_anchor=legend_anchor, ncol=2, fontsize=8, borderaxespad=0.3)
 
-    fig.tight_layout()
-    _save(fig, "fig3_pattern_overlap")
+    _save_with_footer(
+        fig,
+        "fig3_pattern_overlap",
+        benchmark_footer_text(
+            PATTERN_PAYLOAD,
+            source_name="pattern_overlap_latest.json",
+            highlight_ops=("gemm_allscatter",),
+            include_command=False,
+        ),
+    )
 
 
 # ===================================================================
@@ -501,10 +545,16 @@ def fig5_roofline():
     ax.scatter(intensity, xtile_tflops, marker="^", s=50, color=COLORS[1],
                zorder=5, label="XTile", edgecolors="white", linewidth=0.5)
 
+    ratio_by_size = {
+        n: (xt / cu * 100.0) if cu > 0 else 0.0
+        for n, cu, xt in zip(sizes, cublas_tflops, xtile_tflops)
+    }
+    best_size = max(ratio_by_size, key=ratio_by_size.get) if ratio_by_size else None
+
     for i, n in enumerate(sizes):
         ax.annotate(f"{n}", (intensity[i], cublas_tflops[i]),
                     textcoords="offset points", xytext=(5, 5), fontsize=6, color=COLORS[0])
-        suffix = "\n(99.8%)" if n == 4096 else ""
+        suffix = f"\n({ratio_by_size[n]:.1f}%)" if n == best_size else ""
         ax.annotate(f"{n}{suffix}", (intensity[i], xtile_tflops[i]),
                     textcoords="offset points", xytext=(5, -10), fontsize=6, color=COLORS[1])
 
@@ -517,8 +567,15 @@ def fig5_roofline():
     ax.set_ylim(10, 1000)
     ax.legend(loc="lower right", fontsize=7)
 
-    fig.tight_layout()
-    _save(fig, "fig5_roofline")
+    _save_with_footer(
+        fig,
+        "fig5_roofline",
+        benchmark_footer_text(
+            GEMM_PAYLOAD,
+            source_name="gemm_latest.json",
+            include_command=False,
+        ),
+    )
 
 
 # ===================================================================

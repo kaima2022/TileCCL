@@ -41,6 +41,7 @@ from xtile.primitives.collectives import (
     allreduce,
     allgather,
     broadcast,
+    reduce_scatter,
 )
 
 __all__ = [
@@ -73,4 +74,5 @@ __all__ = [
     "allreduce",
     "allgather",
     "broadcast",
+    "reduce_scatter",
 ]

@@ -1,0 +1,104 @@
+"""Tests for structured benchmark-result helpers."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import xtile
+from xtile.utils.benchmark_results import (
+    canonical_benchmark_run,
+    default_gemm_benchmark_path,
+    describe_runtime_support_snapshot,
+    is_canonical_benchmark_output,
+    project_root,
+    runtime_support_snapshot,
+)
+
+
+def test_runtime_support_snapshot_from_context(skip_no_gpu, device_info) -> None:
+    """Existing contexts should serialize into a stable support payload."""
+    ctx = xtile.init(
+        backend=device_info.backend,
+        rank=0,
+        world_size=1,
+        force_backend=True,
+    )
+
+    payload = runtime_support_snapshot(ctx)
+
+    assert payload["context"]["backend"] == device_info.backend
+    assert payload["context"]["has_heap"] is False
+    assert payload["ops"]["gemm_allscatter"]["state"] == "partial"
+    assert payload["ops"]["gemm_reducescatter"]["state"] == "unsupported"
+
+
+def test_describe_runtime_support_snapshot_with_heap(
+    skip_no_gpu,
+    device_info,
+) -> None:
+    """Temporary support snapshots should preserve heap-backed capabilities."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        payload = describe_runtime_support_snapshot(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+
+        assert payload["context"]["has_heap"] is True
+        assert payload["context"]["heap_mode"] == "single_process"
+        assert payload["context"]["transport_strategy"] == "peer_access"
+        assert payload["ops"]["reduce_scatter"]["state"] == "supported"
+        assert payload["collectives"]["collectives.reduce_scatter_launcher"]["state"] == "supported"
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_is_canonical_benchmark_output_matches_figures_data() -> None:
+    """Canonical benchmark outputs should be recognized by directory."""
+    assert is_canonical_benchmark_output(default_gemm_benchmark_path())
+    assert not is_canonical_benchmark_output(Path("/tmp/not_xtile_benchmark.json"))
+
+
+def test_canonical_benchmark_run_rejects_parallel_nonblocking_probe() -> None:
+    """A second process should not be able to enter the canonical lock."""
+    output_path = default_gemm_benchmark_path()
+    repo_root = project_root()
+    script = """
+from pathlib import Path
+from xtile.utils.benchmark_results import canonical_benchmark_run
+
+try:
+    with canonical_benchmark_run(Path(%r), blocking=False):
+        raise SystemExit(2)
+except RuntimeError:
+    raise SystemExit(0)
+""" % str(output_path)
+
+    env = os.environ.copy()
+    pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not pythonpath
+        else f"{repo_root}{os.pathsep}{pythonpath}"
+    )
+
+    with canonical_benchmark_run(output_path):
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    assert proc.returncode == 0, proc.stderr

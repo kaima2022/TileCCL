@@ -24,7 +24,12 @@ from dataclasses import dataclass
 import torch
 import xtile
 from xtile.ops import build_gemm_allscatter_plan
-from xtile.utils.benchmark_results import default_pattern_benchmark_path, write_json
+from xtile.utils.benchmark_results import (
+    canonical_benchmark_run,
+    default_pattern_benchmark_path,
+    runtime_support_snapshot,
+    write_json,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -245,143 +250,146 @@ def main():
     assert torch.cuda.device_count() >= 2, "Need >= 2 GPUs"
 
     args = _parse_args(sys.argv[1:])
-    sizes = QUICK_SIZES if args.quick else IRIS_SIZES
+    with canonical_benchmark_run(args.output_json):
+        sizes = QUICK_SIZES if args.quick else IRIS_SIZES
 
-    print("=== XTile Pattern Overlap Efficiency Benchmark ===")
-    print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
-    print(f"Sizes: {len(sizes)} configurations")
-    print()
+        print("=== XTile Pattern Overlap Efficiency Benchmark ===")
+        print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
+        print(f"Sizes: {len(sizes)} configurations")
+        print()
 
-    world_size = 2
+        world_size = 2
 
-    all_results: list[PatternResult] = []
-    size_payloads: list[dict[str, object]] = []
+        all_results: list[PatternResult] = []
+        size_payloads: list[dict[str, object]] = []
+        support_payload: dict[str, object] | None = None
 
-    for M, N, K in sizes:
-        required_heap = _required_heap_size(M, N, K, world_size, torch.float16)
-        heap_size = required_heap
-        if args.heap_size_mb is not None:
-            heap_size = args.heap_size_mb * 1024 * 1024
-            if heap_size < required_heap:
-                raise ValueError(
-                    "Requested --heap-size-mb is too small for this problem: "
-                    f"need at least {required_heap / 1024 / 1024:.0f} MiB, "
-                    f"got {args.heap_size_mb} MiB"
-                )
+        for M, N, K in sizes:
+            required_heap = _required_heap_size(M, N, K, world_size, torch.float16)
+            heap_size = required_heap
+            if args.heap_size_mb is not None:
+                heap_size = args.heap_size_mb * 1024 * 1024
+                if heap_size < required_heap:
+                    raise ValueError(
+                        "Requested --heap-size-mb is too small for this problem: "
+                        f"need at least {required_heap / 1024 / 1024:.0f} MiB, "
+                        f"got {args.heap_size_mb} MiB"
+                    )
 
-        contexts = xtile.init_local(world_size=world_size, heap_size=heap_size)
-        try:
-            print(f"--- M={M}, N={N}, K={K} ---")
-            print(
-                "  heap per rank: "
-                f"{heap_size / 1024 / 1024:.0f} MiB "
-                f"(required {required_heap / 1024 / 1024:.0f} MiB)"
-            )
-            results, size_metadata = benchmark_size(
-                M,
-                N,
-                K,
-                contexts[0],
-                warmup=args.warmup,
-                iters=args.iters,
-            )
-            all_results.extend(results)
-            best = min(results, key=lambda item: item.min_ms)
-            size_payloads.append({
-                "M": M,
-                "N": N,
-                "K": K,
-                "local_N": N // world_size,
-                "required_heap_bytes": required_heap,
-                "heap_size_bytes": heap_size,
-                "metadata": size_metadata,
-                "results": [
-                    {
-                        "pattern": r.pattern,
-                        "mean_ms": r.mean_ms,
-                        "min_ms": r.min_ms,
-                        "max_ms": r.max_ms,
-                        "speedup_vs_bulk": r.speedup_vs_bulk,
-                        "overlap_efficiency": r.overlap_efficiency,
-                    }
-                    for r in results
-                ],
-                "best_pattern": best.pattern,
-                "best_speedup_vs_bulk": best.speedup_vs_bulk,
-            })
-
-            for r in results:
-                speedup_str = f"{r.speedup_vs_bulk:.3f}x" if r.speedup_vs_bulk > 0 else "N/A"
-                eff_str = f"{r.overlap_efficiency*100:.1f}%" if r.overlap_efficiency != 0 else "N/A"
+            contexts = xtile.init_local(world_size=world_size, heap_size=heap_size)
+            try:
+                print(f"--- M={M}, N={N}, K={K} ---")
                 print(
-                    f"  {r.pattern:25s} | "
-                    f"mean={r.mean_ms:8.3f} ms | "
-                    f"min={r.min_ms:8.3f} ms | "
-                    f"speedup={speedup_str:>7s} | "
-                    f"overlap_eff={eff_str:>6s}"
+                    "  heap per rank: "
+                    f"{heap_size / 1024 / 1024:.0f} MiB "
+                    f"(required {required_heap / 1024 / 1024:.0f} MiB)"
                 )
-        except Exception as e:
-            print(f"  ERROR: {e}")
-        finally:
-            _cleanup_contexts(contexts)
+                if support_payload is None:
+                    support_payload = runtime_support_snapshot(contexts[0])
+                results, size_metadata = benchmark_size(
+                    M,
+                    N,
+                    K,
+                    contexts[0],
+                    warmup=args.warmup,
+                    iters=args.iters,
+                )
+                all_results.extend(results)
+                best = min(results, key=lambda item: item.min_ms)
+                size_payloads.append({
+                    "M": M,
+                    "N": N,
+                    "K": K,
+                    "local_N": N // world_size,
+                    "required_heap_bytes": required_heap,
+                    "heap_size_bytes": heap_size,
+                    "metadata": size_metadata,
+                    "results": [
+                        {
+                            "pattern": r.pattern,
+                            "mean_ms": r.mean_ms,
+                            "min_ms": r.min_ms,
+                            "max_ms": r.max_ms,
+                            "speedup_vs_bulk": r.speedup_vs_bulk,
+                            "overlap_efficiency": r.overlap_efficiency,
+                        }
+                        for r in results
+                    ],
+                    "best_pattern": best.pattern,
+                    "best_speedup_vs_bulk": best.speedup_vs_bulk,
+                })
 
-    # Summary table
-    print()
-    print("=" * 100)
-    print("=== Summary: Best overlap pattern per size ===")
-    print(f"{'M':>6s} {'N':>6s} {'K':>6s} | {'Best Pattern':>25s} | {'Speedup':>8s} | {'Overlap Eff':>11s}")
-    print("-" * 100)
+                for r in results:
+                    speedup_str = f"{r.speedup_vs_bulk:.3f}x" if r.speedup_vs_bulk > 0 else "N/A"
+                    eff_str = f"{r.overlap_efficiency*100:.1f}%" if r.overlap_efficiency != 0 else "N/A"
+                    print(
+                        f"  {r.pattern:25s} | "
+                        f"mean={r.mean_ms:8.3f} ms | "
+                        f"min={r.min_ms:8.3f} ms | "
+                        f"speedup={speedup_str:>7s} | "
+                        f"overlap_eff={eff_str:>6s}"
+                    )
+            except Exception as e:
+                print(f"  ERROR: {e}")
+            finally:
+                _cleanup_contexts(contexts)
 
-    for M, N, K in sizes:
-        size_results = [r for r in all_results if r.M == M and r.N == N and r.K == K]
-        if size_results:
-            best = min(size_results, key=lambda r: r.min_ms)
-            speedup_str = f"{best.speedup_vs_bulk:.3f}x"
-            eff_str = f"{best.overlap_efficiency*100:.1f}%"
-            print(
-                f"{M:>6d} {N:>6d} {K:>6d} | "
-                f"{best.pattern:>25s} | "
-                f"{speedup_str:>8s} | "
-                f"{eff_str:>11s}"
-            )
+        print()
+        print("=" * 100)
+        print("=== Summary: Best overlap pattern per size ===")
+        print(f"{'M':>6s} {'N':>6s} {'K':>6s} | {'Best Pattern':>25s} | {'Speedup':>8s} | {'Overlap Eff':>11s}")
+        print("-" * 100)
 
-    # Check target: at least one pattern achieves >= 1.3x vs bulk_sync
-    best_speedup = max((r.speedup_vs_bulk for r in all_results), default=0.0)
-    print(f"\nBest speedup vs bulk_sync: {best_speedup:.3f}x")
-    print(f"Target (>=1.3x): {'MET' if best_speedup >= 1.3 else 'NOT MET'}")
+        for M, N, K in sizes:
+            size_results = [r for r in all_results if r.M == M and r.N == N and r.K == K]
+            if size_results:
+                best = min(size_results, key=lambda r: r.min_ms)
+                speedup_str = f"{best.speedup_vs_bulk:.3f}x"
+                eff_str = f"{best.overlap_efficiency*100:.1f}%"
+                print(
+                    f"{M:>6d} {N:>6d} {K:>6d} | "
+                    f"{best.pattern:>25s} | "
+                    f"{speedup_str:>8s} | "
+                    f"{eff_str:>11s}"
+                )
 
-    if size_payloads:
-        sample_ctx = contexts[0] if "contexts" in locals() else None
-        sample_heap = sample_ctx.heap if sample_ctx is not None else None
-        payload = {
-            "schema_version": 1,
-            "benchmark": "pattern_overlap",
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "command": " ".join(sys.argv),
-            "environment": {
-                "gpu_name": torch.cuda.get_device_name(0),
-                "visible_gpus": torch.cuda.device_count(),
-                "world_size": world_size,
-                "backend": sample_ctx.backend_name if sample_ctx is not None else "unknown",
-                "allocator_backend": "torch_bump",
-                "heap_mode": sample_heap.mode if sample_heap is not None else "unknown",
-                "transport_strategy": sample_heap.transport_strategy if sample_heap is not None else "unknown",
-                "layout_mode": "shard",
-                "b_layout": "shard",
-                "c_layout": "shard",
-                "dtype": "float16",
-                "quick_mode": args.quick,
-                "warmup": args.warmup,
-                "iters": args.iters,
-            },
-            "sizes": size_payloads,
-            "summary": {
-                "best_speedup_vs_bulk": best_speedup,
-                "size_count": len(size_payloads),
-            },
-        }
-        output_path = write_json(Path(args.output_json), payload)
-        print(f"Structured results written to: {output_path}")
+        best_speedup = max((r.speedup_vs_bulk for r in all_results), default=0.0)
+        print(f"\nBest speedup vs bulk_sync: {best_speedup:.3f}x")
+        print(f"Target (>=1.3x): {'MET' if best_speedup >= 1.3 else 'NOT MET'}")
+
+        if size_payloads:
+            sample_ctx = contexts[0] if "contexts" in locals() else None
+            sample_heap = sample_ctx.heap if sample_ctx is not None else None
+            payload = {
+                "schema_version": 1,
+                "benchmark": "pattern_overlap",
+                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "command": " ".join(sys.argv),
+                "environment": {
+                    "gpu_name": torch.cuda.get_device_name(0),
+                    "visible_gpus": torch.cuda.device_count(),
+                    "world_size": world_size,
+                    "backend": sample_ctx.backend_name if sample_ctx is not None else "unknown",
+                    "allocator_backend": "torch_bump",
+                    "heap_mode": sample_heap.mode if sample_heap is not None else "unknown",
+                    "transport_strategy": sample_heap.transport_strategy if sample_heap is not None else "unknown",
+                    "layout_mode": "shard",
+                    "b_layout": "shard",
+                    "c_layout": "shard",
+                    "dtype": "float16",
+                    "quick_mode": args.quick,
+                    "warmup": args.warmup,
+                    "iters": args.iters,
+                },
+                "runtime_support": support_payload,
+                "sizes": size_payloads,
+                "summary": {
+                    "best_speedup_vs_bulk": best_speedup,
+                    "size_count": len(size_payloads),
+                },
+            }
+            output_path = write_json(Path(args.output_json), payload)
+            print(f"Structured results written to: {output_path}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,519 @@
+{
+  "benchmark": "triton_remote_access_multiprocess_matrix",
+  "cases": [
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --operation both",
+      "dtype": "float16",
+      "operation": "both",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07625599950551987,
+            "mean_ms": 0.06179839968681335,
+            "min_ms": 0.05475199967622757
+          },
+          "load_value": 2.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 1,
+          "rank": 0,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.07132799923419952,
+            "mean_ms": 0.06170239970088005,
+            "min_ms": 0.05734400078654289
+          },
+          "store_value": 11.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.09702400118112564,
+            "mean_ms": 0.06632320135831833,
+            "min_ms": 0.054976001381874084
+          },
+          "load_value": 1.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 0,
+          "rank": 1,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.081727996468544,
+            "mean_ms": 0.0679935984313488,
+            "min_ms": 0.060896001756191254
+          },
+          "store_value": 10.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"peer_rank\": 1, \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 2.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06179839968681335, \"min_ms\": 0.05475199967622757, \"max_ms\": 0.07625599950551987}, \"store_value\": 11.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.06170239970088005, \"min_ms\": 0.05734400078654289, \"max_ms\": 0.07132799923419952}}\n{\"rank\": 1, \"peer_rank\": 0, \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 1.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06632320135831833, \"min_ms\": 0.054976001381874084, \"max_ms\": 0.09702400118112564}, \"store_value\": 10.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.0679935984313488, \"min_ms\": 0.060896001756191254, \"max_ms\": 0.081727996468544}}\n",
+      "summary": {
+        "load_max_rank_skew_ms": 0.0045248016715049785,
+        "load_mean_ms_across_ranks": 0.06406080052256584,
+        "mode": "multiprocess",
+        "operation": "both",
+        "store_max_rank_skew_ms": 0.006291198730468753,
+        "store_mean_ms_across_ranks": 0.06484799906611444,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport ctypes_ipc",
+      "dtype": "float16",
+      "operation": "both",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "forced_transport": "ctypes_ipc",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07360000163316727,
+            "mean_ms": 0.05788800045847893,
+            "min_ms": 0.052000001072883606
+          },
+          "load_value": 1.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 0,
+          "rank": 1,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.06960000097751617,
+            "mean_ms": 0.05825919955968857,
+            "min_ms": 0.05027199909090996
+          },
+          "store_value": 10.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float16",
+          "forced_transport": "ctypes_ipc",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07078400254249573,
+            "mean_ms": 0.06255360022187233,
+            "min_ms": 0.05532800033688545
+          },
+          "load_value": 2.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 1,
+          "rank": 0,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.07411199808120728,
+            "mean_ms": 0.06187519878149032,
+            "min_ms": 0.054207999259233475
+          },
+          "store_value": 11.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"peer_rank\": 0, \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 1.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.05788800045847893, \"min_ms\": 0.052000001072883606, \"max_ms\": 0.07360000163316727}, \"store_value\": 10.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.05825919955968857, \"min_ms\": 0.05027199909090996, \"max_ms\": 0.06960000097751617}}\n{\"rank\": 0, \"peer_rank\": 1, \"dtype\": \"float16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 2.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06255360022187233, \"min_ms\": 0.05532800033688545, \"max_ms\": 0.07078400254249573}, \"store_value\": 11.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.06187519878149032, \"min_ms\": 0.054207999259233475, \"max_ms\": 0.07411199808120728}}\n",
+      "summary": {
+        "load_max_rank_skew_ms": 0.0046655997633933965,
+        "load_mean_ms_across_ranks": 0.06022080034017563,
+        "mode": "multiprocess",
+        "operation": "both",
+        "store_max_rank_skew_ms": 0.0036159992218017523,
+        "store_mean_ms_across_ranks": 0.06006719917058945,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport pytorch_ipc",
+      "dtype": "float16",
+      "operation": "both",
+      "requested_transport": "pytorch_ipc",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "terminate called after throwing an instance of 'c10::Error'\nterminate called after throwing an instance of 'c10::Error'\n  what():  CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\nException raised from c10_cuda_check_implementation at /pytorch/c10/cuda/CUDAException.cpp:43 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x96 (0x7f853356c1b6 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, std::string const&) + 0x64 (0x7f8533515a76 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #2: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, int, bool) + 0x118 (0x7f85339af918 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #3: <unknown function> + 0x2b55c (0x7f853398055c in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #4: <unknown function> + 0x2b841 (0x7f8533980841 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #5: <unknown function> + 0x8582f0 (0x7f852b0e72f0 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #6: <unknown function> + 0x644a90 (0x7f852aed3a90 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #7: <unknown function> + 0x85082f (0x7f852b0df82f in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #8: <unknown function> + 0x1594d7 (0x55d7c2e7f4d7 in /usr/bin/python)\nframe #9: <unknown function> + 0x169873 (0x55d7c2e8f873 in /usr/bin/python)\nframe #10: <unknown function> + 0x1a2280 (0x55d7c2ec8280 in /usr/bin/python)\nframe #11: <unknown function> + 0x1814a8 (0x55d7c2ea74a8 in /usr/bin/python)\nframe #12: <unknown function> + 0x1944e8 (0x55d7c2eba4e8 in /usr/bin/python)\nframe #13: <unknown function> + 0x1944fc (0x55d7c2eba4fc in /usr/bin/python)\nframe #14: <unknown function> + 0x1a040f (0x55d7c2ec640f in /usr/bin/python)\nframe #15: <unknown function> + 0x15f726 (0x55d7c2e85726 in /usr/bin/python)\nframe #16: <unknown function> + 0x292c97 (0x55d7c2fb8c97 in /usr/bin/python)\nframe #17: _PyEval_EvalFrameDefault + 0x5537 (0x55d7c2ea0a47 in /usr/bin/python)\nframe #18: _PyFunction_Vectorcall + 0x7c (0x55d7c2eb168c in /usr/bin/python)\nframe #19: _PyEval_EvalFrameDefault + 0x807 (0x55d7c2e9bd17 in /usr/bin/python)\nframe #20: _PyFunction_Vectorcall + 0x7c (0x55d7c2eb168c in /usr/bin/python)\nframe #21: _PyEval_EvalFrameDefault + 0x6c0 (0x55d7c2e9bbd0 in /usr/bin/python)\nframe #22: _PyFunction_Vectorcall + 0x7c (0x55d7c2eb168c in /usr/bin/python)\nframe #23: _PyEval_EvalFrameDefault + 0x1992 (0x55d7c2e9cea2 in /usr/bin/python)\nframe #24: <unknown function> + 0x259d36 (0x55d7c2f7fd36 in /usr/bin/python)\nframe #25: PyEval_EvalCode + 0x86 (0x55d7c2f7fc06 in /usr/bin/python)\nframe #26: <unknown function> + 0x280678 (0x55d7c2fa6678 in /usr/bin/python)\nframe #27: <unknown function> + 0x27accf (0x55d7c2fa0ccf in /usr/bin/python)\nframe #28: PyRun_StringFlags + 0x81 (0x55d7c2f9ab31 in /usr/bin/python)\nframe #29: PyRun_SimpleStringFlags + 0x41 (0x55d7c2f9a9e1 in /usr/bin/python)\nframe #30: Py_RunMain + 0x3d0 (0x55d7c2f99d10 in /usr/bin/python)\nframe #31: Py_BytesMain + 0x2d (0x55d7c2f73c4d in /usr/bin/python)\nframe #32: <unknown function> + 0x29d90 (0x7f8534513d90 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #33: __libc_start_main + 0x80 (0x7f8534513e40 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #34: _start + 0x25 (0x55d7c2f73b45 in /usr/bin/python)\n\n  what():  CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\nException raised from c10_cuda_check_implementation at /pytorch/c10/cuda/CUDAException.cpp:43 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x96 (0x7f496216c1b6 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, std::string const&) + 0x64 (0x7f4962115a76 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #2: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, int, bool) + 0x118 (0x7f4962618918 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #3: <unknown function> + 0x2b55c (0x7f49625e955c in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #4: <unknown function> + 0x2b841 (0x7f49625e9841 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #5: <unknown function> + 0x8582f0 (0x7f4959ce72f0 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #6: <unknown function> + 0x644a90 (0x7f4959ad3a90 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #7: <unknown function> + 0x85082f (0x7f4959cdf82f in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #8: <unknown function> + 0x1594d7 (0x560b42ac24d7 in /usr/bin/python)\nframe #9: <unknown function> + 0x169873 (0x560b42ad2873 in /usr/bin/python)\nframe #10: <unknown function> + 0x1a2280 (0x560b42b0b280 in /usr/bin/python)\nframe #11: <unknown function> + 0x1814a8 (0x560b42aea4a8 in /usr/bin/python)\nframe #12: <unknown function> + 0x1944e8 (0x560b42afd4e8 in /usr/bin/python)\nframe #13: <unknown function> + 0x1944fc (0x560b42afd4fc in /usr/bin/python)\nframe #14: <unknown function> + 0x1a040f (0x560b42b0940f in /usr/bin/python)\nframe #15: <unknown function> + 0x15f726 (0x560b42ac8726 in /usr/bin/python)\nframe #16: <unknown function> + 0x292c97 (0x560b42bfbc97 in /usr/bin/python)\nframe #17: _PyEval_EvalFrameDefault + 0x5537 (0x560b42ae3a47 in /usr/bin/python)\nframe #18: _PyFunction_Vectorcall + 0x7c (0x560b42af468c in /usr/bin/python)\nframe #19: _PyEval_EvalFrameDefault + 0x807 (0x560b42aded17 in /usr/bin/python)\nframe #20: _PyFunction_Vectorcall + 0x7c (0x560b42af468c in /usr/bin/python)\nframe #21: _PyEval_EvalFrameDefault + 0x6c0 (0x560b42adebd0 in /usr/bin/python)\nframe #22: _PyFunction_Vectorcall + 0x7c (0x560b42af468c in /usr/bin/python)\nframe #23: _PyEval_EvalFrameDefault + 0x1992 (0x560b42adfea2 in /usr/bin/python)\nframe #24: <unknown function> + 0x259d36 (0x560b42bc2d36 in /usr/bin/python)\nframe #25: PyEval_EvalCode + 0x86 (0x560b42bc2c06 in /usr/bin/python)\nframe #26: <unknown function> + 0x280678 (0x560b42be9678 in /usr/bin/python)\nframe #27: <unknown function> + 0x27accf (0x560b42be3ccf in /usr/bin/python)\nframe #28: PyRun_StringFlags + 0x81 (0x560b42bddb31 in /usr/bin/python)\nframe #29: PyRun_SimpleStringFlags + 0x41 (0x560b42bdd9e1 in /usr/bin/python)\nframe #30: Py_RunMain + 0x3d0 (0x560b42bdcd10 in /usr/bin/python)\nframe #31: Py_BytesMain + 0x2d (0x560b42bb6c4d in /usr/bin/python)\nframe #32: <unknown function> + 0x29d90 (0x7f496317cd90 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #33: __libc_start_main + 0x80 (0x7f496317ce40 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #34: _start + 0x25 (0x560b42bb6b45 in /usr/bin/python)\n\nW0321 22:50:18.142000 486694 torch/multiprocessing/spawn.py:169] Terminating process 486944 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 357, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 342, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 180, in _worker\n    load_timing = _timed_kernel(\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 110, in _timed_kernel\n    torch.cuda.synchronize(rank)\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/cuda/__init__.py\", line 985, in synchronize\n    return torch._C._cuda_synchronize()\nRuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float16 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport peer_access_pointer_exchange",
+      "dtype": "float16",
+      "operation": "both",
+      "requested_transport": "peer_access_pointer_exchange",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "[rank0]:[W321 22:50:31.193752545 ProcessGroupNCCL.cpp:1496] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())\nW0321 22:50:32.099000 487890 torch/multiprocessing/spawn.py:169] Terminating process 488005 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 357, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 342, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 180, in _worker\n    load_timing = _timed_kernel(\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 110, in _timed_kernel\n    torch.cuda.synchronize(rank)\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/cuda/__init__.py\", line 985, in synchronize\n    return torch._C._cuda_synchronize()\nRuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --operation both",
+      "dtype": "bfloat16",
+      "operation": "both",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "forced_transport": "auto",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.0737600028514862,
+            "mean_ms": 0.0621568001806736,
+            "min_ms": 0.0578560009598732
+          },
+          "load_value": 2.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 1,
+          "rank": 0,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.06784000247716904,
+            "mean_ms": 0.05708160102367401,
+            "min_ms": 0.04975999891757965
+          },
+          "store_value": 11.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "forced_transport": "auto",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.08207999914884567,
+            "mean_ms": 0.06158720031380653,
+            "min_ms": 0.051872000098228455
+          },
+          "load_value": 1.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 0,
+          "rank": 1,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.06838399916887283,
+            "mean_ms": 0.05801600068807602,
+            "min_ms": 0.05075199902057648
+          },
+          "store_value": 10.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"peer_rank\": 1, \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 2.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.0621568001806736, \"min_ms\": 0.0578560009598732, \"max_ms\": 0.0737600028514862}, \"store_value\": 11.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.05708160102367401, \"min_ms\": 0.04975999891757965, \"max_ms\": 0.06784000247716904}}\n{\"rank\": 1, \"peer_rank\": 0, \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 1.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06158720031380653, \"min_ms\": 0.051872000098228455, \"max_ms\": 0.08207999914884567}, \"store_value\": 10.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.05801600068807602, \"min_ms\": 0.05075199902057648, \"max_ms\": 0.06838399916887283}}\n",
+      "summary": {
+        "load_max_rank_skew_ms": 0.0005695998668670682,
+        "load_mean_ms_across_ranks": 0.061872000247240065,
+        "mode": "multiprocess",
+        "operation": "both",
+        "store_max_rank_skew_ms": 0.0009343996644020081,
+        "store_mean_ms_across_ranks": 0.057548800855875014,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport ctypes_ipc",
+      "dtype": "bfloat16",
+      "operation": "both",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "forced_transport": "ctypes_ipc",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07702399790287018,
+            "mean_ms": 0.06287999972701072,
+            "min_ms": 0.05587200075387955
+          },
+          "load_value": 2.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 1,
+          "rank": 0,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.07286400347948074,
+            "mean_ms": 0.059571200609207155,
+            "min_ms": 0.05193600058555603
+          },
+          "store_value": 11.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "bfloat16",
+          "forced_transport": "ctypes_ipc",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07942400127649307,
+            "mean_ms": 0.06383360028266907,
+            "min_ms": 0.05769599974155426
+          },
+          "load_value": 1.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 0,
+          "rank": 1,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.07331199944019318,
+            "mean_ms": 0.061984000355005266,
+            "min_ms": 0.055904000997543335
+          },
+          "store_value": 10.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"peer_rank\": 1, \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 2.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06287999972701072, \"min_ms\": 0.05587200075387955, \"max_ms\": 0.07702399790287018}, \"store_value\": 11.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.059571200609207155, \"min_ms\": 0.05193600058555603, \"max_ms\": 0.07286400347948074}}\n{\"rank\": 1, \"peer_rank\": 0, \"dtype\": \"bfloat16\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 1.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06383360028266907, \"min_ms\": 0.05769599974155426, \"max_ms\": 0.07942400127649307}, \"store_value\": 10.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.061984000355005266, \"min_ms\": 0.055904000997543335, \"max_ms\": 0.07331199944019318}}\n",
+      "summary": {
+        "load_max_rank_skew_ms": 0.0009536005556583516,
+        "load_mean_ms_across_ranks": 0.0633568000048399,
+        "mode": "multiprocess",
+        "operation": "both",
+        "store_max_rank_skew_ms": 0.002412799745798111,
+        "store_mean_ms_across_ranks": 0.06077760048210621,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport pytorch_ipc",
+      "dtype": "bfloat16",
+      "operation": "both",
+      "requested_transport": "pytorch_ipc",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "terminate called after throwing an instance of 'c10::Error'\n  what():  CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\nException raised from c10_cuda_check_implementation at /pytorch/c10/cuda/CUDAException.cpp:43 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x96 (0x7f6d3636c1b6 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, std::string const&) + 0x64 (0x7f6d36315a76 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #2: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, int, bool) + 0x118 (0x7f6d36727918 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #3: <unknown function> + 0x2b55c (0x7f6d366f855c in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #4: <unknown function> + 0x2b841 (0x7f6d366f8841 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #5: <unknown function> + 0x8582f0 (0x7f6d2dee72f0 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #6: <unknown function> + 0x644a90 (0x7f6d2dcd3a90 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #7: <unknown function> + 0x85082f (0x7f6d2dedf82f in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #8: <unknown function> + 0x1594d7 (0x55aec17ec4d7 in /usr/bin/python)\nframe #9: <unknown function> + 0x169873 (0x55aec17fc873 in /usr/bin/python)\nframe #10: <unknown function> + 0x1a2280 (0x55aec1835280 in /usr/bin/python)\nframe #11: <unknown function> + 0x1814a8 (0x55aec18144a8 in /usr/bin/python)\nframe #12: <unknown function> + 0x1944e8 (0x55aec18274e8 in /usr/bin/python)\nframe #13: <unknown function> + 0x1944fc (0x55aec18274fc in /usr/bin/python)\nframe #14: <unknown function> + 0x1a040f (0x55aec183340f in /usr/bin/python)\nframe #15: <unknown function> + 0x15f726 (0x55aec17f2726 in /usr/bin/python)\nframe #16: <unknown function> + 0x292c97 (0x55aec1925c97 in /usr/bin/python)\nframe #17: _PyEval_EvalFrameDefault + 0x5537 (0x55aec180da47 in /usr/bin/python)\nframe #18: _PyFunction_Vectorcall + 0x7c (0x55aec181e68c in /usr/bin/python)\nframe #19: _PyEval_EvalFrameDefault + 0x807 (0x55aec1808d17 in /usr/bin/python)\nframe #20: _PyFunction_Vectorcall + 0x7c (0x55aec181e68c in /usr/bin/python)\nframe #21: _PyEval_EvalFrameDefault + 0x6c0 (0x55aec1808bd0 in /usr/bin/python)\nframe #22: _PyFunction_Vectorcall + 0x7c (0x55aec181e68c in /usr/bin/python)\nframe #23: _PyEval_EvalFrameDefault + 0x1992 (0x55aec1809ea2 in /usr/bin/python)\nframe #24: <unknown function> + 0x259d36 (0x55aec18ecd36 in /usr/bin/python)\nframe #25: PyEval_EvalCode + 0x86 (0x55aec18ecc06 in /usr/bin/python)\nframe #26: <unknown function> + 0x280678 (0x55aec1913678 in /usr/bin/python)\nframe #27: <unknown function> + 0x27accf (0x55aec190dccf in /usr/bin/python)\nframe #28: PyRun_StringFlags + 0x81 (0x55aec1907b31 in /usr/bin/python)\nframe #29: PyRun_SimpleStringFlags + 0x41 (0x55aec19079e1 in /usr/bin/python)\nframe #30: Py_RunMain + 0x3d0 (0x55aec1906d10 in /usr/bin/python)\nframe #31: Py_BytesMain + 0x2d (0x55aec18e0c4d in /usr/bin/python)\nframe #32: <unknown function> + 0x29d90 (0x7f6d3728bd90 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #33: __libc_start_main + 0x80 (0x7f6d3728be40 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #34: _start + 0x25 (0x55aec18e0b45 in /usr/bin/python)\n\nterminate called after throwing an instance of 'c10::Error'\n  what():  CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\nException raised from c10_cuda_check_implementation at /pytorch/c10/cuda/CUDAException.cpp:43 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x96 (0x7f0379f6c1b6 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, std::string const&) + 0x64 (0x7f0379f15a76 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #2: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, int, bool) + 0x118 (0x7f037a3ca918 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #3: <unknown function> + 0x2b55c (0x7f037a39b55c in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #4: <unknown function> + 0x2b841 (0x7f037a39b841 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #5: <unknown function> + 0x8582f0 (0x7f0371ae72f0 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #6: <unknown function> + 0x644a90 (0x7f03718d3a90 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #7: <unknown function> + 0x85082f (0x7f0371adf82f in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #8: <unknown function> + 0x1594d7 (0x5569465364d7 in /usr/bin/python)\nframe #9: <unknown function> + 0x169873 (0x556946546873 in /usr/bin/python)\nframe #10: <unknown function> + 0x1a2280 (0x55694657f280 in /usr/bin/python)\nframe #11: <unknown function> + 0x1814a8 (0x55694655e4a8 in /usr/bin/python)\nframe #12: <unknown function> + 0x1944e8 (0x5569465714e8 in /usr/bin/python)\nframe #13: <unknown function> + 0x1944fc (0x5569465714fc in /usr/bin/python)\nframe #14: <unknown function> + 0x1a040f (0x55694657d40f in /usr/bin/python)\nframe #15: <unknown function> + 0x15f726 (0x55694653c726 in /usr/bin/python)\nframe #16: <unknown function> + 0x292c97 (0x55694666fc97 in /usr/bin/python)\nframe #17: _PyEval_EvalFrameDefault + 0x5537 (0x556946557a47 in /usr/bin/python)\nframe #18: _PyFunction_Vectorcall + 0x7c (0x55694656868c in /usr/bin/python)\nframe #19: _PyEval_EvalFrameDefault + 0x807 (0x556946552d17 in /usr/bin/python)\nframe #20: _PyFunction_Vectorcall + 0x7c (0x55694656868c in /usr/bin/python)\nframe #21: _PyEval_EvalFrameDefault + 0x6c0 (0x556946552bd0 in /usr/bin/python)\nframe #22: _PyFunction_Vectorcall + 0x7c (0x55694656868c in /usr/bin/python)\nframe #23: _PyEval_EvalFrameDefault + 0x1992 (0x556946553ea2 in /usr/bin/python)\nframe #24: <unknown function> + 0x259d36 (0x556946636d36 in /usr/bin/python)\nframe #25: PyEval_EvalCode + 0x86 (0x556946636c06 in /usr/bin/python)\nframe #26: <unknown function> + 0x280678 (0x55694665d678 in /usr/bin/python)\nframe #27: <unknown function> + 0x27accf (0x556946657ccf in /usr/bin/python)\nframe #28: PyRun_StringFlags + 0x81 (0x556946651b31 in /usr/bin/python)\nframe #29: PyRun_SimpleStringFlags + 0x41 (0x5569466519e1 in /usr/bin/python)\nframe #30: Py_RunMain + 0x3d0 (0x556946650d10 in /usr/bin/python)\nframe #31: Py_BytesMain + 0x2d (0x55694662ac4d in /usr/bin/python)\nframe #32: <unknown function> + 0x29d90 (0x7f037af2ed90 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #33: __libc_start_main + 0x80 (0x7f037af2ee40 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #34: _start + 0x25 (0x55694662ab45 in /usr/bin/python)\n\nW0321 22:51:18.606000 491065 torch/multiprocessing/spawn.py:169] Terminating process 491315 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 357, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 342, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 180, in _worker\n    load_timing = _timed_kernel(\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 110, in _timed_kernel\n    torch.cuda.synchronize(rank)\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/cuda/__init__.py\", line 985, in synchronize\n    return torch._C._cuda_synchronize()\nRuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype bfloat16 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport peer_access_pointer_exchange",
+      "dtype": "bfloat16",
+      "operation": "both",
+      "requested_transport": "peer_access_pointer_exchange",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "[rank0]:[W321 22:51:32.870709632 ProcessGroupNCCL.cpp:1496] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())\nW0321 22:51:33.171000 492275 torch/multiprocessing/spawn.py:169] Terminating process 492520 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 357, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 342, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 180, in _worker\n    load_timing = _timed_kernel(\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 110, in _timed_kernel\n    torch.cuda.synchronize(rank)\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/cuda/__init__.py\", line 985, in synchronize\n    return torch._C._cuda_synchronize()\nRuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --operation both",
+      "dtype": "float32",
+      "operation": "both",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "forced_transport": "auto",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.09939199686050415,
+            "mean_ms": 0.07803520038723946,
+            "min_ms": 0.05929600074887276
+          },
+          "load_value": 2.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 1,
+          "rank": 0,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.07366400212049484,
+            "mean_ms": 0.061299200356006625,
+            "min_ms": 0.053408000618219376
+          },
+          "store_value": 11.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "forced_transport": "auto",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07014399766921997,
+            "mean_ms": 0.06031999960541725,
+            "min_ms": 0.05315199866890907
+          },
+          "load_value": 1.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 0,
+          "rank": 1,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.0658240020275116,
+            "mean_ms": 0.05830400139093399,
+            "min_ms": 0.051072001457214355
+          },
+          "store_value": 10.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"peer_rank\": 1, \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 2.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.07803520038723946, \"min_ms\": 0.05929600074887276, \"max_ms\": 0.09939199686050415}, \"store_value\": 11.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.061299200356006625, \"min_ms\": 0.053408000618219376, \"max_ms\": 0.07366400212049484}}\n{\"rank\": 1, \"peer_rank\": 0, \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"auto\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 1.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.06031999960541725, \"min_ms\": 0.05315199866890907, \"max_ms\": 0.07014399766921997}, \"store_value\": 10.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.05830400139093399, \"min_ms\": 0.051072001457214355, \"max_ms\": 0.0658240020275116}}\n",
+      "summary": {
+        "load_max_rank_skew_ms": 0.01771520078182221,
+        "load_mean_ms_across_ranks": 0.06917759999632836,
+        "mode": "multiprocess",
+        "operation": "both",
+        "store_max_rank_skew_ms": 0.0029951989650726374,
+        "store_mean_ms_across_ranks": 0.059801600873470306,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport ctypes_ipc",
+      "dtype": "float32",
+      "operation": "both",
+      "rank_payloads": [
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "forced_transport": "ctypes_ipc",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.07769600301980972,
+            "mean_ms": 0.0604480005800724,
+            "min_ms": 0.051392000168561935
+          },
+          "load_value": 1.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 0,
+          "rank": 1,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.06896000355482101,
+            "mean_ms": 0.06036480069160462,
+            "min_ms": 0.05430399999022484
+          },
+          "store_value": 10.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        },
+        {
+          "block_size": 128,
+          "dtype": "float32",
+          "forced_transport": "ctypes_ipc",
+          "iters": 5,
+          "load_ok": true,
+          "load_timing_ms": {
+            "max_ms": 0.08336000144481659,
+            "mean_ms": 0.0638016015291214,
+            "min_ms": 0.053279999643564224
+          },
+          "load_value": 2.0,
+          "mode": "multiprocess",
+          "operation": "both",
+          "peer_rank": 1,
+          "rank": 0,
+          "store_ok": true,
+          "store_timing_ms": {
+            "max_ms": 0.07023999840021133,
+            "mean_ms": 0.05993599966168404,
+            "min_ms": 0.05177599936723709
+          },
+          "store_value": 11.0,
+          "transport_strategy": "ctypes_ipc",
+          "warmup": 2
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"peer_rank\": 0, \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 1.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.0604480005800724, \"min_ms\": 0.051392000168561935, \"max_ms\": 0.07769600301980972}, \"store_value\": 10.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.06036480069160462, \"min_ms\": 0.05430399999022484, \"max_ms\": 0.06896000355482101}}\n{\"rank\": 0, \"peer_rank\": 1, \"dtype\": \"float32\", \"block_size\": 128, \"warmup\": 2, \"iters\": 5, \"forced_transport\": \"ctypes_ipc\", \"operation\": \"both\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"load_value\": 2.0, \"load_ok\": true, \"load_timing_ms\": {\"mean_ms\": 0.0638016015291214, \"min_ms\": 0.053279999643564224, \"max_ms\": 0.08336000144481659}, \"store_value\": 11.0, \"store_ok\": true, \"store_timing_ms\": {\"mean_ms\": 0.05993599966168404, \"min_ms\": 0.05177599936723709, \"max_ms\": 0.07023999840021133}}\n",
+      "summary": {
+        "load_max_rank_skew_ms": 0.0033536009490489974,
+        "load_mean_ms_across_ranks": 0.062124801054596904,
+        "mode": "multiprocess",
+        "operation": "both",
+        "store_max_rank_skew_ms": 0.0004288010299205794,
+        "store_mean_ms_across_ranks": 0.06015040017664433,
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport pytorch_ipc",
+      "dtype": "float32",
+      "operation": "both",
+      "requested_transport": "pytorch_ipc",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "terminate called after throwing an instance of 'c10::Error'\nterminate called after throwing an instance of 'c10::Error'\n  what():  CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\nException raised from c10_cuda_check_implementation at /pytorch/c10/cuda/CUDAException.cpp:43 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x96 (0x7f713d36c1b6 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, std::string const&) + 0x64 (0x7f713d315a76 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #2: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, int, bool) + 0x118 (0x7f713d7a3918 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #3: <unknown function> + 0x2b55c (0x7f713d77455c in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #4: <unknown function> + 0x2b841 (0x7f713d774841 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #5: <unknown function> + 0x8582f0 (0x7f71352e72f0 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #6: <unknown function> + 0x644a90 (0x7f71350d3a90 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #7: <unknown function> + 0x85082f (0x7f71352df82f in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #8: <unknown function> + 0x1594d7 (0x55b234d4f4d7 in /usr/bin/python)\nframe #9: <unknown function> + 0x169873 (0x55b234d5f873 in /usr/bin/python)\nframe #10: <unknown function> + 0x1a2280 (0x55b234d98280 in /usr/bin/python)\nframe #11: <unknown function> + 0x1814a8 (0x55b234d774a8 in /usr/bin/python)\nframe #12: <unknown function> + 0x1944e8 (0x55b234d8a4e8 in /usr/bin/python)\nframe #13: <unknown function> + 0x1944fc (0x55b234d8a4fc in /usr/bin/python)\nframe #14: <unknown function> + 0x1a040f (0x55b234d9640f in /usr/bin/python)\nframe #15: <unknown function> + 0x15f726 (0x55b234d55726 in /usr/bin/python)\nframe #16: <unknown function> + 0x292c97 (0x55b234e88c97 in /usr/bin/python)\nframe #17: _PyEval_EvalFrameDefault + 0x5537 (0x55b234d70a47 in /usr/bin/python)\nframe #18: _PyFunction_Vectorcall + 0x7c (0x55b234d8168c in /usr/bin/python)\nframe #19: _PyEval_EvalFrameDefault + 0x807 (0x55b234d6bd17 in /usr/bin/python)\nframe #20: _PyFunction_Vectorcall + 0x7c (0x55b234d8168c in /usr/bin/python)\nframe #21: _PyEval_EvalFrameDefault + 0x6c0 (0x55b234d6bbd0 in /usr/bin/python)\nframe #22: _PyFunction_Vectorcall + 0x7c (0x55b234d8168c in /usr/bin/python)\nframe #23: _PyEval_EvalFrameDefault + 0x1992 (0x55b234d6cea2 in /usr/bin/python)\nframe #24: <unknown function> + 0x259d36 (0x55b234e4fd36 in /usr/bin/python)\nframe #25: PyEval_EvalCode + 0x86 (0x55b234e4fc06 in /usr/bin/python)\nframe #26: <unknown function> + 0x280678 (0x55b234e76678 in /usr/bin/python)\nframe #27: <unknown function> + 0x27accf (0x55b234e70ccf in /usr/bin/python)\nframe #28: PyRun_StringFlags + 0x81 (0x55b234e6ab31 in /usr/bin/python)\nframe #29: PyRun_SimpleStringFlags + 0x41 (0x55b234e6a9e1 in /usr/bin/python)\nframe #30: Py_RunMain + 0x3d0 (0x55b234e69d10 in /usr/bin/python)\nframe #31: Py_BytesMain + 0x2d (0x55b234e43c4d in /usr/bin/python)\nframe #32: <unknown function> + 0x29d90 (0x7f713e5d5d90 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #33: __libc_start_main + 0x80 (0x7f713e5d5e40 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #34: _start + 0x25 (0x55b234e43b45 in /usr/bin/python)\n\n  what():  CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\nException raised from c10_cuda_check_implementation at /pytorch/c10/cuda/CUDAException.cpp:43 (most recent call first):\nframe #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x96 (0x7f5bed76c1b6 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, std::string const&) + 0x64 (0x7f5bed715a76 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10.so)\nframe #2: c10::cuda::c10_cuda_check_implementation(int, char const*, char const*, int, bool) + 0x118 (0x7f5bedb3c918 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #3: <unknown function> + 0x2b55c (0x7f5bedb0d55c in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #4: <unknown function> + 0x2b841 (0x7f5bedb0d841 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libc10_cuda.so)\nframe #5: <unknown function> + 0x8582f0 (0x7f5be52e72f0 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #6: <unknown function> + 0x644a90 (0x7f5be50d3a90 in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #7: <unknown function> + 0x85082f (0x7f5be52df82f in /home/makai/.local/lib/python3.10/site-packages/torch/lib/libtorch_python.so)\nframe #8: <unknown function> + 0x1594d7 (0x55ae301804d7 in /usr/bin/python)\nframe #9: <unknown function> + 0x169873 (0x55ae30190873 in /usr/bin/python)\nframe #10: <unknown function> + 0x1a2280 (0x55ae301c9280 in /usr/bin/python)\nframe #11: <unknown function> + 0x1814a8 (0x55ae301a84a8 in /usr/bin/python)\nframe #12: <unknown function> + 0x1944e8 (0x55ae301bb4e8 in /usr/bin/python)\nframe #13: <unknown function> + 0x1944fc (0x55ae301bb4fc in /usr/bin/python)\nframe #14: <unknown function> + 0x1a040f (0x55ae301c740f in /usr/bin/python)\nframe #15: <unknown function> + 0x15f726 (0x55ae30186726 in /usr/bin/python)\nframe #16: <unknown function> + 0x292c97 (0x55ae302b9c97 in /usr/bin/python)\nframe #17: _PyEval_EvalFrameDefault + 0x5537 (0x55ae301a1a47 in /usr/bin/python)\nframe #18: _PyFunction_Vectorcall + 0x7c (0x55ae301b268c in /usr/bin/python)\nframe #19: _PyEval_EvalFrameDefault + 0x807 (0x55ae3019cd17 in /usr/bin/python)\nframe #20: _PyFunction_Vectorcall + 0x7c (0x55ae301b268c in /usr/bin/python)\nframe #21: _PyEval_EvalFrameDefault + 0x6c0 (0x55ae3019cbd0 in /usr/bin/python)\nframe #22: _PyFunction_Vectorcall + 0x7c (0x55ae301b268c in /usr/bin/python)\nframe #23: _PyEval_EvalFrameDefault + 0x1992 (0x55ae3019dea2 in /usr/bin/python)\nframe #24: <unknown function> + 0x259d36 (0x55ae30280d36 in /usr/bin/python)\nframe #25: PyEval_EvalCode + 0x86 (0x55ae30280c06 in /usr/bin/python)\nframe #26: <unknown function> + 0x280678 (0x55ae302a7678 in /usr/bin/python)\nframe #27: <unknown function> + 0x27accf (0x55ae302a1ccf in /usr/bin/python)\nframe #28: PyRun_StringFlags + 0x81 (0x55ae3029bb31 in /usr/bin/python)\nframe #29: PyRun_SimpleStringFlags + 0x41 (0x55ae3029b9e1 in /usr/bin/python)\nframe #30: Py_RunMain + 0x3d0 (0x55ae3029ad10 in /usr/bin/python)\nframe #31: Py_BytesMain + 0x2d (0x55ae30274c4d in /usr/bin/python)\nframe #32: <unknown function> + 0x29d90 (0x7f5bee6a0d90 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #33: __libc_start_main + 0x80 (0x7f5bee6a0e40 in /lib/x86_64-linux-gnu/libc.so.6)\nframe #34: _start + 0x25 (0x55ae30274b45 in /usr/bin/python)\n\nW0321 22:52:16.463000 495400 torch/multiprocessing/spawn.py:169] Terminating process 495516 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 357, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 342, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 180, in _worker\n    load_timing = _timed_kernel(\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 110, in _timed_kernel\n    torch.cuda.synchronize(rank)\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/cuda/__init__.py\", line 985, in synchronize\n    return torch._C._cuda_synchronize()\nRuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\n",
+      "stdout": ""
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --warmup 2 --iters 5 --block-size 128 --operation both --force-transport peer_access_pointer_exchange",
+      "dtype": "float32",
+      "operation": "both",
+      "requested_transport": "peer_access_pointer_exchange",
+      "returncode": 1,
+      "status": "failed",
+      "stderr": "[rank0]:[W321 22:52:30.368406109 ProcessGroupNCCL.cpp:1496] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())\nW0321 22:52:31.669000 496417 torch/multiprocessing/spawn.py:169] Terminating process 496536 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 357, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 342, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 180, in _worker\n    load_timing = _timed_kernel(\n  File \"/home/makai/XTile/tests/test_e2e/_run_triton_remote_access_multiprocess.py\", line 110, in _timed_kernel\n    torch.cuda.synchronize(rank)\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/cuda/__init__.py\", line 985, in synchronize\n    return torch._C._cuda_synchronize()\nRuntimeError: CUDA error: an illegal memory access was encountered\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n\n\n",
+      "stdout": ""
+    }
+  ],
+  "command": "tests/benchmarks/bench_triton_remote_access_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/triton_remote_access_multiprocess_matrix.json",
+  "environment": {
+    "block_size": 128,
+    "gpu_name": "NVIDIA H100 PCIe",
+    "iters": 5,
+    "operation": "both",
+    "visible_gpus": 2,
+    "warmup": 2
+  },
+  "generated_at_utc": "2026-03-21T22:52:32.446527+00:00",
+  "schema_version": 1,
+  "summary": {
+    "case_count": 12,
+    "failed_cases": 6,
+    "passed_cases": 6
+  }
+}

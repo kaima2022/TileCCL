@@ -116,20 +116,41 @@ tests/test_patterns/test_all_patterns.py ........                        [100%]
 **复测结论**：
 - 这能减少辅助开销，但**没有**改变核心结论：在当前 2×H100、当前 kernel 结构下，`producer_consumer` / `wg_specialized` 仍未稳定优于 `bulk_sync`
 
+#### DC-026: canonical benchmark 串行锁与污染修正
+
+**发现问题**：
+- 一轮中断前的复测里，`bench_gemm.py`、`bench_p2p_translate.py`、`bench_patterns.py` 曾被并发跑在同一组 H100 上。
+- 这会直接污染 `figures/data/*.json` 与由其生成的 figure headline，不能当成正式结果。
+
+**修复**：
+- `xtile.utils.benchmark_results` 新增 canonical benchmark 全局锁。
+- 任何把结果写到 `figures/data/` 的 benchmark 现在都会自动串行化。
+- 新增测试：`tests/test_benchmark_results.py` 会验证第二个进程无法非阻塞进入 canonical benchmark 锁。
+
+**结果**：
+- 后续 canonical artifact 已全部按串行命令重跑并覆盖旧产物。
+- figure / Markdown summary 现在都建立在这一轮串行结果上。
+- 当前 serial headline：
+  - GEMM `4096³ fp16=94.9%`、`4096³ bf16=91.1%`
+  - GEMM `8192³ fp16=83.0%`、`8192³ bf16=83.5%`
+  - P2P best read `248.74 GB/s`、best write `248.43 GB/s`
+  - Pattern best speedup `1.667×`（`wg_specialized`, `8192×4608×36864`）
+
 #### GEMM 复测结果（official helper，3 次重复取中位数）
 
 命令口径：复用 `tests/benchmarks/bench_gemm.py::_run_gemm_comparison`
 
 | Size | dtype | 中位数比值 |
 |------|-------|------------|
-| 4096³ | fp16 | **100.2%** |
+| 4096³ | fp16 | **94.9%** |
 | 4096³ | bf16 | **91.1%** |
-| 8192³ | fp16 | **84.2%** |
-| 8192³ | bf16 | **86.1%** |
+| 8192³ | fp16 | **83.0%** |
+| 8192³ | bf16 | **83.5%** |
 
 **解释**：
 - 8192³ 相比 Phase 5 的 ~79% 有提升，但仍未达到 90% 目标
 - 这说明当前 `128×128×64, stages=4` 路线已经逼近现有 Triton kernel 的稳定上限，继续提升需要更深的 kernel 级优化
+- 2026-03-21 当天不同串行 rerun 之间仍存在可见波动，因此当前做法是如实记录 latest canonical artifact，而不是保留更好看的旧 headline
 
 #### Pattern overlap 全量复测（统一 runtime + 动态 heap）
 
@@ -142,22 +163,548 @@ PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10
 
 | M | N | K | Best Pattern | Best Speedup |
 |------|------|-------|--------------|--------------|
-| 4096 | 4096 | 4096 | fused_sequential | **1.084×** |
-| 8192 | 4608 | 36864 | wg_specialized | **1.616×** |
-| 8192 | 3584 | 14336 | fused_sequential | **1.209×** |
-| 8192 | 8192 | 30720 | wg_specialized | **1.619×** |
-| 4096 | 8192 | 8192 | fused_sequential | **1.155×** |
+| 4096 | 4096 | 4096 | fused_sequential | **1.129×** |
+| 8192 | 4608 | 36864 | wg_specialized | **1.667×** |
+| 8192 | 3584 | 14336 | fused_sequential | **1.218×** |
+| 8192 | 8192 | 30720 | wg_specialized | **1.578×** |
+| 4096 | 8192 | 8192 | fused_sequential | **1.161×** |
 | 2048 | 16384 | 8192 | fused_sequential | **1.190×** |
 
 **更新结论**：
 - 旧的 `1.067×` 结果是更早阶段的单尺寸历史结果，不能再充当当前 headline
-- 更早一轮统一 runtime 复测里出现过 `1.004×` 的保守结论，但在显式 contract + plan-builder 主链稳定后，最新 full 6-size rerun headline 已更新为 `1.619×`
-- 当前最好的稳定点是 `wg_specialized` 在 `8192×8192×30720` 上达到 `1.619×`
+- 更早一轮统一 runtime 复测里出现过 `1.004×` 的保守结论，但在显式 contract + plan-builder 主链稳定后，最新 canonical serial rerun headline 已更新为 `1.667×`
+- 当前最好的稳定点是 `wg_specialized` 在 `8192×4608×36864` 上达到 `1.667×`
 - 因此 XTile 当前已经证明 overlap pattern 可以显著超过 baseline，但优势仍然依赖尺寸与 pattern 选择，不应夸大成“全尺寸统一大幅领先”
+
+#### DC-027: plot / 文档导出接入 runtime_support 并完成 canonical rerun
+
+**变更**：
+- 新增 `scripts/_benchmark_reporting.py`
+- `scripts/plot_figures.py` 现在会在 PNG/PDF footer 写入 `source + run date + runtime_support`
+- 新增 `scripts/export_benchmark_summary.py`
+- 新增导出结果：`docs/generated/benchmark_runtime_summary.md`
+
+**真实执行**：
+- `PYTHONPATH=. python tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json`
+- `PYTHONPATH=. python tests/benchmarks/bench_p2p_translate.py --output-json figures/data/p2p_latest.json`
+- `PYTHONPATH=. python tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json figures/data/pattern_overlap_latest.json`
+- `python scripts/plot_figures.py`
+- `python scripts/export_benchmark_summary.py`
+
+**结果**：
+- 3 份 canonical JSON 均已内嵌 `runtime_support`
+- figure footer 已显示 `backend / world_size / heap_mode / transport / op state`
+- 导出的 Markdown 摘要已包含 runtime snapshot、命令、时间戳与 headline 指标
+- `figures/data/` 官方 benchmark 产物现在有锁保护，不再允许“并发复测后覆盖成正式结果”
+
+#### DC-028: `gemm_allscatter(full/shard)` host wrapper + workspace 复用
+
+**变更**：
+- `xtile.ops.build_gemm_allscatter_plan(...)` 现在支持 `b_layout="full", c_layout="shard"`。
+- 高层 wrapper 会自动 materialize 一个 heap-backed full output workspace，内部仍复用稳定的 `full/full` pattern plan。
+- `XTileContext.workspace(...)` 新增可复用 scratch buffer 入口，避免高层 wrapper 每次调用都继续向 bump allocator 申请新空间。
+
+**为什么先做这项**：
+- 这是当前 mixed layout 中最容易定义清楚的一半。
+- `full/shard` 不需要新增 device collective 语义，只需要把“内部 full 输出”和“外部 shard 输出”明确分层。
+- 这样 public API 先少掉一块显式拒绝面，能更快把默认用户入口收口到 `xtile.ops.*`。
+
+**真实验证**：
+- multigpu 回归：
+  - `pytest -q tests/test_ops.py tests/test_support.py tests/test_cli_support.py`
+  - `16 passed in 9.57s`
+- 连续两次真实调用验收：
+```bash
+python - <<'PY'
+...
+print({
+    'before_bytes': before,
+    'after_first_bytes': after_first,
+    'after_second_bytes': after_second,
+    'workspace_reused': after_first == after_second,
+    'correct': bool(torch.allclose(C, ref, rtol=1e-2, atol=1e-1)),
+})
+PY
+```
+- 实测输出：
+  - `before_bytes = 0`
+  - `after_first_bytes = 65536`
+  - `after_second_bytes = 65536`
+  - `workspace_reused = True`
+  - `correct = True`
+
+**结论**：
+- `gemm_allscatter.full/shard` 现在可以从“unsupported”下调为 **supported**
+- 而且高层 wrapper 没有引入重复调用堆空间持续增长的问题
+- 剩余 mixed layout 真正难的一半变成 `shard/full`，但问题已不只是“一维 `allgather(...)` 不够表达二维列拼装”，而是需要先重新定义 local-output ownership contract
+
+#### DC-029: `gemm_allscatter(shard/full)` 诊断后继续保持拒绝
+
+**背景**：
+- 这轮原本准备把 mixed-layout 的另一半 `shard/full` 也补齐。
+- 初看似乎可以走“内部 shard/shard plan + 外部 allgather materialization”。
+- 但这条路只有在当前 `gemm_allscatter_sharded(...)` 真正表达“每个 rank 先稳定产出自己的 local output shard”时才成立。
+
+**真实诊断**：
+- support 现状复核：
+  - `python -m xtile.cli support --backend cuda --world-size 2 --heap-size-mb 64 --json`
+  - 当前输出确认：
+    - `contracts.gemm_allscatter.full/shard = supported`
+    - `contracts.gemm_allscatter.shard/full = unsupported`
+- 2-GPU ownership 诊断：
+```bash
+python - <<'PY'
+...
+xtile.ops.gemm_allscatter_sharded(A, B_shard, C_shard, ctx=ctx, full_N=N, pattern="bulk_sync")
+...
+print(summary)
+PY
+```
+- 实测摘要：
+  - `rank0 max_abs_diff_vs_local_matmul = 35.5`
+  - `rank1 max_abs_diff_vs_local_matmul = 0.00048828125`
+  - 两个 rank 的 `sample_out` 完全一样，而 `rank0 sample_ref` 与之明显不一致
+
+**结论**：
+- 当前 multi-rank `gemm_allscatter_sharded(...)` 暴露的是 **peer-scatter ownership contract**，而不是稳定 **local-shard ownership contract**。
+- 因此不能把 `shard/full` 当成“再补一层 host wrapper”。
+- 更正确的下一步是把这条需求转入 future **`gemm_allgather` 风格 public contract**：
+  - 先定义 local GEMM 结果到底归谁拥有
+  - 再定义 full-output assembly / heap ownership / allgather path
+  - 最后再决定是否复用现有 pattern
 
 ---
 
 ## Benchmark 数据
+
+### Runtime / Collective 状态更新（2026-03-21）
+
+- 新增正式状态出口：`python -m xtile.cli support --backend cuda --world-size 2 --heap-size-mb 64 --json`
+- 实测输出确认：
+  - `heap_mode = single_process`
+  - `transport_strategy = peer_access`
+  - `gemm_allscatter = supported`
+  - `allgather = supported`
+  - `reduce_scatter = supported`
+  - `gemm_reducescatter = unsupported`
+  - `collectives.reduce_scatter_launcher = supported`
+
+- `reduce_scatter(...)` / `xtile.ops.reduce_scatter(...)` 真实值校验：
+
+```bash
+python - <<'PY'
+import torch
+from xtile.memory.symmetric_heap import SymmetricHeap
+from xtile.primitives import reduce_scatter
+...
+PY
+```
+
+- 结果：
+  - `rank0 dst0 = 12.0`
+  - `rank1 dst0 = 14.0`
+  - 期望值：`[12, 14]`
+
+**结论**：
+- 当前 `reduce_scatter(...)` host launcher 与 `xtile.ops.reduce_scatter(...)` 单进程 reference 主路径都已闭环
+- support matrix 对这一路径现在应记为 **supported**
+- `implementation="device"` 在 `single_process` 下实测会给出错误值，因此当前已改成显式拒绝，而不是继续暴露一个不可信的强制选项
+- 但 `gemm_reducescatter(...)` 仍然不能宣称完成，因为 fused contract 与 device/multiprocess public gate 还没闭环
+- 本轮已把 benchmark 结构化结果的 `runtime_support` 快照接进实际 plot / Markdown 导出主链
+- 定向回归：
+  - `pytest -q tests/test_benchmark_results.py tests/test_collectives_host.py tests/test_cli_support.py tests/test_support.py tests/test_ops.py tests/test_patterns/test_contracts.py tests/test_context.py`
+  - `24 passed in 7.89s`
+- 后续在补上 canonical benchmark 锁与 reporting 回归后，又执行：
+  - `pytest -q tests/test_benchmark_results.py tests/test_benchmark_reporting.py tests/test_export_benchmark_summary.py tests/test_collectives_host.py tests/test_cli_support.py tests/test_support.py tests/test_ops.py tests/test_patterns/test_contracts.py tests/test_context.py`
+  - `32 passed in 7.69s`
+
+#### DC-030: multiprocess `reduce_scatter(device)` 真实诊断、bring-up 修复与 gate 保守收口
+
+**背景**：
+- P0-B 的下一步原本是继续把 multiprocess/device-path 往 stable public contract 推。
+- 在真正放开之前，先补了两类真实诊断：
+  - multiprocess heap / IPC bring-up
+  - multiprocess `reduce_scatter(device)` primitive + high-level API correctness
+
+**本轮修复**：
+- `xtile.backends.cuda._CUDARuntime.ipc_get_handle()` 与 HIP 对应实现，改为返回完整 64-byte IPC handle。
+- 原先 `bytes(c_char_array)` 会在首个 `NUL` 处截断，实测 CUDA handle 只返回 **6 bytes**。
+- `SymmetricHeap._setup_multiprocess()` 的 ctypes IPC 第一层 fallback 现在改为捕获 `Exception`，不会因为 `ValueError` 直接中断到进程崩溃。
+- `tile_reduce_scatter` 已从“远端写 peer 输入缓冲区”的不安全写入式实现，改为 **只远端读 peer chunk、只本地写 output** 的 correctness-first device 实现，避免 peer 覆盖未归约本地 chunk 的 data race。
+- multiprocess 诊断脚本已改为在 `init_process_group(..., device_id=torch.device("cuda", rank))` 下初始化，清理 NCCL barrier 设备未知警告。
+- 新增 feature gate：
+  - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES`
+- 默认 public 行为已收紧：
+  - multiprocess `reduce_scatter(auto|device)` 默认显式拒绝
+  - 只有设置上述环境变量时，才允许继续走实验性 device path
+
+**真实实验**：
+- handle 长度 sanity：
+  - `pytest -q tests/test_backend_ipc.py`
+  - 结果：`2 passed`
+- multiprocess heap / IPC bring-up：
+  - `python -m tests.test_e2e._run_ipc_test`
+  - 结果：**通过**
+  - 关键输出：`ALL MULTI-GPU IPC TESTS PASSED`
+- multiprocess `reduce_scatter(device)`：
+  - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_reduce_scatter_multiprocess`
+  - 结果：**通过**
+  - JSON 输出：
+    - `rank0: expected=4.0, primitive=4.0, high_level=4.0, transport_strategy="ctypes_ipc"`
+    - `rank1: expected=6.0, primitive=6.0, high_level=6.0, transport_strategy="ctypes_ipc"`
+- 默认 gate 回归：
+  - `pytest -q tests/test_backend_ipc.py tests/test_ops.py tests/test_support.py tests/test_collectives_host.py tests/test_reduce_scatter_multiprocess.py tests/test_cli_support.py tests/test_context.py tests/test_patterns/test_contracts.py`
+  - 结果：`32 passed, 1 skipped`
+- opt-in gate 回归：
+  - `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_backend_ipc.py tests/test_ops.py tests/test_support.py tests/test_collectives_host.py tests/test_reduce_scatter_multiprocess.py tests/test_cli_support.py tests/test_context.py tests/test_patterns/test_contracts.py`
+  - 结果：`33 passed`
+
+**结论**：
+- 这次最重要的结论已经从“先止崩”推进到“真实值闭环”：
+  - **ctypes IPC handle 截断 bug 已修复**
+  - **multiprocess heap / IPC bring-up 已通过真实 2-GPU 复测**
+  - **multiprocess `reduce_scatter(device)` primitive 与高层 API 已通过真实 2-GPU 值校验**
+  - 当前 multiprocess/device path 在这台机器上的实际 transport 主路径是 **`ctypes_ipc`**
+- 但工业级默认行为仍然应保持 **默认 gate 关闭**，原因不再是“会崩进程”，而是：
+  - 目前只完成了 2-GPU correctness bring-up
+  - 还没有完成更大 world size、更多 dtype、更多 transport fallback、benchmark/stress 的稳定 public/performance 验证
+- 对 `gemm_reducescatter(...)` 的影响：
+  - 现在阻塞项已经不再是 crash，而是 **public/performance gate 尚未闭环**
+  - 下一阶段应扩大 multiprocess/device 验证矩阵与 benchmark/stress 证据，再谈 fused public contract
+
+#### DC-031: multiprocess/device `reduce_scatter` dtype × transport 矩阵 + transport-aware gate
+
+**背景**：
+- DC-030 之后，已经能确认当前 H100 环境下 `ctypes_ipc` 主路径可跑通。
+- 但“multiprocess/device 已实验打通”这个说法仍然太宽，因为 `_setup_multiprocess()` 还有 `pytorch_ipc` 与 `peer_access_pointer_exchange` 两条 fallback。
+- 如果不把 transport 维度单独验清楚，public gate 仍然会过宽。
+
+**本轮代码收口**：
+- 新增 `XTILE_FORCE_MULTIPROCESS_TRANSPORT`，只用于受控诊断/benchmark，支持：
+  - `ctypes_ipc`
+  - `pytorch_ipc`
+  - `peer_access_pointer_exchange`
+- `SymmetricHeap._setup_multiprocess()` 现已重构为按策略分派：
+  - `_setup_multiprocess_ctypes_ipc()`
+  - `_setup_multiprocess_pytorch_ipc()`
+  - `_setup_multiprocess_peer_access_pointer_exchange()`
+- 新增结构化矩阵脚本：
+  - `tests/benchmarks/bench_reduce_scatter_multiprocess.py`
+  - 产物：`docs/generated/reduce_scatter_multiprocess_matrix.json`
+- `tests.test_e2e._run_reduce_scatter_multiprocess` 现支持：
+  - `--dtype`
+  - `--warmup`
+  - `--iters`
+  - `--force-transport`
+- public gate 现已进一步收紧成 **transport-aware**：
+  - 即便开启 `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1`
+  - 也只允许当前真实矩阵已验证的 `transport_strategy='ctypes_ipc'`
+  - `pytorch_ipc` / `peer_access_pointer_exchange` 会在 host 侧提前抛 `ValueError`，不再落到 device kernel 非法访存
+
+**真实实验**：
+- 矩阵命令：
+  - `PYTHONPATH=. XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -u tests/benchmarks/bench_reduce_scatter_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/reduce_scatter_multiprocess_matrix.json`
+- 结构化结果摘要：
+  - `case_count = 12`
+  - `passed_cases = 6`
+  - `failed_cases = 6`
+
+| dtype | requested transport | 结果 | actual transport / 失败原因 |
+|------|----------------------|------|-----------------------------|
+| fp16 | `auto` | PASS | `ctypes_ipc` |
+| fp16 | `ctypes_ipc` | PASS | `ctypes_ipc` |
+| fp16 | `pytorch_ipc` | FAIL | host 侧显式拒绝：当前仅验证 `ctypes_ipc` |
+| fp16 | `peer_access_pointer_exchange` | FAIL | host 侧显式拒绝：当前仅验证 `ctypes_ipc` |
+| bf16 | `auto` | PASS | `ctypes_ipc` |
+| bf16 | `ctypes_ipc` | PASS | `ctypes_ipc` |
+| bf16 | `pytorch_ipc` | FAIL | host 侧显式拒绝：当前仅验证 `ctypes_ipc` |
+| bf16 | `peer_access_pointer_exchange` | FAIL | host 侧显式拒绝：当前仅验证 `ctypes_ipc` |
+| fp32 | `auto` | PASS | `ctypes_ipc` |
+| fp32 | `ctypes_ipc` | PASS | `ctypes_ipc` |
+| fp32 | `pytorch_ipc` | FAIL | host 侧显式拒绝：当前仅验证 `ctypes_ipc` |
+| fp32 | `peer_access_pointer_exchange` | FAIL | host 侧显式拒绝：当前仅验证 `ctypes_ipc` |
+
+**补充回归**：
+- `pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_ops.py tests/test_backend_ipc.py`
+  - 结果：`29 passed`
+- `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py`
+  - 结果：`3 passed`
+- `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_backend_ipc.py tests/test_reduce_scatter_multiprocess.py`
+  - 结果：`16 passed`
+
+**结论**：
+- 当前 multiprocess/device `reduce_scatter` 的真实支持面必须写成：
+  - **`ctypes_ipc`：已通过 2-GPU `fp16/bf16/fp32` correctness + timing 矩阵**
+  - **`pytorch_ipc`：当前未验证通过，现已显式拒绝进入 device path**
+  - **`peer_access_pointer_exchange`：当前未验证通过，现已显式拒绝进入 device path**
+- 因此，下一阶段优先级需要进一步收敛：
+  - 要么继续修 `pytorch_ipc` / `peer_access_pointer_exchange` 的 device-collective 正确性
+  - 要么明确把 experimental contract 收窄为 “same-node multiprocess + `ctypes_ipc` only”
+- `world_size>2` 的下一轮真实验收目前受本机只有 2 张 H100 限制，暂不能在当前环境下完成
+
+#### DC-032: 最小 Triton remote-access transport 矩阵 + auto multiprocess transport 收窄
+
+**背景**：
+- DC-031 已经把 `reduce_scatter(device)` 的 public gate 收窄为 transport-aware。
+- 但当时仍然存在一个更底层的问题需要单独确认：
+  - `pytorch_ipc` 的失败，到底是 collective kernel 逻辑问题
+  - 还是它本身就不是 Triton device-side remote dereference 可用 transport
+- 如果不把这一层剥开，`SymmetricHeap._setup_multiprocess()` 继续把 `pytorch_ipc` 放在 auto fallback 链里，就仍然不够工业级。
+
+**本轮代码变更**：
+- 新增最小真实诊断脚本：
+  - `tests/test_e2e/_run_triton_remote_access_multiprocess.py`
+  - 只测 `translate_ptr + tl.load/tl.store`
+- 新增结构化矩阵 benchmark：
+  - `tests/benchmarks/bench_triton_remote_access_multiprocess.py`
+  - 产物：`docs/generated/triton_remote_access_multiprocess_matrix.json`
+- `SymmetricHeap._setup_multiprocess()` 的 auto path 现已进一步收紧：
+  - 默认只尝试 `ctypes_ipc`
+  - `pytorch_ipc` / `peer_access_pointer_exchange` 仅保留 `XTILE_FORCE_MULTIPROCESS_TRANSPORT=...` 的受控诊断入口
+- support matrix 新增：
+  - `memory["symmetric_heap.device_remote_access"]`
+  - 用于回答“当前 heap transport 是否真的能被 Triton device-side 远端解引用”
+
+**真实实验**：
+- 最小 remote-access 矩阵命令：
+  - `PYTHONPATH=. python -u tests/benchmarks/bench_triton_remote_access_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/triton_remote_access_multiprocess_matrix.json`
+- 结构化结果摘要：
+  - `case_count = 12`
+  - `passed_cases = 6`
+  - `failed_cases = 6`
+
+| dtype | requested transport | host-side IPC bring-up | 最小 Triton remote load/store | 结论 |
+|------|----------------------|------------------------|-------------------------------|------|
+| fp16/bf16/fp32 | `auto` | PASS | PASS | 实际 transport 为 `ctypes_ipc` |
+| fp16/bf16/fp32 | `ctypes_ipc` | PASS | PASS | 当前唯一通过真实 device-side 矩阵的 multiprocess transport |
+| fp16/bf16/fp32 | `pytorch_ipc` | PASS | FAIL | `CUDA error: an illegal memory access was encountered` |
+| fp16/bf16/fp32 | `peer_access_pointer_exchange` | FAIL | FAIL | host `cudaMemcpy err=1`；最小 Triton remote load 也非法访存 |
+
+**关键对照命令**：
+- `XTILE_FORCE_MULTIPROCESS_TRANSPORT=pytorch_ipc python -u -m tests.test_e2e._run_ipc_test`
+  - 结果：`ALL MULTI-GPU IPC TESTS PASSED`
+- `python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --warmup 1 --iters 2 --force-transport pytorch_ipc --operation both`
+  - 结果：失败，`CUDA error: an illegal memory access was encountered`
+- `XTILE_FORCE_MULTIPROCESS_TRANSPORT=peer_access_pointer_exchange python -u -m tests.test_e2e._run_ipc_test`
+  - 结果：失败，`cudaMemcpy err=1`
+- `python -u -m tests.test_e2e._run_triton_remote_access_multiprocess --dtype float32 --warmup 1 --iters 2 --force-transport peer_access_pointer_exchange --operation both`
+  - 结果：失败，`CUDA error: an illegal memory access was encountered`
+
+**补充回归**：
+- `pytest -q tests/test_feature_gates.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_ops.py`
+  - 结果：`57 passed`
+
+**结论**：
+- 现在可以把 transport 分层写得更精确：
+  - **`ctypes_ipc`**：host-side IPC bring-up、最小 Triton remote load/store、`reduce_scatter(device)` 都已通过真实 2-GPU 验证
+  - **`pytorch_ipc`**：host-side bring-up 可用，但不是当前机器上 Triton device-side remote dereference 可用 transport
+  - **`peer_access_pointer_exchange`**：既不是可靠 host-side IPC transport，也不是 device-side remote dereference transport
+- 因此 auto multiprocess transport 继续保留 `pytorch_ipc` 是不合理的，现已正式收窄为 **`ctypes_ipc only`**
+- 后续若要重新放开 `pytorch_ipc`，前提不再是“host 能不能读”，而是“最小 Triton remote load/store 能否真实通过”
+
+#### DC-033: multiprocess `allgather` 真机验证 + public surface/support matrix 收紧
+
+**背景**：
+- DC-032 之后，已经能确认“最小 Triton remote access”只有 `ctypes_ipc` 是 device-safe。
+- 但 public surface 里还有两类需要继续收紧：
+  - `allgather(...)` / `xtile.ops.allgather(...)`
+  - `gemm_allscatter(...)` / `pattern.execute(...)`
+- 如果这些入口还继续把 unsupported transport 写成“可用”，support matrix 和实际风险就会继续漂。
+
+**本轮代码变更**：
+- `xtile.primitives.allgather(...)` / `allreduce(...)` / `broadcast(...)` 现已新增 multiprocess transport 守卫：
+  - unsupported transport 会在 host 侧直接 `ValueError`
+  - 不再掉进 Triton kernel 非法访存
+- `xtile.ops.build_allgather_plan(...)` 现已在 host 侧校验 device-remote-access transport
+- `xtile.ops.build_gemm_allscatter_plan(...)` 现已显式要求 attached heap，并在 multiprocess unsupported transport 下提前失败
+- 4 个 overlap pattern 的 `execute(...)` expert surface 现也会在 unsupported transport 下提前失败
+- support matrix 已改成 mode/transport 感知：
+  - `gemm_allscatter`：无 heap 时不再写成 `supported`
+  - multiprocess `allgather` / `gemm_allscatter` 不再一律写成 `supported`
+
+**新增真实诊断脚本 / 产物**：
+- 新增：
+  - `tests/test_e2e/_run_allgather_multiprocess.py`
+  - `tests/benchmarks/bench_allgather_multiprocess.py`
+- 结构化产物：
+  - `docs/generated/allgather_multiprocess_matrix.json`
+
+**真实实验**：
+- 默认 multiprocess allgather 真机验收：
+  - `python -u -m tests.test_e2e._run_allgather_multiprocess --dtype float32 --warmup 1 --iters 2 --launcher all`
+  - 结果：
+    - `transport_strategy = ctypes_ipc`
+    - `primitive_ok = true`
+    - `high_level_ok = true`
+    - `kernel_ok = true`
+- 全矩阵命令：
+  - `PYTHONPATH=. python -u tests/benchmarks/bench_allgather_multiprocess.py --warmup 2 --iters 5 --timeout-sec 60 --output-json docs/generated/allgather_multiprocess_matrix.json`
+- 结构化结果摘要：
+  - `case_count = 12`
+  - `passed_cases = 6`
+  - `failed_cases = 6`
+
+| dtype | requested transport | primitive / high-level / kernel | 结论 |
+|------|----------------------|----------------------------------|------|
+| fp16/bf16/fp32 | `auto` | PASS / PASS / PASS | 实际 transport 为 `ctypes_ipc` |
+| fp16/bf16/fp32 | `ctypes_ipc` | PASS / PASS / PASS | 当前已通过真实 2-GPU allgather multiprocess correctness |
+| fp16/bf16/fp32 | `pytorch_ipc` | FAIL / FAIL / FAIL | host 侧显式拒绝，报 `remote dereference ... only transport_strategy='ctypes_ipc'` |
+| fp16/bf16/fp32 | `peer_access_pointer_exchange` | FAIL / FAIL / FAIL | host 侧显式拒绝，报 `remote dereference ... only transport_strategy='ctypes_ipc'` |
+
+**关键对照命令**：
+- `python -u -m tests.test_e2e._run_allgather_multiprocess --dtype float32 --warmup 1 --iters 2 --force-transport pytorch_ipc --launcher all`
+  - 结果：host 侧 `ValueError`
+  - 关键信息：`xtile.primitives.allgather(...) relies on Triton device-side remote dereference ... only transport_strategy='ctypes_ipc'`
+- `python -u -m tests.test_e2e._run_allgather_multiprocess --dtype float32 --warmup 1 --iters 2 --force-transport peer_access_pointer_exchange --launcher all`
+  - 结果：host 侧 `ValueError`
+  - 关键信息同上
+
+**回归**：
+- `pytest -q tests/test_feature_gates.py tests/test_collectives_host.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_ops.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_allgather_multiprocess.py`
+  - 结果：`74 passed`
+
+**结论**：
+- 现在可以把 multiprocess `allgather` 写得更精确：
+  - **`ctypes_ipc`：已通过 2-GPU `fp16/bf16/fp32` primitive + kernel + high-level API 真机矩阵**
+  - **`pytorch_ipc` / `peer_access_pointer_exchange`：现已 host 侧明确拒绝，不再崩进 Triton kernel**
+- support matrix 当前更准确的语义应是：
+  - `allgather`：single-process `supported`；multiprocess `ctypes_ipc` `partial`
+  - `gemm_allscatter`：single-process `supported`；multiprocess 当时仍仅完成 transport-safety 收口，因此保持 `partial`
+- 这一步的重点不是“把更多东西写成 supported”，而是把 public surface 和真实证据重新对齐
+
+#### DC-034: multiprocess `gemm_allscatter` public baseline 真机验证
+
+**背景**：
+- DC-033 之后，`gemm_allscatter(...)` 在 multiprocess 下虽然已经有 transport guard，但文档口径仍然只能写成“只完成 transport-safety 收口”。
+- 这会导致 support matrix 无法区分“完全没验过”和“已完成 baseline correctness，但尚未完成 broader closure”。
+
+**本轮新增脚本 / 产物**：
+- 新增：
+  - `tests/test_e2e/_run_gemm_allscatter_multiprocess.py`
+  - `tests/benchmarks/bench_gemm_allscatter_multiprocess.py`
+  - `tests/test_gemm_allscatter_multiprocess.py`
+- 结构化产物：
+  - `docs/generated/gemm_allscatter_multiprocess_matrix.json`
+
+**真实实验**：
+- 默认 baseline correctness：
+  - `python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --dtype float32 --contract full_full --warmup 1 --iters 2 --pattern bulk_sync`
+  - `python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --dtype float32 --contract full_shard --warmup 1 --iters 2 --pattern bulk_sync`
+  - 结果：
+    - 两个 contract 都在 `transport_strategy = ctypes_ipc` 下通过
+    - `plan_ok = true`
+    - `high_level_ok = true`
+    - `float32` 的 `max_abs_diff = 0.044677734375`
+      - 这来自当前 Triton GEMM 的数值误差范围，不是 contract 级错误
+- 全矩阵命令：
+  - `PYTHONPATH=. python -u tests/benchmarks/bench_gemm_allscatter_multiprocess.py --warmup 2 --iters 5 --timeout-sec 120 --output-json docs/generated/gemm_allscatter_multiprocess_matrix.json`
+- 结构化结果摘要：
+  - `case_count = 24`
+  - `passed_cases = 12`
+  - `failed_cases = 12`
+
+| contract | dtype | requested transport | 结果 | 结论 |
+|----------|-------|---------------------|------|------|
+| `full/full` | fp16/bf16/fp32 | `auto` | PASS | 实际 transport 为 `ctypes_ipc` |
+| `full/full` | fp16/bf16/fp32 | `ctypes_ipc` | PASS | public baseline plan / high-level API 均通过 |
+| `full/full` | fp16/bf16/fp32 | `pytorch_ipc` | FAIL | host 侧 `ValueError`，不再掉进 Triton 非法访存 |
+| `full/full` | fp16/bf16/fp32 | `peer_access_pointer_exchange` | FAIL | host 侧 `ValueError`，不再掉进 Triton 非法访存 |
+| `full/shard` | fp16/bf16/fp32 | `auto` | PASS | 实际 transport 为 `ctypes_ipc` |
+| `full/shard` | fp16/bf16/fp32 | `ctypes_ipc` | PASS | public wrapper + internal plan 均通过 |
+| `full/shard` | fp16/bf16/fp32 | `pytorch_ipc` | FAIL | host 侧 `ValueError` |
+| `full/shard` | fp16/bf16/fp32 | `peer_access_pointer_exchange` | FAIL | host 侧 `ValueError` |
+
+**关键对照命令**：
+- `python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --dtype float32 --contract full_full --warmup 1 --iters 2 --pattern bulk_sync --force-transport pytorch_ipc`
+  - 结果：host 侧 `ValueError`
+  - 关键信息：`xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference ... only transport_strategy='ctypes_ipc'`
+- `python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --dtype float32 --contract full_full --warmup 1 --iters 2 --pattern bulk_sync --force-transport peer_access_pointer_exchange`
+  - 结果：host 侧 `ValueError`
+  - 关键信息同上
+
+**回归**：
+- `pytest -q tests/test_feature_gates.py tests/test_collectives_host.py tests/test_memory/test_symmetric_heap.py tests/test_support.py tests/test_ops.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_allgather_multiprocess.py tests/test_gemm_allscatter_multiprocess.py`
+  - 结果：`76 passed`
+
+**结论**：
+- 现在 `gemm_allscatter` 的 multiprocess 状态可以写得更准确：
+  - **`ctypes_ipc`：2-GPU public baseline correctness 已通过**
+    - 覆盖 `full/full` 与 `full/shard`
+    - 覆盖 `fp16/bf16/fp32`
+    - 覆盖 explicit plan 与 high-level API
+  - **`pytorch_ipc` / `peer_access_pointer_exchange`：仍未 device-safe，且已 host 侧明确拒绝**
+- support matrix 目前仍应保持 `partial`，因为还没有完成：
+  - 默认 `auto` 选中的更广 pattern 面验证
+  - 更大 shape / world-size 压力验证
+  - multiprocess performance/stress contract
+- 这意味着当前真正准确的口径是：
+  - **不是“只有 transport-safety，没有 gemm 证据”**
+  - **而是“已有 2-GPU public baseline correctness，但 broader closure 仍未完成”**
+
+#### DC-035: multiprocess `gemm_allscatter` 默认 `auto` pattern 面验证
+
+**背景**：
+- DC-034 已经把 multiprocess `gemm_allscatter` 的 public baseline correctness 补齐，但当时仍只覆盖 `pattern='bulk_sync'`。
+- 因此 `P15-001` 的下一优先级是：确认默认 `auto` 选择出来的四个 pattern 分支，在 multiprocess `ctypes_ipc` 下是否都能保持 public contract 正确。
+
+**本轮脚本/回归增强**：
+- `tests/test_e2e/_run_gemm_allscatter_multiprocess.py`
+  - 现支持 `--expect-pattern`
+  - 现支持 `--heap-size-mb`
+  - 改成复用同一组 heap-backed `A/B/C`，不再为 plan / high-level 各自复制一套输入，方便大 shape 反复复跑
+  - 现会根据 shape / contract / dtype 自动抬高最小 heap 下限
+- 新增：
+  - `tests/benchmarks/bench_gemm_allscatter_multiprocess_auto_patterns.py`
+  - `tests/test_gemm_allscatter_auto_patterns_multiprocess.py`
+- 结构化产物：
+  - `docs/generated/gemm_allscatter_multiprocess_auto_patterns.json`
+
+**代表性 shape 与预期 pattern**：
+
+| case | M | N | K | expect pattern |
+|------|---|---|---|----------------|
+| `bulk_sync_small_m` | 128 | 512 | 256 | `bulk_sync` |
+| `fused_seq_large_k` | 512 | 1024 | 16384 | `fused_sequential` |
+| `producer_consumer_mid_n` | 512 | 3072 | 8192 | `producer_consumer` |
+| `wg_specialized_large_tiles` | 2048 | 4096 | 8192 | `wg_specialized` |
+
+**真实实验**：
+- 回归：
+  - `pytest -q tests/test_gemm_allscatter_auto_patterns_multiprocess.py`
+  - 结果：`4 passed`
+- 全矩阵：
+  - `PYTHONPATH=. python -u tests/benchmarks/bench_gemm_allscatter_multiprocess_auto_patterns.py --warmup 1 --iters 2 --output-json docs/generated/gemm_allscatter_multiprocess_auto_patterns.json`
+  - 结构化结果摘要：
+    - `case_count = 8`
+    - `passed_cases = 8`
+    - `failed_cases = 0`
+
+| contract | case | selected pattern | 结果 | 备注 |
+|----------|------|------------------|------|------|
+| `full/full` | `bulk_sync_small_m` | `bulk_sync` | PASS | `max_abs_diff = 0.03125` |
+| `full/full` | `fused_seq_large_k` | `fused_sequential` | PASS | `max_abs_diff = 2.0` |
+| `full/full` | `producer_consumer_mid_n` | `producer_consumer` | PASS | `max_abs_diff = 2.0` |
+| `full/full` | `wg_specialized_large_tiles` | `wg_specialized` | PASS | `max_abs_diff = 0.0` |
+| `full/shard` | `bulk_sync_small_m` | `bulk_sync` | PASS | `max_abs_diff = 0.03125` |
+| `full/shard` | `fused_seq_large_k` | `fused_sequential` | PASS | `max_abs_diff = 2.0` |
+| `full/shard` | `producer_consumer_mid_n` | `producer_consumer` | PASS | `max_abs_diff = 2.0` |
+| `full/shard` | `wg_specialized_large_tiles` | `wg_specialized` | PASS | `max_abs_diff = 0.0` |
+
+**说明**：
+- `fused_sequential` / `producer_consumer` 这两组 case 的 `fp16 max_abs_diff = 2.0`，来自长 K 半精度 GEMM 的数值误差范围，不是通信 ownership 或 public contract 错误；在当前容忍度下 `plan_ok/high_level_ok` 均为 `true`。
+- `wg_specialized_large_tiles` 由于 shape 更大、累计行为更稳定，这组 `max_abs_diff = 0.0`。
+- 自动抬高的 heap 下限在 `wg_specialized_large_tiles` case 上生效：
+  - `full/full` 实际 `heap_size_mb = 176`
+  - `full/shard` 实际 `heap_size_mb = 184`
+
+**结论**：
+- 现在 `gemm_allscatter` multiprocess 的 `auto` public face 已经有了更扎实的证据：
+  - **默认 `auto` 在当前 2-GPU `ctypes_ipc` 下，已覆盖 4 个 pattern 分支**
+  - **`full/full` 与 `full/shard` 两个 public contract 都已通过 representative correctness**
+- support matrix 仍保持 `partial`，但口径需要继续收紧为：
+  - **已经不只是 `bulk_sync` baseline**
+  - **已经有 representative auto-selected coverage**
+  - **下一优先级不再是“补 auto pattern 面”，而是更大 shape、长时间 stress、world-size 扩展与 performance contract**
 
 ### P2P 带宽 (bench_p2p_translate.py, 2026-03-19)
 
@@ -738,7 +1285,7 @@ tl.assume(stride_bn > 0)
 | Pattern overlap (best) | 1.000× | **1.067×** | ≥ 1.05× | ✅ 达标 |
 | P2P read (128MB) | 248.85 GB/s | 248.70 GB/s | ≥ 285 GB/s | ❌ 硬件天花板 |
 
-【新增状态更新 2026-03-21】以上表格是 **Phase 5 历史结果**，不是当前 headline。当前显式 contract + plan-builder 主链下的最新 full 6-size rerun，best speedup 已更新为 `1.619×`，见本文开头的最新汇总。
+【新增状态更新 2026-03-21】以上表格是 **Phase 5 历史结果**，不是当前 headline。当前显式 contract + plan-builder 主链下的 latest canonical serial rerun，best speedup 已更新为 `1.667×`，见本文开头的最新汇总。
 
 ### 已知问题
 
@@ -833,8 +1380,20 @@ lib.cudaIpcOpenMemHandle.argtypes = [
 - 原生 ctypes `cudaIpcOpenMemHandle` 使用内核级进程间内存映射，受 `ptrace_scope=1` 限制
 - 这不是 ctypes 调用约定 bug（那个已修复），而是 Linux 安全策略阻止了 IPC
 
+【2026-03-21 复核】以上结论是 **64-byte handle 修复前** 的阶段性诊断。在当前代码与当前机器上重新实测：
+
+- `cat /proc/sys/kernel/yama/ptrace_scope` 仍为 `1`
+- 但 `python -m tests.test_e2e._run_ipc_test` 已可真实通过
+- `XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 python -m tests.test_e2e._run_reduce_scatter_multiprocess` 的 `transport_strategy` 也已回到 `ctypes_ipc`
+
+因此，今天更准确的表述是：
+
+- `ptrace_scope=1` 仍然是需要防御的环境变量
+- 但它**不再能被当作当前 H100 环境下 ctypes IPC 必然失败的充分条件**
+- PyTorch IPC fallback 仍然保留，但现在是后备路径，不是这台机器上的默认成功路径
+
 **解决方案**：`_setup_multiprocess()` 新增三级 fallback：
-1. ctypes IPC → 需 ptrace_scope=0
+1. ctypes IPC → 首选直接路径；当前 H100 环境已复测可用，但仍需保留 fallback
 2. **PyTorch IPC** → `_share_cuda_` / `_new_shared_cuda`，works with ptrace_scope=1 ✅ (NEW)
 3. peer access 指针交换 → 仅限同节点
 

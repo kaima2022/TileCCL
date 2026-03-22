@@ -80,6 +80,9 @@ class BulkSyncPattern(Pattern):
         """
         import torch
 
+        self.require_device_remote_access_runtime(
+            operation="bulk_sync pattern execution"
+        )
         spec = self.resolve_execution(
             A,
             B,

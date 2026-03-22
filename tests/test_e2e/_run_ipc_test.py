@@ -18,10 +18,16 @@ import torch.multiprocessing as mp
 def _worker(rank: int, world_size: int, store_path: str):
     """Per-rank worker: create heap, exchange IPC, verify P2P."""
     torch.cuda.set_device(rank)
+    device = torch.device("cuda", rank)
+    barrier_kwargs = {"device_ids": [rank]}
 
     store = dist.FileStore(store_path, world_size)
     dist.init_process_group(
-        "nccl", store=store, rank=rank, world_size=world_size,
+        "nccl",
+        store=store,
+        rank=rank,
+        world_size=world_size,
+        device_id=device,
     )
     print(f"Rank {rank}/{world_size}: init on cuda:{rank}", flush=True)
 
@@ -81,7 +87,7 @@ def _worker(rank: int, world_size: int, store_path: str):
 
     heap.barrier()
     heap.cleanup()
-    dist.barrier()
+    dist.barrier(**barrier_kwargs)
     dist.destroy_process_group()
 
     if rank == 0:

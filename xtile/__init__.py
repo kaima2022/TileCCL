@@ -60,6 +60,13 @@ class XTileContext:
     heap: Optional["SymmetricHeap"] = field(default=None, repr=False)
     """Optional symmetric heap attached to this context."""
 
+    _workspace_cache: dict[tuple[str, tuple[int, ...], str], "torch.Tensor"] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
+    """Reusable heap-backed scratch buffers keyed by logical purpose + shape."""
+
     @property
     def has_heap(self) -> bool:
         """Whether a symmetric heap is attached to this context."""
@@ -107,6 +114,7 @@ class XTileContext:
                 f"{heap_backend!r} != {self.backend_name!r}"
             )
         self.heap = heap
+        self._workspace_cache.clear()
         return self
 
     def barrier(self) -> None:
@@ -136,6 +144,29 @@ class XTileContext:
         tensor.normal_()
         return tensor
 
+    def workspace(
+        self,
+        name: str,
+        *size: int,
+        dtype: "torch.dtype",
+        zero: bool = False,
+    ) -> "torch.Tensor":
+        """Return a reusable heap-backed workspace tensor.
+
+        The first request for a given ``(name, shape, dtype)`` key allocates
+        from the attached symmetric heap; subsequent requests reuse the same
+        buffer so high-level wrappers do not monotonically consume heap space.
+        """
+        shape = _normalize_shape(size)
+        key = (name, shape, str(dtype))
+        tensor = self._workspace_cache.get(key)
+        if tensor is None:
+            tensor = self.allocate_tensor(shape, dtype)
+            self._workspace_cache[key] = tensor
+        if zero:
+            tensor.zero_()
+        return tensor
+
     def auto_select_pattern(
         self,
         op: str,
@@ -158,6 +189,12 @@ class XTileContext:
             ctx=self,
         )
 
+    def support_matrix(self):
+        """Return the current structured runtime support matrix."""
+        from xtile.support import describe_runtime_support
+
+        return describe_runtime_support(self)
+
 
 # ---------------------------------------------------------------------------
 # Global context singleton
@@ -173,6 +210,13 @@ def _get_ctx() -> XTileContext:
             "XTile has not been initialised. Call xtile.init() first."
         )
     return _ctx
+
+
+def describe_runtime_support(ctx: XTileContext | None = None):
+    """Return the current structured runtime support matrix."""
+    from xtile.support import describe_runtime_support as _describe_runtime_support
+
+    return _describe_runtime_support(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +518,7 @@ __all__ = [
     "get_rank",
     "get_world_size",
     "current_context",
+    "describe_runtime_support",
     "XTileContext",
     "Tile",
     "SymmetricHeap",

@@ -233,14 +233,13 @@ class _HIPRuntime:
         handle = HipIpcMemHandle()
         err = self._lib.hipIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(ptr))
         self._check(err, "hipIpcGetMemHandle")
-        return bytes(handle.reserved)
+        return ctypes.string_at(ctypes.byref(handle), HIP_IPC_HANDLE_SIZE)
 
     def ipc_open_handle(self, handle: bytes) -> int:
         """``hipIpcOpenMemHandle`` -- open peer handle, return local pointer."""
         if self._lib is None:
             raise RuntimeError("HIP runtime library not loaded")
-        h = HipIpcMemHandle()
-        ctypes.memmove(h.reserved, handle, HIP_IPC_HANDLE_SIZE)
+        h = HipIpcMemHandle.from_buffer_copy(handle)
         ptr = ctypes.c_void_p()
         # flags = 0 : default (hipIpcMemLazyEnablePeerAccess)
         err = self._lib.hipIpcOpenMemHandle(ctypes.byref(ptr), h, ctypes.c_uint(0))

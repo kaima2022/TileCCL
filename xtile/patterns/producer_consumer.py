@@ -153,6 +153,9 @@ class ProducerConsumerPattern(Pattern):
         """
         import torch
 
+        self.require_device_remote_access_runtime(
+            operation="producer_consumer pattern execution"
+        )
         spec = self.resolve_execution(
             A,
             B,

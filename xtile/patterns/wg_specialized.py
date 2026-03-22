@@ -140,6 +140,9 @@ class WGSpecializedPattern(Pattern):
         """
         import torch
 
+        self.require_device_remote_access_runtime(
+            operation="wg_specialized pattern execution"
+        )
         spec = self.resolve_execution(
             A,
             B,

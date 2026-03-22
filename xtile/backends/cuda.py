@@ -234,14 +234,13 @@ class _CUDARuntime:
         handle = CudaIpcMemHandle()
         err = self._lib.cudaIpcGetMemHandle(ctypes.byref(handle), ctypes.c_void_p(ptr))
         self._check(err, "cudaIpcGetMemHandle")
-        return bytes(handle.reserved)
+        return ctypes.string_at(ctypes.byref(handle), CUDA_IPC_HANDLE_SIZE)
 
     def ipc_open_handle(self, handle: bytes) -> int:
         """``cudaIpcOpenMemHandle`` -- open peer handle, return local pointer."""
         if self._lib is None:
             raise RuntimeError("CUDA runtime library not loaded")
-        h = CudaIpcMemHandle()
-        ctypes.memmove(h.reserved, handle, CUDA_IPC_HANDLE_SIZE)
+        h = CudaIpcMemHandle.from_buffer_copy(handle)
         ptr = ctypes.c_void_p()
         # flags = 1 : cudaIpcMemLazyEnablePeerAccess
         err = self._lib.cudaIpcOpenMemHandle(ctypes.byref(ptr), h, ctypes.c_uint(1))

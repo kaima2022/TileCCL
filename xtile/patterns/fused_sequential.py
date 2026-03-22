@@ -87,6 +87,9 @@ class FusedSequentialPattern(Pattern):
         """
         import torch
 
+        self.require_device_remote_access_runtime(
+            operation="fused_sequential pattern execution"
+        )
         spec = self.resolve_execution(
             A,
             B,

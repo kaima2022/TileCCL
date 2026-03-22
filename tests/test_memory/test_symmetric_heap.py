@@ -86,6 +86,90 @@ class TestSymmetricHeapUnit:
             with pytest.raises(ValueError):
                 SymmetricHeap(**kwargs)
 
+    def test_multiprocess_auto_transport_only_tries_device_safe_chain(
+        self,
+        monkeypatch,
+    ) -> None:
+        """Default multiprocess setup should no longer auto-fallback to unsafe transports."""
+        from xtile.memory.symmetric_heap import SymmetricHeap
+
+        heap = SymmetricHeap.__new__(SymmetricHeap)
+        heap._backend = MagicMock()
+        heap._backend.init_ipc = MagicMock()
+        heap._rank = 0
+        heap._world_size = 2
+
+        calls: list[str] = []
+        heap._setup_multiprocess_ctypes_ipc = MagicMock(
+            side_effect=lambda: calls.append("ctypes_ipc")
+        )
+        heap._setup_multiprocess_pytorch_ipc = MagicMock(
+            side_effect=lambda: calls.append("pytorch_ipc")
+        )
+        heap._setup_multiprocess_peer_access_pointer_exchange = MagicMock(
+            side_effect=lambda: calls.append("peer_access_pointer_exchange")
+        )
+
+        monkeypatch.delenv("XTILE_FORCE_MULTIPROCESS_TRANSPORT", raising=False)
+        heap._setup_multiprocess()
+
+        assert calls == ["ctypes_ipc"]
+
+    def test_multiprocess_auto_transport_no_longer_falls_back_to_pytorch_ipc(
+        self,
+        monkeypatch,
+    ) -> None:
+        """If the device-safe path fails, auto mode should fail closed instead of downgrading silently."""
+        from xtile.memory.symmetric_heap import SymmetricHeap
+
+        heap = SymmetricHeap.__new__(SymmetricHeap)
+        heap._backend = MagicMock()
+        heap._backend.init_ipc = MagicMock()
+        heap._rank = 0
+        heap._world_size = 2
+
+        heap._setup_multiprocess_ctypes_ipc = MagicMock(
+            side_effect=RuntimeError("ctypes failed")
+        )
+        heap._setup_multiprocess_pytorch_ipc = MagicMock()
+        heap._setup_multiprocess_peer_access_pointer_exchange = MagicMock()
+
+        monkeypatch.delenv("XTILE_FORCE_MULTIPROCESS_TRANSPORT", raising=False)
+        with pytest.raises(RuntimeError, match="All multiprocess transport strategies failed"):
+            heap._setup_multiprocess()
+
+        heap._setup_multiprocess_pytorch_ipc.assert_not_called()
+        heap._setup_multiprocess_peer_access_pointer_exchange.assert_not_called()
+
+    def test_multiprocess_forced_transport_still_dispatches_diagnostic_path(
+        self,
+        monkeypatch,
+    ) -> None:
+        """Forced diagnostics should still be able to target non-default transports."""
+        from xtile.memory.symmetric_heap import SymmetricHeap
+
+        heap = SymmetricHeap.__new__(SymmetricHeap)
+        heap._backend = MagicMock()
+        heap._backend.init_ipc = MagicMock()
+        heap._rank = 0
+        heap._world_size = 2
+
+        calls: list[str] = []
+        heap._setup_multiprocess_ctypes_ipc = MagicMock(
+            side_effect=lambda: calls.append("ctypes_ipc")
+        )
+        heap._setup_multiprocess_pytorch_ipc = MagicMock(
+            side_effect=lambda: calls.append("pytorch_ipc")
+        )
+        heap._setup_multiprocess_peer_access_pointer_exchange = MagicMock(
+            side_effect=lambda: calls.append("peer_access_pointer_exchange")
+        )
+
+        monkeypatch.setenv("XTILE_FORCE_MULTIPROCESS_TRANSPORT", "pytorch_ipc")
+        heap._setup_multiprocess()
+
+        assert calls == ["pytorch_ipc"]
+
     # ---- bump allocator (requires 1 GPU via symmetric_heap fixture) ------
 
     def test_bump_allocator_alignment(self, symmetric_heap) -> None:

@@ -1,0 +1,748 @@
+{
+  "benchmark": "gemm_allscatter_multiprocess_auto_patterns",
+  "cases": [
+    {
+      "K": 256,
+      "M": 128,
+      "N": 512,
+      "case": "bulk_sync_small_m",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 512 --K 256 --dtype float16 --contract full_full --pattern auto --expect-pattern bulk_sync --warmup 1 --iters 2 --launcher all",
+      "contract": "full_full",
+      "dtype": "float16",
+      "expected_pattern": "bulk_sync",
+      "rank_payloads": [
+        {
+          "K": 256,
+          "M": 128,
+          "N": 512,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.03125,
+          "high_level_ok": true,
+          "high_level_sample": 20.09375,
+          "high_level_timing_ms": {
+            "max_ms": 0.24687999486923218,
+            "mean_ms": 0.23559999465942383,
+            "min_ms": 0.22431999444961548
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.03125,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 20.09375,
+          "plan_timing_ms": {
+            "max_ms": 0.23811200261116028,
+            "mean_ms": 0.19833599776029587,
+            "min_ms": 0.15855999290943146
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 256,
+          "M": 128,
+          "N": 512,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.03125,
+          "high_level_ok": true,
+          "high_level_sample": 20.09375,
+          "high_level_timing_ms": {
+            "max_ms": 0.25887998938560486,
+            "mean_ms": 0.25281599164009094,
+            "min_ms": 0.24675199389457703
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.03125,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 20.09375,
+          "plan_timing_ms": {
+            "max_ms": 0.2512640058994293,
+            "mean_ms": 0.20572800189256668,
+            "min_ms": 0.16019199788570404
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.19833599776029587, \"min_ms\": 0.15855999290943146, \"max_ms\": 0.23811200261116028}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.23559999465942383, \"min_ms\": 0.22431999444961548, \"max_ms\": 0.24687999486923218}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.20572800189256668, \"min_ms\": 0.16019199788570404, \"max_ms\": 0.2512640058994293}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.25281599164009094, \"min_ms\": 0.24675199389457703, \"max_ms\": 0.25887998938560486}}\n",
+      "summary": {
+        "heap_size_mb": 128,
+        "high_level_mean_ms_across_ranks": 0.24420799314975739,
+        "max_high_level_abs_diff": 0.03125,
+        "max_plan_abs_diff": 0.03125,
+        "max_rank_skew_ms": 0.017215996980667114,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 0.20203199982643127,
+        "selected_patterns": [
+          "bulk_sync"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 16384,
+      "M": 512,
+      "N": 1024,
+      "case": "fused_seq_large_k",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 512 --N 1024 --K 16384 --dtype float16 --contract full_full --pattern auto --expect-pattern fused_sequential --warmup 1 --iters 2 --launcher all",
+      "contract": "full_full",
+      "dtype": "float16",
+      "expected_pattern": "fused_sequential",
+      "rank_payloads": [
+        {
+          "K": 16384,
+          "M": 512,
+          "N": 1024,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 1336.0,
+          "high_level_timing_ms": {
+            "max_ms": 0.3538239896297455,
+            "mean_ms": 0.34225599467754364,
+            "min_ms": 0.3306879997253418
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "fused_sequential",
+          "plan_sample": 1336.0,
+          "plan_timing_ms": {
+            "max_ms": 0.35177600383758545,
+            "mean_ms": 0.30740800499916077,
+            "min_ms": 0.2630400061607361
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 16384,
+          "M": 512,
+          "N": 1024,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 1336.0,
+          "high_level_timing_ms": {
+            "max_ms": 0.41673600673675537,
+            "mean_ms": 0.39452800154685974,
+            "min_ms": 0.3723199963569641
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "fused_sequential",
+          "plan_sample": 1336.0,
+          "plan_timing_ms": {
+            "max_ms": 0.4010559916496277,
+            "mean_ms": 0.34039999544620514,
+            "min_ms": 0.2797439992427826
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 512, \"N\": 1024, \"K\": 16384, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"fused_sequential\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 1336.0, \"plan_timing_ms\": {\"mean_ms\": 0.30740800499916077, \"min_ms\": 0.2630400061607361, \"max_ms\": 0.35177600383758545}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 1336.0, \"high_level_timing_ms\": {\"mean_ms\": 0.34225599467754364, \"min_ms\": 0.3306879997253418, \"max_ms\": 0.3538239896297455}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 512, \"N\": 1024, \"K\": 16384, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"fused_sequential\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 1336.0, \"plan_timing_ms\": {\"mean_ms\": 0.34039999544620514, \"min_ms\": 0.2797439992427826, \"max_ms\": 0.4010559916496277}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 1336.0, \"high_level_timing_ms\": {\"mean_ms\": 0.39452800154685974, \"min_ms\": 0.3723199963569641, \"max_ms\": 0.41673600673675537}}\n",
+      "summary": {
+        "heap_size_mb": 128,
+        "high_level_mean_ms_across_ranks": 0.3683919981122017,
+        "max_high_level_abs_diff": 2.0,
+        "max_plan_abs_diff": 2.0,
+        "max_rank_skew_ms": 0.0522720068693161,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 0.32390400022268295,
+        "selected_patterns": [
+          "fused_sequential"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 8192,
+      "M": 512,
+      "N": 3072,
+      "case": "producer_consumer_mid_n",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 512 --N 3072 --K 8192 --dtype float16 --contract full_full --pattern auto --expect-pattern producer_consumer --warmup 1 --iters 2 --launcher all",
+      "contract": "full_full",
+      "dtype": "float16",
+      "expected_pattern": "producer_consumer",
+      "rank_payloads": [
+        {
+          "K": 8192,
+          "M": 512,
+          "N": 3072,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 670.5,
+          "high_level_timing_ms": {
+            "max_ms": 0.5763199925422668,
+            "mean_ms": 0.5555520057678223,
+            "min_ms": 0.5347840189933777
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "producer_consumer",
+          "plan_sample": 670.5,
+          "plan_timing_ms": {
+            "max_ms": 0.8352959752082825,
+            "mean_ms": 0.6434719860553741,
+            "min_ms": 0.4516479969024658
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 8192,
+          "M": 512,
+          "N": 3072,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 670.5,
+          "high_level_timing_ms": {
+            "max_ms": 0.5658559799194336,
+            "mean_ms": 0.5380479991436005,
+            "min_ms": 0.5102400183677673
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "producer_consumer",
+          "plan_sample": 670.5,
+          "plan_timing_ms": {
+            "max_ms": 0.6048319935798645,
+            "mean_ms": 0.5307520031929016,
+            "min_ms": 0.4566720128059387
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 512, \"N\": 3072, \"K\": 8192, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"producer_consumer\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 670.5, \"plan_timing_ms\": {\"mean_ms\": 0.6434719860553741, \"min_ms\": 0.4516479969024658, \"max_ms\": 0.8352959752082825}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 670.5, \"high_level_timing_ms\": {\"mean_ms\": 0.5555520057678223, \"min_ms\": 0.5347840189933777, \"max_ms\": 0.5763199925422668}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 512, \"N\": 3072, \"K\": 8192, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"producer_consumer\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 670.5, \"plan_timing_ms\": {\"mean_ms\": 0.5307520031929016, \"min_ms\": 0.4566720128059387, \"max_ms\": 0.6048319935798645}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 670.5, \"high_level_timing_ms\": {\"mean_ms\": 0.5380479991436005, \"min_ms\": 0.5102400183677673, \"max_ms\": 0.5658559799194336}}\n",
+      "summary": {
+        "heap_size_mb": 128,
+        "high_level_mean_ms_across_ranks": 0.5468000024557114,
+        "max_high_level_abs_diff": 2.0,
+        "max_plan_abs_diff": 2.0,
+        "max_rank_skew_ms": 0.017504006624221802,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 0.5871119946241379,
+        "selected_patterns": [
+          "producer_consumer"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 8192,
+      "M": 2048,
+      "N": 4096,
+      "case": "wg_specialized_large_tiles",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 2048 --N 4096 --K 8192 --dtype float16 --contract full_full --pattern auto --expect-pattern wg_specialized --warmup 1 --iters 2 --launcher all",
+      "contract": "full_full",
+      "dtype": "float16",
+      "expected_pattern": "wg_specialized",
+      "rank_payloads": [
+        {
+          "K": 8192,
+          "M": 2048,
+          "N": 4096,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 176,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": 670.5,
+          "high_level_timing_ms": {
+            "max_ms": 1.312000036239624,
+            "mean_ms": 1.2880319952964783,
+            "min_ms": 1.2640639543533325
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "wg_specialized",
+          "plan_sample": 670.5,
+          "plan_timing_ms": {
+            "max_ms": 1.460096001625061,
+            "mean_ms": 1.3910880088806152,
+            "min_ms": 1.3220800161361694
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 8192,
+          "M": 2048,
+          "N": 4096,
+          "contract": "full_full",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 176,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": 670.5,
+          "high_level_timing_ms": {
+            "max_ms": 1.31004798412323,
+            "mean_ms": 1.2953760027885437,
+            "min_ms": 1.2807040214538574
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "wg_specialized",
+          "plan_sample": 670.5,
+          "plan_timing_ms": {
+            "max_ms": 1.3334399461746216,
+            "mean_ms": 1.2707199454307556,
+            "min_ms": 1.2079999446868896
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 2048, \"N\": 4096, \"K\": 8192, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 176, \"plan_pattern_name\": \"wg_specialized\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 670.5, \"plan_timing_ms\": {\"mean_ms\": 1.3910880088806152, \"min_ms\": 1.3220800161361694, \"max_ms\": 1.460096001625061}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 670.5, \"high_level_timing_ms\": {\"mean_ms\": 1.2880319952964783, \"min_ms\": 1.2640639543533325, \"max_ms\": 1.312000036239624}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 2048, \"N\": 4096, \"K\": 8192, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 176, \"plan_pattern_name\": \"wg_specialized\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 670.5, \"plan_timing_ms\": {\"mean_ms\": 1.2707199454307556, \"min_ms\": 1.2079999446868896, \"max_ms\": 1.3334399461746216}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 670.5, \"high_level_timing_ms\": {\"mean_ms\": 1.2953760027885437, \"min_ms\": 1.2807040214538574, \"max_ms\": 1.31004798412323}}\n",
+      "summary": {
+        "heap_size_mb": 176,
+        "high_level_mean_ms_across_ranks": 1.291703999042511,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 0.00734400749206543,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 1.3309039771556854,
+        "selected_patterns": [
+          "wg_specialized"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 256,
+      "M": 128,
+      "N": 512,
+      "case": "bulk_sync_small_m",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 512 --K 256 --dtype float16 --contract full_shard --pattern auto --expect-pattern bulk_sync --warmup 1 --iters 2 --launcher all",
+      "contract": "full_shard",
+      "dtype": "float16",
+      "expected_pattern": "bulk_sync",
+      "rank_payloads": [
+        {
+          "K": 256,
+          "M": 128,
+          "N": 512,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.03125,
+          "high_level_ok": true,
+          "high_level_sample": 41.4375,
+          "high_level_timing_ms": {
+            "max_ms": 0.30480000376701355,
+            "mean_ms": 0.2901120036840439,
+            "min_ms": 0.2754240036010742
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.03125,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 41.4375,
+          "plan_timing_ms": {
+            "max_ms": 0.2919040024280548,
+            "mean_ms": 0.2396159991621971,
+            "min_ms": 0.18732799589633942
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 256,
+          "M": 128,
+          "N": 512,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.03125,
+          "high_level_ok": true,
+          "high_level_sample": 20.09375,
+          "high_level_timing_ms": {
+            "max_ms": 0.31148800253868103,
+            "mean_ms": 0.2852640002965927,
+            "min_ms": 0.2590399980545044
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.03125,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 20.09375,
+          "plan_timing_ms": {
+            "max_ms": 0.3040960133075714,
+            "mean_ms": 0.2569600045681,
+            "min_ms": 0.20982399582862854
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 41.4375, \"plan_timing_ms\": {\"mean_ms\": 0.2396159991621971, \"min_ms\": 0.18732799589633942, \"max_ms\": 0.2919040024280548}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 41.4375, \"high_level_timing_ms\": {\"mean_ms\": 0.2901120036840439, \"min_ms\": 0.2754240036010742, \"max_ms\": 0.30480000376701355}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.2569600045681, \"min_ms\": 0.20982399582862854, \"max_ms\": 0.3040960133075714}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.2852640002965927, \"min_ms\": 0.2590399980545044, \"max_ms\": 0.31148800253868103}}\n",
+      "summary": {
+        "heap_size_mb": 128,
+        "high_level_mean_ms_across_ranks": 0.2876880019903183,
+        "max_high_level_abs_diff": 0.03125,
+        "max_plan_abs_diff": 0.03125,
+        "max_rank_skew_ms": 0.004848003387451172,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 0.24828800186514854,
+        "selected_patterns": [
+          "bulk_sync"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 16384,
+      "M": 512,
+      "N": 1024,
+      "case": "fused_seq_large_k",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 512 --N 1024 --K 16384 --dtype float16 --contract full_shard --pattern auto --expect-pattern fused_sequential --warmup 1 --iters 2 --launcher all",
+      "contract": "full_shard",
+      "dtype": "float16",
+      "expected_pattern": "fused_sequential",
+      "rank_payloads": [
+        {
+          "K": 16384,
+          "M": 512,
+          "N": 1024,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 4348.0,
+          "high_level_timing_ms": {
+            "max_ms": 0.38547199964523315,
+            "mean_ms": 0.3741759955883026,
+            "min_ms": 0.36287999153137207
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "fused_sequential",
+          "plan_sample": 4348.0,
+          "plan_timing_ms": {
+            "max_ms": 0.3845120072364807,
+            "mean_ms": 0.3412960022687912,
+            "min_ms": 0.2980799973011017
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 16384,
+          "M": 512,
+          "N": 1024,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 1336.0,
+          "high_level_timing_ms": {
+            "max_ms": 0.36662399768829346,
+            "mean_ms": 0.3521119952201843,
+            "min_ms": 0.3375999927520752
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "fused_sequential",
+          "plan_sample": 1336.0,
+          "plan_timing_ms": {
+            "max_ms": 0.37273600697517395,
+            "mean_ms": 0.3256800025701523,
+            "min_ms": 0.2786239981651306
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 512, \"N\": 1024, \"K\": 16384, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"fused_sequential\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 4348.0, \"plan_timing_ms\": {\"mean_ms\": 0.3412960022687912, \"min_ms\": 0.2980799973011017, \"max_ms\": 0.3845120072364807}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 4348.0, \"high_level_timing_ms\": {\"mean_ms\": 0.3741759955883026, \"min_ms\": 0.36287999153137207, \"max_ms\": 0.38547199964523315}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 512, \"N\": 1024, \"K\": 16384, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"fused_sequential\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 1336.0, \"plan_timing_ms\": {\"mean_ms\": 0.3256800025701523, \"min_ms\": 0.2786239981651306, \"max_ms\": 0.37273600697517395}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 1336.0, \"high_level_timing_ms\": {\"mean_ms\": 0.3521119952201843, \"min_ms\": 0.3375999927520752, \"max_ms\": 0.36662399768829346}}\n",
+      "summary": {
+        "heap_size_mb": 128,
+        "high_level_mean_ms_across_ranks": 0.36314399540424347,
+        "max_high_level_abs_diff": 2.0,
+        "max_plan_abs_diff": 2.0,
+        "max_rank_skew_ms": 0.022064000368118286,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 0.33348800241947174,
+        "selected_patterns": [
+          "fused_sequential"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 8192,
+      "M": 512,
+      "N": 3072,
+      "case": "producer_consumer_mid_n",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 512 --N 3072 --K 8192 --dtype float16 --contract full_shard --pattern auto --expect-pattern producer_consumer --warmup 1 --iters 2 --launcher all",
+      "contract": "full_shard",
+      "dtype": "float16",
+      "expected_pattern": "producer_consumer",
+      "rank_payloads": [
+        {
+          "K": 8192,
+          "M": 512,
+          "N": 3072,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": 670.5,
+          "high_level_timing_ms": {
+            "max_ms": 0.6517760157585144,
+            "mean_ms": 0.6090080142021179,
+            "min_ms": 0.5662400126457214
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "producer_consumer",
+          "plan_sample": 670.5,
+          "plan_timing_ms": {
+            "max_ms": 0.6073279976844788,
+            "mean_ms": 0.5405599921941757,
+            "min_ms": 0.4737919867038727
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 8192,
+          "M": 512,
+          "N": 3072,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 2.0,
+          "high_level_ok": true,
+          "high_level_sample": -2510.0,
+          "high_level_timing_ms": {
+            "max_ms": 0.694208025932312,
+            "mean_ms": 0.6492800116539001,
+            "min_ms": 0.6043519973754883
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 2.0,
+          "plan_ok": true,
+          "plan_pattern_name": "producer_consumer",
+          "plan_sample": -2510.0,
+          "plan_timing_ms": {
+            "max_ms": 0.5663359761238098,
+            "mean_ms": 0.5111039876937866,
+            "min_ms": 0.4558719992637634
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 512, \"N\": 3072, \"K\": 8192, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"producer_consumer\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": 670.5, \"plan_timing_ms\": {\"mean_ms\": 0.5405599921941757, \"min_ms\": 0.4737919867038727, \"max_ms\": 0.6073279976844788}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": 670.5, \"high_level_timing_ms\": {\"mean_ms\": 0.6090080142021179, \"min_ms\": 0.5662400126457214, \"max_ms\": 0.6517760157585144}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 512, \"N\": 3072, \"K\": 8192, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"producer_consumer\", \"plan_ok\": true, \"plan_max_abs_diff\": 2.0, \"plan_sample\": -2510.0, \"plan_timing_ms\": {\"mean_ms\": 0.5111039876937866, \"min_ms\": 0.4558719992637634, \"max_ms\": 0.5663359761238098}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 2.0, \"high_level_sample\": -2510.0, \"high_level_timing_ms\": {\"mean_ms\": 0.6492800116539001, \"min_ms\": 0.6043519973754883, \"max_ms\": 0.694208025932312}}\n",
+      "summary": {
+        "heap_size_mb": 128,
+        "high_level_mean_ms_across_ranks": 0.629144012928009,
+        "max_high_level_abs_diff": 2.0,
+        "max_plan_abs_diff": 2.0,
+        "max_rank_skew_ms": 0.04027199745178223,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 0.5258319899439812,
+        "selected_patterns": [
+          "producer_consumer"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "K": 8192,
+      "M": 2048,
+      "N": 4096,
+      "case": "wg_specialized_large_tiles",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 2048 --N 4096 --K 8192 --dtype float16 --contract full_shard --pattern auto --expect-pattern wg_specialized --warmup 1 --iters 2 --launcher all",
+      "contract": "full_shard",
+      "dtype": "float16",
+      "expected_pattern": "wg_specialized",
+      "rank_payloads": [
+        {
+          "K": 8192,
+          "M": 2048,
+          "N": 4096,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 184,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": 670.5,
+          "high_level_timing_ms": {
+            "max_ms": 1.3679039478302002,
+            "mean_ms": 1.3223199844360352,
+            "min_ms": 1.2767360210418701
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "wg_specialized",
+          "plan_sample": 670.5,
+          "plan_timing_ms": {
+            "max_ms": 1.3295680284500122,
+            "mean_ms": 1.2768639922142029,
+            "min_ms": 1.2241599559783936
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 8192,
+          "M": 2048,
+          "N": 4096,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 184,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": 1002.0,
+          "high_level_timing_ms": {
+            "max_ms": 1.3060799837112427,
+            "mean_ms": 1.298367977142334,
+            "min_ms": 1.2906559705734253
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "auto",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "wg_specialized",
+          "plan_sample": 1002.0,
+          "plan_timing_ms": {
+            "max_ms": 1.3421440124511719,
+            "mean_ms": 1.2853919863700867,
+            "min_ms": 1.2286399602890015
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 2048, \"N\": 4096, \"K\": 8192, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 184, \"plan_pattern_name\": \"wg_specialized\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 670.5, \"plan_timing_ms\": {\"mean_ms\": 1.2768639922142029, \"min_ms\": 1.2241599559783936, \"max_ms\": 1.3295680284500122}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 670.5, \"high_level_timing_ms\": {\"mean_ms\": 1.3223199844360352, \"min_ms\": 1.2767360210418701, \"max_ms\": 1.3679039478302002}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 2048, \"N\": 4096, \"K\": 8192, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"auto\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 184, \"plan_pattern_name\": \"wg_specialized\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 1002.0, \"plan_timing_ms\": {\"mean_ms\": 1.2853919863700867, \"min_ms\": 1.2286399602890015, \"max_ms\": 1.3421440124511719}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 1002.0, \"high_level_timing_ms\": {\"mean_ms\": 1.298367977142334, \"min_ms\": 1.2906559705734253, \"max_ms\": 1.3060799837112427}}\n",
+      "summary": {
+        "heap_size_mb": 184,
+        "high_level_mean_ms_across_ranks": 1.3103439807891846,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 0.023952007293701172,
+        "mode": "multiprocess",
+        "plan_mean_ms_across_ranks": 1.2811279892921448,
+        "selected_patterns": [
+          "wg_specialized"
+        ],
+        "transport_strategy": "ctypes_ipc"
+      }
+    }
+  ],
+  "command": "tests/benchmarks/bench_gemm_allscatter_multiprocess_auto_patterns.py --warmup 1 --iters 2 --output-json docs/generated/gemm_allscatter_multiprocess_auto_patterns.json",
+  "environment": {
+    "dtype": "float16",
+    "gpu_name": "NVIDIA H100 PCIe",
+    "iters": 2,
+    "visible_gpus": 2,
+    "warmup": 1
+  },
+  "generated_at_utc": "2026-03-22T00:04:32.836866+00:00",
+  "schema_version": 1,
+  "summary": {
+    "case_count": 8,
+    "failed_cases": 0,
+    "passed_cases": 8
+  }
+}

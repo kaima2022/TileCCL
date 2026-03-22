@@ -36,6 +36,111 @@ def _handle_info(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _format_support_matrix(matrix) -> str:
+    """Render a support matrix into a human-readable CLI summary."""
+    lines: list[str] = []
+    lines.append("=== XTile Runtime Support Matrix ===")
+    lines.append(
+        "Context: "
+        f"backend={matrix.backend}, device={matrix.device}, "
+        f"rank={matrix.rank}, world_size={matrix.world_size}, "
+        f"has_heap={matrix.has_heap}"
+    )
+    if matrix.has_heap:
+        lines.append(
+            "Heap: "
+            f"mode={matrix.heap_mode}, transport_strategy={matrix.transport_strategy}"
+        )
+
+    def _section(title: str, entries: dict) -> None:
+        lines.append("")
+        lines.append(f"{title}:")
+        for name, status in entries.items():
+            lines.append(f"  - {name}: {status.state} | {status.detail}")
+
+    _section("Ops", matrix.ops)
+    _section("Contracts", matrix.contracts)
+    _section("Execution Paths", matrix.execution_paths)
+    _section("Collectives", matrix.collectives)
+    _section("Memory", matrix.memory)
+    return "\n".join(lines)
+
+
+def _build_support_context(args: argparse.Namespace):
+    """Create a context for the support-matrix command.
+
+    Returns ``(ctx, cleanup_fn)``.
+    """
+    import xtile
+
+    backend = getattr(args, "backend", "auto")
+    world_size = int(getattr(args, "world_size", 1) or 1)
+    heap_size_mb = getattr(args, "heap_size_mb", None)
+    if world_size < 1:
+        raise ValueError(f"world_size must be >= 1, got {world_size}")
+
+    if heap_size_mb is not None:
+        heap_size = int(heap_size_mb) * 1024 * 1024
+        if heap_size <= 0:
+            raise ValueError(f"heap_size_mb must be positive, got {heap_size_mb}")
+        if world_size > 1:
+            contexts = xtile.init_local(
+                world_size=world_size,
+                heap_size=heap_size,
+                backend=backend,
+            )
+
+            def _cleanup() -> None:
+                for ctx in contexts:
+                    if ctx.heap is not None:
+                        ctx.heap.cleanup()
+
+            return contexts[0], _cleanup
+
+        ctx = xtile.init(
+            backend=backend,
+            rank=0,
+            world_size=1,
+            heap_size=heap_size,
+            force_backend=True,
+        )
+
+        def _cleanup() -> None:
+            if ctx.heap is not None:
+                ctx.heap.cleanup()
+
+        return ctx, _cleanup
+
+    ctx = xtile.init(
+        backend=backend,
+        rank=0,
+        world_size=world_size,
+        force_backend=True,
+    )
+    return ctx, (lambda: None)
+
+
+def _handle_support(args: argparse.Namespace) -> None:
+    """Print the current runtime support matrix."""
+    _ensure_gpu()
+    import xtile
+
+    try:
+        ctx, cleanup = _build_support_context(args)
+    except Exception as exc:
+        print(f"[xtile support] Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        matrix = xtile.describe_runtime_support(ctx)
+        if getattr(args, "json", False):
+            print(json.dumps(matrix.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            print(_format_support_matrix(matrix))
+    finally:
+        cleanup()
+
+
 # ---------------------------------------------------------------------------
 # Benchmark sub-handlers
 # ---------------------------------------------------------------------------
@@ -398,6 +503,35 @@ def main() -> None:
     # xtile info
     subparsers.add_parser("info", help="Print hardware and topology info")
 
+    # xtile support
+    support_parser = subparsers.add_parser(
+        "support",
+        help="Print the current runtime support / capability matrix",
+    )
+    support_parser.add_argument(
+        "--backend",
+        default="auto",
+        choices=["auto", "cuda", "hip"],
+        help="Backend used to construct the inspection context",
+    )
+    support_parser.add_argument(
+        "--world-size",
+        type=int,
+        default=1,
+        help="Logical world size for the inspection context",
+    )
+    support_parser.add_argument(
+        "--heap-size-mb",
+        type=int,
+        default=None,
+        help="Attach a symmetric heap of this size (MiB) before collecting support status",
+    )
+    support_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the support matrix as JSON",
+    )
+
     # xtile bench
     bench_parser = subparsers.add_parser("bench", help="Run benchmarks")
     bench_parser.add_argument(
@@ -450,6 +584,8 @@ def main() -> None:
         sys.exit(0)
     elif args.command == "info":
         _handle_info(args)
+    elif args.command == "support":
+        _handle_support(args)
     elif args.command == "bench":
         _handle_bench(args)
     elif args.command == "compare":

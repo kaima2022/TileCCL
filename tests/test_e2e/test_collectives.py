@@ -310,12 +310,7 @@ class TestCollectives:
             ), f"Rank {rank}: expected {expected_val}, got {dst[rank][0].item()}"
 
     def test_reduce_scatter(self):
-        """Reduce-scatter: verify kernel executes without errors.
-
-        The ring reduce-scatter is cooperative and requires simultaneous
-        execution. In sequential single-process mode, we verify the
-        kernel runs without errors and produces output.
-        """
+        """Reduce-scatter: verify the kernel computes the expected chunk."""
         total_elements = BLOCK_SIZE * self.world_size
         src = self._symmetric_alloc((total_elements,), torch.float32)
         dst = self._symmetric_alloc((BLOCK_SIZE,), torch.float32)
@@ -341,11 +336,11 @@ class TestCollectives:
         for rank in range(self.world_size):
             torch.cuda.synchronize(rank)
 
-        # Verify dst got data (not zeros)
         for rank in range(self.world_size):
-            assert dst[rank][0].item() != 0.0, (
-                f"Rank {rank}: reduce_scatter produced zeros"
-            )
+            expected_val = float((0 * 2 + rank + 1) + (1 * 2 + rank + 1))
+            assert torch.allclose(
+                dst[rank], torch.full_like(dst[rank], expected_val), atol=1e-4,
+            ), f"Rank {rank}: expected {expected_val}, got {dst[rank][0].item()}"
 
 
 if __name__ == "__main__":

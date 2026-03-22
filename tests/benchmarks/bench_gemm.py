@@ -23,7 +23,12 @@ from typing import Any
 import pytest
 import torch
 
-from xtile.utils.benchmark_results import default_gemm_benchmark_path, write_json
+from xtile.utils.benchmark_results import (
+    canonical_benchmark_run,
+    default_gemm_benchmark_path,
+    describe_runtime_support_snapshot,
+    write_json,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +225,7 @@ def _gemm_payload(
     results: list[dict[str, Any]],
     device: str,
     repeats: int,
+    runtime_support: dict[str, Any],
 ) -> dict[str, Any]:
     """Build a structured GEMM benchmark payload."""
     ratios = [float(item["ratio"]) for item in results]
@@ -237,6 +243,7 @@ def _gemm_payload(
             "repeats": repeats,
             "aggregation": "median_of_full_runs",
         },
+        "runtime_support": runtime_support,
         "results": results,
         "summary": {
             "target_ratio": _TARGET_RATIO,
@@ -459,55 +466,69 @@ def _print_results_table(results: list[dict[str, Any]]) -> None:
 # Standalone runner
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> None:
+    """Run the standalone GEMM benchmark."""
     if not torch.cuda.is_available():
         print("No GPU detected. Exiting.")
         raise SystemExit(1)
 
-    args = _parse_args(sys.argv[1:])
-    device = args.device
-    props = torch.cuda.get_device_properties(device)
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    with canonical_benchmark_run(args.output_json):
+        device = args.device
+        props = torch.cuda.get_device_properties(device)
 
-    print("=" * 80)
-    print("  XTile GEMM Performance Benchmark")
-    print("=" * 80)
-    print(f"  Device         : {props.name}")
-    print(f"  SMs            : {props.multi_processor_count}")
-    print(f"  VRAM           : {props.total_memory / (1024**3):.1f} GB")
-    print(f"  Warmup iters   : {_WARMUP_ITERS}")
-    print(f"  Timed iters    : {_TIMED_ITERS}")
-    print(f"  Full repeats   : {args.repeats}")
-    print(f"  Target ratio   : >= {_TARGET_RATIO * 100:.0f}% of torch.matmul")
-    print("=" * 80)
+        print("=" * 80)
+        print("  XTile GEMM Performance Benchmark")
+        print("=" * 80)
+        print(f"  Device         : {props.name}")
+        print(f"  SMs            : {props.multi_processor_count}")
+        print(f"  VRAM           : {props.total_memory / (1024**3):.1f} GB")
+        print(f"  Warmup iters   : {_WARMUP_ITERS}")
+        print(f"  Timed iters    : {_TIMED_ITERS}")
+        print(f"  Full repeats   : {args.repeats}")
+        print(f"  Target ratio   : >= {_TARGET_RATIO * 100:.0f}% of torch.matmul")
+        print("=" * 80)
 
-    repeat_results = [run_gemm_benchmark(device=device) for _ in range(args.repeats)]
-    results = _aggregate_repeat_results(repeat_results)
-    _print_results_table(results)
+        repeat_results = [run_gemm_benchmark(device=device) for _ in range(args.repeats)]
+        results = _aggregate_repeat_results(repeat_results)
+        _print_results_table(results)
+        device_rank = int(device.split(":", 1)[1]) if ":" in device else 0
+        benchmark_backend = "hip" if getattr(torch.version, "hip", None) is not None else "cuda"
+        runtime_support = describe_runtime_support_snapshot(
+            backend=benchmark_backend,
+            rank=device_rank,
+            world_size=1,
+            force_backend=True,
+        )
 
-    # Summary
-    print()
-    passing = [r for r in results if r["ratio"] >= _TARGET_RATIO]
-    failing = [r for r in results if r["ratio"] < _TARGET_RATIO]
-    incorrect = [r for r in results if not r["correct"]]
+        print()
+        passing = [r for r in results if r["ratio"] >= _TARGET_RATIO]
+        failing = [r for r in results if r["ratio"] < _TARGET_RATIO]
+        incorrect = [r for r in results if not r["correct"]]
 
-    print(
-        f"  Results: {len(passing)}/{len(results)} meet the "
-        f"{_TARGET_RATIO * 100:.0f}% target"
-    )
-    if incorrect:
-        print(f"  WARNING: {len(incorrect)} results had incorrect output!")
-    if failing:
-        print("  Below-target configurations:")
-        for r in failing:
-            print(
-                f"    {r['M']}x{r['N']}x{r['K']} {r['dtype']}: "
-                f"{r['ratio_pct']:.1f}%"
-            )
+        print(
+            f"  Results: {len(passing)}/{len(results)} meet the "
+            f"{_TARGET_RATIO * 100:.0f}% target"
+        )
+        if incorrect:
+            print(f"  WARNING: {len(incorrect)} results had incorrect output!")
+        if failing:
+            print("  Below-target configurations:")
+            for r in failing:
+                print(
+                    f"    {r['M']}x{r['N']}x{r['K']} {r['dtype']}: "
+                    f"{r['ratio_pct']:.1f}%"
+                )
 
-    output_path = write_json(Path(args.output_json), _gemm_payload(
-        results=results,
-        device=device,
-        repeats=args.repeats,
-    ))
-    print(f"  Structured results written to: {output_path}")
-    print("=" * 80)
+        output_path = write_json(Path(args.output_json), _gemm_payload(
+            results=results,
+            device=device,
+            repeats=args.repeats,
+            runtime_support=runtime_support,
+        ))
+        print(f"  Structured results written to: {output_path}")
+        print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()

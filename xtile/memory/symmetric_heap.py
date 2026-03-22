@@ -38,6 +38,10 @@ import torch.distributed as dist
 
 from xtile.backends import get_backend, detect_hardware
 from xtile.backends.base import BackendInterface
+from xtile.utils.feature_gates import (
+    FORCE_MULTIPROCESS_TRANSPORT_ENV,
+    forced_multiprocess_transport,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +159,7 @@ class SymmetricHeap:
         self._remote_ptrs: list[int] = []
         self._heap_bases: Optional[torch.Tensor] = None
         self._ipc_opened: list[Optional[int]] = []
+        self._peer_buffers: Optional[list[torch.Tensor]] = None
         self._mode: str = "single_process" if _peer_bases is not None or world_size == 1 else "multiprocess"
         self._transport_strategy: str = "local_only" if world_size == 1 else "unknown"
 
@@ -171,6 +176,7 @@ class SymmetricHeap:
             self._heap_bases = torch.tensor(
                 [self._local_ptr], dtype=torch.int64, device=self._device,
             )
+            self._peer_buffers = [self._buffer]
         else:
             # Multi-process mode: try IPC, fall back to all_gather of pointers
             self._setup_multiprocess()
@@ -257,6 +263,7 @@ class SymmetricHeap:
             heap._heap_bases = torch.tensor(
                 bases, dtype=torch.int64, device=f"cuda:{rank}",
             )
+            heap._peer_buffers = list(buffers)
             heap._mode = "single_process"
             heap._transport_strategy = "peer_access"
             heap._bump_offset = 0
@@ -275,104 +282,156 @@ class SymmetricHeap:
     def _setup_multiprocess(self) -> None:
         """Exchange heap pointers across ranks for multi-process mode.
 
-        Tries three strategies in order:
+        Tries the device-safe strategies in order:
 
         1. **Raw ctypes IPC** — ``cudaIpcGetMemHandle`` / ``cudaIpcOpenMemHandle``
-           (requires ``ptrace_scope=0`` on Linux).
-        2. **PyTorch IPC** — ``storage._share_cuda_()`` / ``_new_shared_cuda()``
-           Uses file-descriptor sharing over Unix domain sockets, which
-           works even with ``ptrace_scope=1`` on same-node.
-        3. **Peer-access pointer exchange** — ``dist.all_gather`` of raw
-           ``data_ptr()`` values.  Works when all ranks have NVLink/NVSwitch
-           peer access on the same node.
+           (historically the most direct path, but some Linux/driver
+           environments may still reject it, so fallback remains required).
+
+        Additional transports such as PyTorch fd-passing CUDA storage IPC or
+        raw cross-process pointer exchange remain available only through the
+        explicit force-transport diagnostic path. Real multiprocess Triton
+        remote-access diagnostics currently validate only ``ctypes_ipc`` as a
+        device-dereferenceable transport.
         """
         self._backend.init_ipc()
-
-        # --- Strategy 1: raw ctypes IPC handle exchange ---
-        try:
-            local_handle: bytes = self._backend.get_ipc_handle(self._local_ptr)
-            handle_len = len(local_handle)
-
-            local_t = torch.tensor(
-                list(local_handle), dtype=torch.uint8, device=self._device,
-            )
-            gathered = [
-                torch.zeros(handle_len, dtype=torch.uint8, device=self._device)
-                for _ in range(self._world_size)
+        forced_strategy = forced_multiprocess_transport()
+        strategies = (
+            [forced_strategy]
+            if forced_strategy is not None
+            else [
+                "ctypes_ipc",
             ]
-            dist.all_gather(gathered, local_t)
-
-            remote_ptrs: list[int] = []
-            ipc_opened: list[Optional[int]] = []
-            for r in range(self._world_size):
-                if r == self._rank:
-                    remote_ptrs.append(self._local_ptr)
-                    ipc_opened.append(None)
+        )
+        errors: list[tuple[str, Exception]] = []
+        for strategy in strategies:
+            try:
+                if strategy == "ctypes_ipc":
+                    self._setup_multiprocess_ctypes_ipc()
+                elif strategy == "pytorch_ipc":
+                    self._setup_multiprocess_pytorch_ipc()
+                elif strategy == "peer_access_pointer_exchange":
+                    self._setup_multiprocess_peer_access_pointer_exchange()
                 else:
-                    handle_bytes = bytes(gathered[r].cpu().tolist())
-                    remote_ptr = self._backend.open_ipc_handle(handle_bytes)
-                    remote_ptrs.append(remote_ptr)
-                    ipc_opened.append(remote_ptr)
+                    raise AssertionError(f"Unhandled transport strategy {strategy!r}")
+                return
+            except Exception as exc:
+                errors.append((strategy, exc))
+                if forced_strategy is not None:
+                    break
+                logger.warning(
+                    "Rank %d: multiprocess transport %s failed (%s), trying next fallback",
+                    self._rank,
+                    strategy,
+                    exc,
+                )
 
-            self._remote_ptrs = remote_ptrs
-            self._ipc_opened = ipc_opened
-            self._heap_bases = torch.tensor(
-                remote_ptrs, dtype=torch.int64, device=self._device,
-            )
-            self._transport_strategy = "ctypes_ipc"
-            dist.barrier()
-            logger.info("Rank %d: ctypes IPC setup complete", self._rank)
-            return
+        detail = "; ".join(
+            f"{strategy}: {type(exc).__name__}({exc})"
+            for strategy, exc in errors
+        )
+        if forced_strategy is not None:
+            raise RuntimeError(
+                f"Forced multiprocess transport {forced_strategy!r} failed on rank "
+                f"{self._rank}. Set {FORCE_MULTIPROCESS_TRANSPORT_ENV}=auto to "
+                f"restore the normal fallback chain. Details: {detail}"
+            ) from errors[-1][1]
+        raise RuntimeError(
+            f"All multiprocess transport strategies failed on rank {self._rank}: "
+            f"{detail}"
+        ) from errors[-1][1]
 
-        except RuntimeError as e:
-            logger.warning(
-                "Rank %d: ctypes IPC failed (%s), trying PyTorch IPC",
-                self._rank, e,
-            )
+    def _setup_multiprocess_ctypes_ipc(self) -> None:
+        """Map peer heaps via raw CUDA/HIP IPC handles."""
+        local_handle: bytes = self._backend.get_ipc_handle(self._local_ptr)
+        handle_len = len(local_handle)
 
-        # --- Strategy 2: PyTorch-native IPC (file-descriptor sharing) ---
-        try:
-            storage = self._buffer.untyped_storage()
-            share_info = storage._share_cuda_()
+        local_t = torch.tensor(
+            list(local_handle), dtype=torch.uint8, device=self._device,
+        )
+        gathered = [
+            torch.zeros(handle_len, dtype=torch.uint8, device=self._device)
+            for _ in range(self._world_size)
+        ]
+        dist.all_gather(gathered, local_t)
 
-            # Exchange via all_gather_object (supports arbitrary Python objects)
-            all_infos: list[object] = [None] * self._world_size
-            dist.all_gather_object(all_infos, share_info)
+        remote_ptrs: list[int] = []
+        ipc_opened: list[Optional[int]] = []
+        for r in range(self._world_size):
+            if r == self._rank:
+                remote_ptrs.append(self._local_ptr)
+                ipc_opened.append(None)
+            else:
+                handle_bytes = bytes(gathered[r].cpu().tolist())
+                remote_ptr = self._backend.open_ipc_handle(handle_bytes)
+                remote_ptrs.append(remote_ptr)
+                ipc_opened.append(remote_ptr)
 
-            remote_ptrs = []
-            ipc_storages: list[Optional[torch.UntypedStorage]] = []
-            for r in range(self._world_size):
-                if r == self._rank:
-                    remote_ptrs.append(self._local_ptr)
-                    ipc_storages.append(None)
-                else:
-                    remote_storage = torch.UntypedStorage._new_shared_cuda(
-                        *all_infos[r]
-                    )
-                    # The storage's data_ptr is the IPC-mapped address
-                    remote_ptr = remote_storage.data_ptr()
-                    remote_ptrs.append(remote_ptr)
-                    ipc_storages.append(remote_storage)
+        self._remote_ptrs = remote_ptrs
+        self._ipc_opened = ipc_opened
+        self._heap_bases = torch.tensor(
+            remote_ptrs, dtype=torch.int64, device=self._device,
+        )
+        self._transport_strategy = "ctypes_ipc"
+        dist.barrier()
+        logger.info("Rank %d: ctypes IPC setup complete", self._rank)
 
-            self._remote_ptrs = remote_ptrs
-            self._ipc_opened = []  # PyTorch manages handle lifetime
-            self._ipc_storages = ipc_storages  # prevent GC
-            self._heap_bases = torch.tensor(
-                remote_ptrs, dtype=torch.int64, device=self._device,
-            )
-            self._transport_strategy = "pytorch_ipc"
-            dist.barrier()
-            logger.info("Rank %d: PyTorch IPC setup complete", self._rank)
-            return
+    def _setup_multiprocess_pytorch_ipc(self) -> None:
+        """Map peer heaps via PyTorch's fd-passing CUDA storage IPC."""
+        for peer_rank in range(self._world_size):
+            if peer_rank == self._rank:
+                continue
+            if torch.cuda.can_device_access_peer(self._rank, peer_rank):
+                try:
+                    self._backend.enable_peer_access(peer_rank)
+                except RuntimeError:
+                    pass
 
-        except Exception as e:
-            logger.warning(
-                "Rank %d: PyTorch IPC failed (%s), falling back to "
-                "peer-access pointer exchange",
-                self._rank, e,
-            )
+        storage = self._buffer.untyped_storage()
+        share_info = storage._share_cuda_()
 
-        # --- Strategy 3: raw pointer exchange with peer access ---
+        all_infos: list[object] = [None] * self._world_size
+        dist.all_gather_object(all_infos, share_info)
+
+        remote_ptrs = []
+        ipc_storages: list[Optional[torch.UntypedStorage]] = []
+        for r in range(self._world_size):
+            if r == self._rank:
+                remote_ptrs.append(self._local_ptr)
+                ipc_storages.append(None)
+            else:
+                remote_storage = torch.UntypedStorage._new_shared_cuda(
+                    *all_infos[r]
+                )
+                remote_ptr = remote_storage.data_ptr()
+                remote_ptrs.append(remote_ptr)
+                ipc_storages.append(remote_storage)
+
+        self._remote_ptrs = remote_ptrs
+        self._ipc_opened = []
+        self._ipc_storages = ipc_storages
+        self._heap_bases = torch.tensor(
+            remote_ptrs, dtype=torch.int64, device=self._device,
+        )
+        self._transport_strategy = "pytorch_ipc"
+        dist.barrier()
+        logger.info("Rank %d: PyTorch IPC setup complete", self._rank)
+
+    def _setup_multiprocess_peer_access_pointer_exchange(self) -> None:
+        """Exchange raw heap pointers after enabling peer access where possible.
+
+        This path is kept only for forced diagnostics. Raw virtual addresses
+        from another process are not a validated public transport contract.
+        """
+        for peer_rank in range(self._world_size):
+            if peer_rank == self._rank:
+                continue
+            if torch.cuda.can_device_access_peer(self._rank, peer_rank):
+                try:
+                    self._backend.enable_peer_access(peer_rank)
+                except RuntimeError:
+                    pass
+
         local_base = torch.tensor(
             [self._local_ptr], dtype=torch.int64, device=self._device,
         )
@@ -499,6 +558,23 @@ class SymmetricHeap:
         """Concrete heap-establishment strategy used by this heap."""
         return self._transport_strategy
 
+    def get_peer_buffer(self, rank: int) -> torch.Tensor:
+        """Return the local-process tensor backing *rank*'s heap buffer.
+
+        This is only available in single-process mode created via
+        :meth:`create_all`. It is intended for host-side reference paths
+        and diagnostics, not hot-path kernels.
+        """
+        if self._peer_buffers is None:
+            raise RuntimeError(
+                "Peer heap buffers are only available in single-process mode."
+            )
+        if rank < 0 or rank >= self._world_size:
+            raise ValueError(
+                f"rank={rank} out of range [0, {self._world_size})"
+            )
+        return self._peer_buffers[rank]
+
     # ---------------------------------------------------------- translation
 
     def translate(self, local_ptr: int, to_rank: int) -> int:
@@ -561,6 +637,7 @@ class SymmetricHeap:
         self._heap_bases = None
         self._remote_ptrs = []
         self._ipc_opened = []
+        self._peer_buffers = None
         self._alloc_records.clear()
         self._bump_offset = 0
 
