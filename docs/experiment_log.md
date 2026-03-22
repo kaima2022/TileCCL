@@ -2093,3 +2093,75 @@ python -m tests.benchmarks.bench_p2p_translate \
 - XTile 的 allocator-first substrate 现在已经有 local segment、peer export、peer import、peer map 四层结构化状态
 - 这比此前“transport-aware fallback + 若干内部数组”更接近工业级 canonical substrate
 - 但真正的下一步仍然是 external mapping / segmented import-map / unified access，而不是继续扩 transport 面
+
+### Part J: allocator capability surface + explicit external-mapping gap (2026-03-22)
+
+继续沿着 P0-next 推进，本轮没有去伪装“external mapping 快做好了”，而是把 allocator 能力边界显式写进 runtime metadata。
+
+新增内容：
+
+- `BaseSymmetricAllocator.capabilities()`
+- allocator metadata 现显式带：
+  - `multi_segment`
+  - `peer_export`
+  - `peer_import`
+  - `external_import_copy`
+  - `external_mapping`
+  - `fd_passing`
+  - `dmabuf_mapping`
+
+对于当前 `torch_bump` backend，真实口径就是：
+
+- `external_import_copy = true`
+- `external_mapping = false`
+- `fd_passing = false`
+- `dmabuf_mapping = false`
+
+这一步的意义是：
+
+- “copy-based external import 已有”和“zero-copy external mapping 还没有”现在能从 runtime metadata 直接区分
+- 文档里关于 FD passing / DMA-BUF 的差距不再只是静态说明，而是变成了显式 capability gap
+
+support matrix 同步新增：
+
+- `memory["symmetric_heap.external_mapping"]`
+
+当前准确口径：
+
+- attached heap + `torch_bump` allocator → `external_mapping = unsupported`
+- 没有 attached heap 时 → `partial`，因为当前上下文还没有选定 allocator backend 能力集
+
+基础回归：
+
+```bash
+pytest -q \
+  tests/test_memory/test_symmetric_heap.py \
+  tests/test_context.py \
+  tests/test_support.py \
+  tests/test_benchmark_results.py
+```
+
+结果：
+
+- `50 passed in 5.47s`
+
+真实 benchmark smoke（H100 PCIe x2）：
+
+```bash
+python -m tests.benchmarks.bench_p2p_translate \
+  --quick \
+  --output-json /tmp/xtile_p2p_allocator_capabilities_smoke.json
+```
+
+结果：
+
+- artifact 已写出 allocator `capabilities`
+- `external_mapping = false`
+- `fd_passing = false`
+- `dmabuf_mapping = false`
+- P2P quick：`best read = 248.74 GB/s`，`best write = 248.04 GB/s`
+
+结论：
+
+- allocator-first substrate 现在不仅暴露“现在有什么”，也开始暴露“还缺什么”
+- 这让后续 FD/DMA-BUF external mapping 的工程推进可以直接对照 runtime metadata / support matrix 收口

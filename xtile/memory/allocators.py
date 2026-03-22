@@ -237,6 +237,18 @@ class BaseSymmetricAllocator(ABC):
         # dropping references is enough. More advanced allocators can override.
         return None
 
+    def capabilities(self) -> dict[str, bool]:
+        """Return structured allocator capability flags."""
+        return {
+            "multi_segment": len(self.segment_descriptors()) > 1,
+            "peer_export": True,
+            "peer_import": True,
+            "external_import_copy": True,
+            "external_mapping": False,
+            "fd_passing": False,
+            "dmabuf_mapping": False,
+        }
+
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
@@ -247,6 +259,7 @@ class BaseSymmetricAllocator(ABC):
             "bytes_allocated": self.bytes_allocated,
             "bytes_free": self.bytes_free,
             "segment_count": len(segments),
+            "capabilities": self.capabilities(),
             "segments": [segment.to_dict() for segment in segments],
         }
 

@@ -216,6 +216,14 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before using external import/as_symmetric helpers.",
         ),
+        "symmetric_heap.external_mapping": SupportStatus(
+            "unsupported" if has_heap else "partial",
+            "The active allocator does not yet implement zero-copy external mapping "
+            "(FD passing / DMA-BUF import-map)."
+            if has_heap
+            else "Attach a heap to inspect allocator external-mapping capability. "
+            "The current default torch_bump backend does not implement zero-copy external mapping.",
+        ),
         "symmetric_heap.segment_metadata": SupportStatus(
             "supported" if has_heap else "partial",
             "Heap exposes allocator-owned local segment metadata for the active heap backend."

@@ -370,6 +370,12 @@ class TestSymmetricHeapUnit:
         assert metadata["size_bytes"] == symmetric_heap.size
         assert metadata["bytes_allocated"] == symmetric_heap.bytes_allocated
         assert metadata["segment_count"] == 1
+        assert metadata["capabilities"]["peer_export"] is True
+        assert metadata["capabilities"]["peer_import"] is True
+        assert metadata["capabilities"]["external_import_copy"] is True
+        assert metadata["capabilities"]["external_mapping"] is False
+        assert metadata["capabilities"]["fd_passing"] is False
+        assert metadata["capabilities"]["dmabuf_mapping"] is False
         assert len(metadata["segments"]) == 1
         assert metadata["segments"][0]["segment_id"] == "heap"
         assert metadata["segments"][0]["segment_kind"] == "device_heap"

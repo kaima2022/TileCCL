@@ -354,6 +354,13 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] 真实 benchmark smoke（H100 PCIe x2）：`python -m tests.benchmarks.bench_p2p_translate --quick --output-json /tmp/xtile_p2p_peer_imports_smoke.json`
 - [x] smoke 结果确认：artifact 已写出 `peer_imports`，P2P quick `best read=248.68 GB/s`、`best write=248.12 GB/s`
 
+### Phase 25 交付物（2026-03-22）
+- [x] allocator capability surface：`BaseSymmetricAllocator.capabilities()` 已接入，allocator metadata 现显式带 `multi_segment / peer_export / peer_import / external_import_copy / external_mapping / fd_passing / dmabuf_mapping`
+- [x] support matrix 更新：新增 `memory["symmetric_heap.external_mapping"]`，明确当前 runtime 仍不支持 zero-copy external mapping
+- [x] allocator/context/support 基础回归：`pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_support.py tests/test_benchmark_results.py` → `50 passed`
+- [x] 真实 benchmark smoke（H100 PCIe x2）：`python -m tests.benchmarks.bench_p2p_translate --quick --output-json /tmp/xtile_p2p_allocator_capabilities_smoke.json`
+- [x] smoke 结果确认：artifact 已写出 allocator `capabilities`，其中 `external_mapping=false`、`fd_passing=false`、`dmabuf_mapping=false`；P2P quick `best read=248.74 GB/s`、`best write=248.04 GB/s`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -377,7 +384,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P13-001 | multiprocess/device 传输面目前只在 `ctypes_ipc` 上通过真实矩阵，其他 transport 仍未修复 | ⚠️ auto contract 已正式收窄为 `ctypes_ipc only`；下一优先级是修 `pytorch_ipc` / `peer_access_pointer_exchange` 的最小 Triton remote-access 正确性，再决定是否重新放开 |
 | P10-001 | `gemm_allscatter.shard/full` 不应作为 allscatter wrapper 继续补；该需求已独立收口到 `gemm_allgather.shard/full` public contract | ⚠️ contract 已落地，但 `gemm_allgather` 的 broader multiprocess/performance/world-size validation 仍未闭环 |
 | P15-001 | multiprocess `gemm_allscatter` 已完成 2-GPU `ctypes_ipc` public baseline correctness，并补齐 representative auto-selected coverage（4 个 pattern、`full/full + full/shard`），但 broader larger-shape / world-size / stress / performance contract 仍未闭环 | ⚠️ 继续保持 `partial`；下一优先级转为更大 shape、长时压力和 world-size 扩展验证 |
-| P17-001 | allocator-first substrate 已落地 v1，但仍缺 Iris 风格 canonical export/import/map/access substrate | ⚠️ 当前已有 `torch_bump`、local segment metadata、allocator-owned peer export、peer import 与 peer-map metadata；但 FD/DMA-BUF external mapping、segmented import-map 和统一 access 语义仍待实现 |
+| P17-001 | allocator-first substrate 已落地 v1，但仍缺 Iris 风格 canonical export/import/map/access substrate | ⚠️ 当前已有 `torch_bump`、allocator capability metadata、local segment metadata、allocator-owned peer export、peer import 与 peer-map metadata；但 FD/DMA-BUF external mapping、segmented import-map 和统一 access 语义仍待实现 |
 
 ## 性能基线
 | 指标 | 实测值 | 目标值 | 状态 |
