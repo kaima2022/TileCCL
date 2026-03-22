@@ -729,12 +729,16 @@ class TestSymmetricHeapUnit:
         metadata = symmetric_heap.peer_memory_map_metadata()
         exports = symmetric_heap.peer_export_descriptors()
         export_metadata = symmetric_heap.peer_export_metadata()
+        export = symmetric_heap.peer_export_descriptor(0)
+        imported = symmetric_heap.peer_import(0)
         imports = symmetric_heap.peer_import_metadata()
 
         assert len(metadata) == 1
         assert len(exports) == 1
         assert len(export_metadata) == 1
         assert len(imports) == 1
+        assert export.peer_rank == 0
+        assert imported.peer_rank == 0
         assert metadata[0]["peer_rank"] == 0
         assert metadata[0]["segment_id"] == "heap"
         assert metadata[0]["segment_kind"] == "device_heap"
@@ -749,6 +753,7 @@ class TestSymmetricHeapUnit:
         assert exports[0].segment_kind == "device_heap"
         assert exports[0].transport == "local_only"
         assert exports[0].base_ptr == symmetric_heap.local_base
+        assert export.base_ptr == symmetric_heap.local_base
         assert export_metadata[0]["peer_rank"] == 0
         assert export_metadata[0]["segment_id"] == "heap"
         assert export_metadata[0]["segment_kind"] == "device_heap"
@@ -773,6 +778,13 @@ class TestSymmetricHeapUnit:
 
         external.zero_()
         assert not torch.allclose(imported, external)
+
+    def test_peer_accessors_validate_rank(self, symmetric_heap) -> None:
+        """Rank-addressed peer accessors should fail on invalid ranks."""
+        with pytest.raises(ValueError, match="rank=1"):
+            symmetric_heap.peer_export_descriptor(1)
+        with pytest.raises(ValueError, match="rank=1"):
+            symmetric_heap.peer_import(1)
 
     def test_allocator_exports_structured_ctypes_peer_descriptor(
         self,
@@ -904,6 +916,8 @@ class TestSymmetricHeapMultiGPU:
             metadata = heaps[0].peer_memory_map_metadata()
             exports = heaps[0].peer_export_descriptors()
             export_metadata = heaps[0].peer_export_metadata()
+            assert heaps[0].peer_export_descriptor(1).peer_rank == 1
+            assert heaps[0].peer_import(1).peer_rank == 1
             imports = heaps[0].peer_import_metadata()
 
             assert len(metadata) == world_size

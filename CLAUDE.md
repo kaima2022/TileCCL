@@ -413,6 +413,15 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
 
+### Phase 32 交付物（2026-03-22）
+- [x] rank-addressed peer accessors：`SymmetricHeap.peer_export_descriptor(rank)` / `peer_import(rank)` 已接入
+- [x] host-side translate 收口：`translate(...)` 现统一走 `peer_import(rank)`，而不是直接依赖内部列表索引
+- [x] explicit accessor regression：新增 accessor 成功路径与 invalid-rank 失败路径覆盖
+- [x] 定向回归：`pytest -q tests/test_memory/test_symmetric_heap.py` → `44 passed`
+- [x] allocator/context/support/CLI 回归：`pytest -q tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `17 passed`
+- [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed`
+- [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed`
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|

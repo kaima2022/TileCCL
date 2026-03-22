@@ -2486,3 +2486,51 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - `peer_exports` / `peer_imports` / `peer_memory_map` 的 metadata visibility 现在已经在消费层被锁定
 - 这让 P0 substrate 的结构化 surface 不只是“存在”，而是“被下游显式依赖并受测试保护”
+
+### Part Q: rank-addressed peer accessors close the last obvious indexing leak (2026-03-22)
+
+继续沿着 P0-next 做小步收口。本轮不是再加新的 metadata，而是把已有 canonicalized peer state 通过显式 accessor 暴露出来。
+
+本轮完成：
+
+- `SymmetricHeap.peer_export_descriptor(rank)`
+- `SymmetricHeap.peer_import(rank)`
+- `translate(...)` 现在改成通过 `peer_import(to_rank)` 访问目标 rank 映射，而不是直接读内部列表
+- 新增 invalid-rank 失败路径测试
+
+这一步的意义是：
+
+- public / host-side consumer 不再必须知道 “`_peer_imports[to_rank]` 就是目标 rank”
+- 虽然内部 state 仍以 rank-ordered list 持有，但对外语义已经收口成显式 rank-addressed accessor
+- 这让后续如果内部表示再变，host-side 调用点更少、更容易维护
+
+这一步没有做的事情：
+
+- 没有新增 transport
+- 没有改变 benchmark headline
+- 没有实现 external mapping / segmented import-map
+
+回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py tests/test_memory/test_symmetric_heap.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py
+pytest -q tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py` → `44 passed in 5.65s`
+- `tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `17 passed in 6.15s`
+- `allgather + gemm_allgather` → `2 passed in 38.83s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 65.87s`
+
+结论：
+
+- peer state 的 host-side 使用现在更少依赖内部表示细节
+- 这一轮继续提升了可维护性，但 canonical backend 本体仍未完成

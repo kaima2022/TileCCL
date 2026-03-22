@@ -915,6 +915,14 @@ class SymmetricHeap:
         """Return the rank-visible peer export descriptors for this heap."""
         return tuple(self._peer_exports)
 
+    def peer_export_descriptor(self, rank: int) -> PeerMemoryExportDescriptor:
+        """Return the peer-export descriptor for one rank."""
+        if rank < 0 or rank >= self._world_size:
+            raise ValueError(
+                f"rank={rank} out of range [0, {self._world_size})"
+            )
+        return self._peer_exports[rank]
+
     def peer_export_metadata(self) -> list[dict[str, object]]:
         """Return peer-export metadata in JSON-friendly form."""
         return [export.to_dict() for export in self._peer_exports]
@@ -922,6 +930,14 @@ class SymmetricHeap:
     def peer_imports(self) -> tuple[ImportedPeerMemory, ...]:
         """Return the structured peer-import records for this heap."""
         return tuple(self._peer_imports)
+
+    def peer_import(self, rank: int) -> ImportedPeerMemory:
+        """Return the structured peer-import record for one rank."""
+        if rank < 0 or rank >= self._world_size:
+            raise ValueError(
+                f"rank={rank} out of range [0, {self._world_size})"
+            )
+        return self._peer_imports[rank]
 
     def peer_import_metadata(self) -> list[dict[str, object]]:
         """Return peer-import metadata in JSON-friendly form."""
@@ -982,7 +998,7 @@ class SymmetricHeap:
                 f"to_rank={to_rank} out of range [0, {self._world_size})"
             )
         offset = self.get_offset(local_ptr)
-        return self._peer_imports[to_rank].mapped_ptr + offset
+        return self.peer_import(to_rank).mapped_ptr + offset
 
     def get_offset(self, ptr: int) -> int:
         """Return the byte offset of *ptr* within this rank's heap."""

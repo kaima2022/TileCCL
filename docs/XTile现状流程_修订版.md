@@ -785,6 +785,7 @@ contracts = {
 - `SymmetricHeap._apply_peer_mapping_state(...)` 现在会先按 `peer_rank` 归一化 incoming peer records，再进行校验与发布；内部 contract 不再要求调用方手工先按 rank 排序。
 - `_apply_peer_mapping_state(...)` 现在是 fail-closed 的：非法 peer state 不会污染 `_peer_exports`、`_peer_imports` 或 `heap_bases`。
 - `context` / benchmark artifact 侧的回归也已经补上：`peer_exports`、`peer_imports`、`peer_memory_map` 的 `peer_rank` 可见性现在有消费层测试锁定。
+- `SymmetricHeap.peer_export_descriptor(rank)` / `peer_import(rank)` 已接入；host-side peer lookup 现已有显式 rank-addressed accessor，不必再直接依赖内部列表下标。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
