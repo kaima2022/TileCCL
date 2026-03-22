@@ -973,16 +973,24 @@ class TestSymmetricHeapUnit:
         metadata = symmetric_heap.peer_memory_map_metadata()
         exports = symmetric_heap.peer_export_descriptors()
         export_metadata = symmetric_heap.peer_export_metadata()
+        export_catalog = symmetric_heap.peer_export_catalog_metadata()
         export = symmetric_heap.peer_export_descriptor(0)
+        export_segment = symmetric_heap.peer_export_segment(0, "heap")
         imported = symmetric_heap.peer_import(0)
+        import_segment = symmetric_heap.peer_import_segment(0, "heap")
         imports = symmetric_heap.peer_import_metadata()
+        import_catalog = symmetric_heap.peer_import_catalog_metadata()
 
         assert len(metadata) == 1
         assert len(exports) == 1
         assert len(export_metadata) == 1
         assert len(imports) == 1
+        assert len(export_catalog) == 1
+        assert len(import_catalog) == 1
         assert export.peer_rank == 0
+        assert export_segment.peer_rank == 0
         assert imported.peer_rank == 0
+        assert import_segment.peer_rank == 0
         assert metadata[0]["peer_rank"] == 0
         assert metadata[0]["segment_id"] == "heap"
         assert metadata[0]["segment_kind"] == "device_heap"
@@ -1004,6 +1012,10 @@ class TestSymmetricHeapUnit:
         assert export_metadata[0]["segment_kind"] == "device_heap"
         assert export_metadata[0]["transport"] == "local_only"
         assert export_metadata[0]["base_ptr"] == symmetric_heap.local_base
+        assert export_catalog[0]["peer_rank"] == 0
+        assert export_catalog[0]["segment_count"] == 1
+        assert export_catalog[0]["segment_ids"] == ["heap"]
+        assert export_catalog[0]["segments"][0]["segment_id"] == "heap"
         assert imports[0]["peer_rank"] == 0
         assert imports[0]["segment_id"] == "heap"
         assert imports[0]["transport"] == "local_only"
@@ -1011,6 +1023,10 @@ class TestSymmetricHeapUnit:
         assert imports[0]["mapped_ptr"] == symmetric_heap.local_base
         assert imports[0]["exported_base_ptr"] == symmetric_heap.local_base
         assert imports[0]["cleanup_kind"] == "none"
+        assert import_catalog[0]["peer_rank"] == 0
+        assert import_catalog[0]["segment_count"] == 1
+        assert import_catalog[0]["segment_ids"] == ["heap"]
+        assert import_catalog[0]["segments"][0]["segment_id"] == "heap"
 
     def test_import_external_tensor_materializes_heap_copy(self, symmetric_heap) -> None:
         """import_external_tensor should copy data onto the symmetric heap."""
@@ -1031,6 +1047,37 @@ class TestSymmetricHeapUnit:
             symmetric_heap.peer_export_descriptor(1)
         with pytest.raises(ValueError, match="rank=1"):
             symmetric_heap.peer_import(1)
+        with pytest.raises(ValueError, match="rank=1"):
+            symmetric_heap.peer_export_segments(1)
+        with pytest.raises(ValueError, match="rank=1"):
+            symmetric_heap.peer_import_segments(1)
+
+    def test_segment_scoped_peer_accessors_resolve_primary_segment(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Segment-scoped peer accessors should expose the primary segment explicitly."""
+        exports = symmetric_heap.peer_export_segments(0)
+        imports = symmetric_heap.peer_import_segments(0)
+        export = symmetric_heap.peer_export_segment(0, "heap")
+        imported = symmetric_heap.peer_import_segment(0, "heap")
+
+        assert len(exports) == 1
+        assert len(imports) == 1
+        assert export == symmetric_heap.peer_export_descriptor(0)
+        assert imported == symmetric_heap.peer_import(0)
+        assert exports[0].segment_id == "heap"
+        assert imports[0].segment_id == "heap"
+
+    def test_segment_scoped_peer_accessors_reject_unknown_segment(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Segment-scoped peer accessors should fail on unknown segment ids."""
+        with pytest.raises(KeyError, match="Unknown peer export segment_id"):
+            symmetric_heap.peer_export_segment(0, "staging")
+        with pytest.raises(KeyError, match="Unknown peer import segment_id"):
+            symmetric_heap.peer_import_segment(0, "staging")
 
     def test_allocator_exports_structured_ctypes_peer_descriptor(
         self,
@@ -1164,18 +1211,26 @@ class TestSymmetricHeapMultiGPU:
             metadata = heaps[0].peer_memory_map_metadata()
             exports = heaps[0].peer_export_descriptors()
             export_metadata = heaps[0].peer_export_metadata()
+            export_catalog = heaps[0].peer_export_catalog_metadata()
             assert heaps[0].peer_export_descriptor(1).peer_rank == 1
+            assert heaps[0].peer_export_segment(1, "heap").peer_rank == 1
             assert heaps[0].peer_import(1).peer_rank == 1
+            assert heaps[0].peer_import_segment(1, "heap").peer_rank == 1
             imports = heaps[0].peer_import_metadata()
+            import_catalog = heaps[0].peer_import_catalog_metadata()
 
             assert len(metadata) == world_size
             assert len(exports) == world_size
             assert len(export_metadata) == world_size
             assert len(imports) == world_size
+            assert len(export_catalog) == world_size
+            assert len(import_catalog) == world_size
             assert {entry["peer_rank"] for entry in metadata} == {0, 1}
             assert {export.peer_rank for export in exports} == {0, 1}
             assert {entry["peer_rank"] for entry in export_metadata} == {0, 1}
             assert {entry["peer_rank"] for entry in imports} == {0, 1}
+            assert {entry["peer_rank"] for entry in export_catalog} == {0, 1}
+            assert {entry["peer_rank"] for entry in import_catalog} == {0, 1}
             assert {entry["segment_id"] for entry in metadata} == {"heap"}
             assert {entry["segment_kind"] for entry in metadata} == {"device_heap"}
             assert {entry["transport"] for entry in metadata} == {"peer_access"}
@@ -1183,6 +1238,8 @@ class TestSymmetricHeapMultiGPU:
             assert {entry["transport"] for entry in export_metadata} == {"peer_access"}
             assert {entry["transport"] for entry in imports} == {"peer_access"}
             assert {entry["access_kind"] for entry in imports} == {"local", "peer_direct"}
+            assert {tuple(entry["segment_ids"]) for entry in export_catalog} == {("heap",)}
+            assert {tuple(entry["segment_ids"]) for entry in import_catalog} == {("heap",)}
             assert all(entry["size_bytes"] == heaps[0].size for entry in metadata)
             assert metadata[0]["is_local_rank"] is True
             assert metadata[1]["is_local_rank"] is False

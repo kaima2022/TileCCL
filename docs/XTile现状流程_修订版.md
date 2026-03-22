@@ -797,11 +797,14 @@ contracts = {
 - allocator metadata / heap surface 现还显式带结构化 `external_memory_interface`；当前 external interop 语义已能正式表达 `import_mode=copy`、`mapping_mode=none`、`zero_copy_mapping_supported=false`。
 - allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
 - `SymmetricHeap._validate_peer_mapping_state(...)` 现在除了校验 world-size、rank 对齐和 local-base 一致性，还会显式校验 peer export 的 `segment_id` 必须存在于 allocator `exportable_segments`，且 `segment_kind` 必须与 exportable segment catalog 一致。
+- `SymmetricHeap` 现还维护 segment-scoped peer export/import catalog：`peer_export_segments(rank)` / `peer_export_segment(rank, segment_id)` / `peer_import_segments(rank)` / `peer_import_segment(rank, segment_id)` 已接入，host-side peer state 不再只能按 flat list 消费。
+- 现有 `peer_export_descriptor(rank)` / `peer_import(rank)` 也已经改为通过 primary `segment_id` 走 segment-scoped catalog；当前仍是单 exportable segment runtime，但 host-side access shape 已不再把“一 rank 一条记录”写死成唯一形式。
+- heap metadata 现已新增 `peer_export_catalog` / `peer_import_catalog` 两个 grouped surface；context、benchmark artifact 与 support matrix 现都能显式消费 segment-scoped peer catalog。
 - `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
 - `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
 - `XTileContext.heap_metadata()` / `runtime_metadata()` 已接入，runtime / heap / peer-map 现在有统一结构化出口。
 - `tests/benchmarks/bench_gemm.py`、`tests/benchmarks/bench_p2p_translate.py`、`tests/benchmarks/bench_patterns.py` 生成的结构化 JSON 已统一带出 `runtime_metadata`；其中 pattern benchmark 因 heap size 随 problem size 变化，额外按 size 记录对应 runtime metadata。
-- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import`、`symmetric_heap.external_mapping`、`symmetric_heap.segment_metadata`、`symmetric_heap.peer_import_metadata` 与 `symmetric_heap.peer_mapping_metadata` 状态。
+- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import`、`symmetric_heap.external_mapping`、`symmetric_heap.segment_metadata`、`symmetric_heap.peer_import_metadata`、`symmetric_heap.peer_segment_catalog` 与 `symmetric_heap.peer_mapping_metadata` 状态。
 
 当前准确口径是：
 

@@ -3016,3 +3016,60 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - peer mapping state 现在已经和 allocator exportable segment catalog 建立了显式一致性约束
 - 这一步继续提高了 canonical substrate 的可维护性，但 segmented import-map / external mapping backend 仍未完成
+
+### Part AA: peer export/import now expose a segment-scoped catalog view (2026-03-22)
+
+继续沿着 P0-next 往 canonical substrate 推，这一轮开始把 host-side peer state 从“只有 flat list”再收口一步，变成同时具备 rank-grouped catalog 与 `(peer_rank, segment_id)` 精确索引的结构。
+
+本轮完成：
+
+- `SymmetricHeap._build_peer_record_catalog(...)`
+- `SymmetricHeap.peer_export_segments(rank)`
+- `SymmetricHeap.peer_export_segment(rank, segment_id)`
+- `SymmetricHeap.peer_import_segments(rank)`
+- `SymmetricHeap.peer_import_segment(rank, segment_id)`
+- heap metadata 新增：
+  - `peer_export_catalog`
+  - `peer_import_catalog`
+- support matrix 新增：
+  - `memory["symmetric_heap.peer_segment_catalog"]`
+
+同时现有 primary-segment 访问器也已经收口：
+
+- `peer_export_descriptor(rank)` 现在改为显式通过 `primary_segment_descriptor().segment_id` 查 `peer_export_segment(...)`
+- `peer_import(rank)` 现在改为显式通过 `primary_segment_descriptor().segment_id` 查 `peer_import_segment(...)`
+
+这一步的意义是：
+
+- host-side consumer 不再必须把 “一 rank 一条记录” 当成唯一可访问形态
+- 当前 runtime 虽然仍只有单个 exportable segment，但 future segmented import-map 已经有更稳定的 host-side index/copy-free lookup 形状
+- flat metadata 与 grouped catalog 现在可以并存，便于 benchmark / docs / context 按不同视角消费
+
+这一步没有做的事情：
+
+- 没有把底层 `_apply_peer_mapping_state(...)` 改成 multi-segment publish path
+- 没有改变当前 single exportable segment 的运行方式
+- 没有实现 FD passing / DMA-BUF external mapping
+
+回归：
+
+```bash
+python -m compileall xtile/memory/symmetric_heap.py xtile/support.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `71 passed in 5.92s`
+- `allgather + gemm_allgather` → `2 passed in 32.75s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 61.38s`
+
+结论：
+
+- XTile 现在已经不只暴露 flat peer records，也暴露了 segment-scoped peer catalog
+- 这一步让 canonical substrate 的 host-side 访问层更接近 future segmented import-map，但 backend 本体仍未完成

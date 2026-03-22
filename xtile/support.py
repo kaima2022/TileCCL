@@ -264,6 +264,13 @@ def describe_runtime_support(
             if has_heap
             else "Attach a heap before querying peer-import metadata.",
         ),
+        "symmetric_heap.peer_segment_catalog": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes segment-scoped peer export/import catalogs keyed by peer rank "
+            "and segment id, in addition to the flat per-record metadata."
+            if has_heap
+            else "Attach a heap before querying segment-scoped peer export/import catalogs.",
+        ),
         "symmetric_heap.peer_mapping_metadata": SupportStatus(
             "supported" if has_heap else "partial",
             "Heap exposes allocator-owned peer export descriptors, peer-import records, plus structured peer mapping metadata."

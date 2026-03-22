@@ -41,6 +41,7 @@ def test_support_matrix_without_heap(skip_no_gpu, device_info) -> None:
     assert matrix.memory["symmetric_heap.exportable_segment_metadata"].state == "partial"
     assert matrix.memory["symmetric_heap.allocator_memory_model"].state == "partial"
     assert matrix.memory["symmetric_heap.peer_import_metadata"].state == "partial"
+    assert matrix.memory["symmetric_heap.peer_segment_catalog"].state == "partial"
     assert matrix.memory["symmetric_heap.peer_mapping_metadata"].state == "partial"
 
 
@@ -88,6 +89,7 @@ def test_support_matrix_with_heap_matches_context_method(
         assert direct.memory["symmetric_heap.exportable_segment_metadata"].state == "supported"
         assert direct.memory["symmetric_heap.allocator_memory_model"].state == "supported"
         assert direct.memory["symmetric_heap.peer_import_metadata"].state == "supported"
+        assert direct.memory["symmetric_heap.peer_segment_catalog"].state == "supported"
         assert direct.memory["symmetric_heap.peer_mapping_metadata"].state == "supported"
     finally:
         for heap in heaps:
@@ -124,6 +126,7 @@ def test_support_matrix_multigpu_reports_peer_access(
         assert matrix.memory["symmetric_heap.exportable_segment_metadata"].state == "supported"
         assert matrix.memory["symmetric_heap.allocator_memory_model"].state == "supported"
         assert matrix.memory["symmetric_heap.peer_import_metadata"].state == "supported"
+        assert matrix.memory["symmetric_heap.peer_segment_catalog"].state == "supported"
         assert matrix.memory["symmetric_heap.peer_mapping_metadata"].state == "supported"
     finally:
         for ctx in contexts:

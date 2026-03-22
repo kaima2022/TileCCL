@@ -81,9 +81,15 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert len(heap_metadata["peer_exports"]) == 1
         assert heap_metadata["peer_exports"][0]["peer_rank"] == 0
         assert heap_metadata["peer_exports"][0]["segment_id"] == "heap"
+        assert len(heap_metadata["peer_export_catalog"]) == 1
+        assert heap_metadata["peer_export_catalog"][0]["peer_rank"] == 0
+        assert heap_metadata["peer_export_catalog"][0]["segment_ids"] == ["heap"]
         assert len(heap_metadata["peer_imports"]) == 1
         assert heap_metadata["peer_imports"][0]["peer_rank"] == 0
         assert heap_metadata["peer_imports"][0]["access_kind"] == "local"
+        assert len(heap_metadata["peer_import_catalog"]) == 1
+        assert heap_metadata["peer_import_catalog"][0]["peer_rank"] == 0
+        assert heap_metadata["peer_import_catalog"][0]["segment_ids"] == ["heap"]
         assert len(heap_metadata["peer_memory_map"]) == 1
         assert heap_metadata["peer_memory_map"][0]["peer_rank"] == 0
         assert heap_metadata["peer_memory_map"][0]["access_kind"] == "local"
@@ -130,9 +136,15 @@ def test_init_local_returns_attached_contexts(skip_no_multigpu, device_info) -> 
             assert len(ctx.heap_metadata()["segments"]) == 1
             assert len(ctx.heap_metadata()["peer_exports"]) == 2
             assert {entry["peer_rank"] for entry in ctx.heap_metadata()["peer_exports"]} == {0, 1}
+            assert len(ctx.heap_metadata()["peer_export_catalog"]) == 2
+            assert {entry["peer_rank"] for entry in ctx.heap_metadata()["peer_export_catalog"]} == {0, 1}
+            assert {tuple(entry["segment_ids"]) for entry in ctx.heap_metadata()["peer_export_catalog"]} == {("heap",)}
             assert len(ctx.heap_metadata()["peer_imports"]) == 2
             assert {entry["peer_rank"] for entry in ctx.heap_metadata()["peer_imports"]} == {0, 1}
             assert {entry["access_kind"] for entry in ctx.heap_metadata()["peer_imports"]} == {"local", "peer_direct"}
+            assert len(ctx.heap_metadata()["peer_import_catalog"]) == 2
+            assert {entry["peer_rank"] for entry in ctx.heap_metadata()["peer_import_catalog"]} == {0, 1}
+            assert {tuple(entry["segment_ids"]) for entry in ctx.heap_metadata()["peer_import_catalog"]} == {("heap",)}
             assert len(ctx.heap_metadata()["peer_memory_map"]) == 2
             assert {entry["peer_rank"] for entry in ctx.heap_metadata()["peer_memory_map"]} == {0, 1}
             assert {entry["access_kind"] for entry in ctx.heap_metadata()["peer_memory_map"]} == {"local", "peer_direct"}

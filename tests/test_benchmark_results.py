@@ -113,9 +113,13 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["heap"]["segments"][0]["segment_id"] == "heap"
         assert payload["heap"]["peer_exports"][0]["peer_rank"] == 0
         assert payload["heap"]["peer_exports"][0]["segment_id"] == "heap"
+        assert payload["heap"]["peer_export_catalog"][0]["peer_rank"] == 0
+        assert payload["heap"]["peer_export_catalog"][0]["segment_ids"] == ["heap"]
         assert payload["heap"]["peer_imports"][0]["segment_id"] == "heap"
         assert payload["heap"]["peer_imports"][0]["peer_rank"] == 0
         assert payload["heap"]["peer_imports"][0]["access_kind"] == "local"
+        assert payload["heap"]["peer_import_catalog"][0]["peer_rank"] == 0
+        assert payload["heap"]["peer_import_catalog"][0]["segment_ids"] == ["heap"]
         assert len(payload["heap"]["peer_memory_map"]) == 1
         assert payload["heap"]["peer_memory_map"][0]["peer_rank"] == 0
         assert payload["heap"]["peer_memory_map"][0]["access_kind"] == "local"

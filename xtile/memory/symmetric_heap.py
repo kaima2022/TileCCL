@@ -191,6 +191,10 @@ class SymmetricHeap:
         self._heap_bases: Optional[torch.Tensor] = None
         self._peer_exports: list[PeerMemoryExportDescriptor] = []
         self._peer_imports: list[ImportedPeerMemory] = []
+        self._peer_export_catalog: tuple[tuple[PeerMemoryExportDescriptor, ...], ...] = ()
+        self._peer_import_catalog: tuple[tuple[ImportedPeerMemory, ...], ...] = ()
+        self._peer_export_index: dict[tuple[int, str], PeerMemoryExportDescriptor] = {}
+        self._peer_import_index: dict[tuple[int, str], ImportedPeerMemory] = {}
         self._peer_buffers: Optional[list[torch.Tensor]] = None
         self._mode: str = "single_process" if _peer_bases is not None or world_size == 1 else "multiprocess"
         self._transport_strategy: str = "local_only" if world_size == 1 else "unknown"
@@ -307,7 +311,14 @@ class SymmetricHeap:
             )
             heap._buffer = heap._allocator.buffer
             heap._local_ptr = heap._allocator.base_ptr
+            heap._heap_bases = None
+            heap._peer_exports = []
             heap._peer_imports = []
+            heap._peer_export_catalog = ()
+            heap._peer_import_catalog = ()
+            heap._peer_export_index = {}
+            heap._peer_import_index = {}
+            heap._peer_buffers = None
             heap._apply_peer_mapping_state(
                 peer_exports=heap._build_local_peer_exports(
                     transport="peer_access",
@@ -669,11 +680,58 @@ class SymmetricHeap:
         )
         self._peer_exports = resolved_exports
         self._peer_imports = resolved_imports
+        (
+            self._peer_export_catalog,
+            self._peer_export_index,
+        ) = self._build_peer_record_catalog(
+            records=self._peer_exports,
+            label="peer_exports",
+        )
+        (
+            self._peer_import_catalog,
+            self._peer_import_index,
+        ) = self._build_peer_record_catalog(
+            records=self._peer_imports,
+            label="peer_imports",
+        )
         self._refresh_heap_bases()
 
     def _peer_base_ptrs(self) -> list[int]:
         """Return mapped base pointers derived from the peer-import state."""
         return [imported.mapped_ptr for imported in self._peer_imports]
+
+    def _validate_rank_argument(self, *, rank: int, label: str = "rank") -> None:
+        """Validate one public rank argument against the heap world size."""
+        if rank < 0 or rank >= self._world_size:
+            raise ValueError(f"{label}={rank} out of range [0, {self._world_size})")
+
+    def _build_peer_record_catalog(
+        self,
+        *,
+        records: list[_PeerRecordT],
+        label: str,
+    ) -> tuple[tuple[_PeerRecordT, ...], dict[tuple[int, str], _PeerRecordT]]:
+        """Build segment-scoped rank catalogs for one peer-record collection."""
+        grouped: list[list[_PeerRecordT]] = [[] for _ in range(self._world_size)]
+        by_rank_and_segment: dict[tuple[int, str], _PeerRecordT] = {}
+        for record in records:
+            peer_rank = int(record.peer_rank)
+            if peer_rank < 0 or peer_rank >= self._world_size:
+                raise RuntimeError(
+                    "peer mapping state is inconsistent: "
+                    f"{label} contains out-of-range peer_rank={peer_rank} "
+                    f"for world_size={self._world_size}"
+                )
+            key = (peer_rank, record.segment_id)
+            if key in by_rank_and_segment:
+                raise RuntimeError(
+                    "peer mapping state is inconsistent: "
+                    f"{label} contains duplicate segment_id {record.segment_id!r} "
+                    f"for peer_rank={peer_rank}"
+                )
+            grouped[peer_rank].append(record)
+            by_rank_and_segment[key] = record
+        return tuple(tuple(records_for_rank) for records_for_rank in grouped), by_rank_and_segment
 
     def _refresh_heap_bases(self) -> None:
         """Refresh the device-resident heap-base tensor from peer imports."""
@@ -925,10 +983,7 @@ class SymmetricHeap:
             raise RuntimeError(
                 "Peer heap buffers are only available in single-process mode."
             )
-        if rank < 0 or rank >= self._world_size:
-            raise ValueError(
-                f"rank={rank} out of range [0, {self._world_size})"
-            )
+        self._validate_rank_argument(rank=rank)
         return self._peer_buffers[rank]
 
     @property
@@ -1027,33 +1082,99 @@ class SymmetricHeap:
         """Return the rank-visible peer export descriptors for this heap."""
         return tuple(self._peer_exports)
 
+    def peer_export_segments(self, rank: int) -> tuple[PeerMemoryExportDescriptor, ...]:
+        """Return all peer-export descriptors currently published for one rank."""
+        self._validate_rank_argument(rank=rank)
+        return self._peer_export_catalog[rank]
+
+    def peer_export_segment(
+        self,
+        rank: int,
+        segment_id: str,
+    ) -> PeerMemoryExportDescriptor:
+        """Return one peer-export descriptor addressed by rank and segment id."""
+        self._validate_rank_argument(rank=rank)
+        key = (rank, segment_id)
+        export = self._peer_export_index.get(key)
+        if export is not None:
+            return export
+        raise KeyError(
+            f"Unknown peer export segment_id {segment_id!r} for rank {rank}; "
+            f"available segments="
+            f"{[record.segment_id for record in self.peer_export_segments(rank)]}"
+        )
+
     def peer_export_descriptor(self, rank: int) -> PeerMemoryExportDescriptor:
-        """Return the peer-export descriptor for one rank."""
-        if rank < 0 or rank >= self._world_size:
-            raise ValueError(
-                f"rank={rank} out of range [0, {self._world_size})"
-            )
-        return self._peer_exports[rank]
+        """Return the primary-segment peer-export descriptor for one rank."""
+        return self.peer_export_segment(
+            rank,
+            self.primary_segment_descriptor().segment_id,
+        )
 
     def peer_export_metadata(self) -> list[dict[str, object]]:
         """Return peer-export metadata in JSON-friendly form."""
         return [export.to_dict() for export in self._peer_exports]
 
+    def peer_export_catalog_metadata(self) -> list[dict[str, object]]:
+        """Return peer-export metadata grouped by rank and segment."""
+        return [
+            {
+                "peer_rank": rank,
+                "segment_count": len(exports),
+                "segment_ids": [export.segment_id for export in exports],
+                "segments": [export.to_dict() for export in exports],
+            }
+            for rank, exports in enumerate(self._peer_export_catalog)
+        ]
+
     def peer_imports(self) -> tuple[ImportedPeerMemory, ...]:
         """Return the structured peer-import records for this heap."""
         return tuple(self._peer_imports)
 
+    def peer_import_segments(self, rank: int) -> tuple[ImportedPeerMemory, ...]:
+        """Return all peer-import records currently resolved for one rank."""
+        self._validate_rank_argument(rank=rank)
+        return self._peer_import_catalog[rank]
+
+    def peer_import_segment(
+        self,
+        rank: int,
+        segment_id: str,
+    ) -> ImportedPeerMemory:
+        """Return one peer-import record addressed by rank and segment id."""
+        self._validate_rank_argument(rank=rank)
+        key = (rank, segment_id)
+        imported = self._peer_import_index.get(key)
+        if imported is not None:
+            return imported
+        raise KeyError(
+            f"Unknown peer import segment_id {segment_id!r} for rank {rank}; "
+            f"available segments="
+            f"{[record.segment_id for record in self.peer_import_segments(rank)]}"
+        )
+
     def peer_import(self, rank: int) -> ImportedPeerMemory:
-        """Return the structured peer-import record for one rank."""
-        if rank < 0 or rank >= self._world_size:
-            raise ValueError(
-                f"rank={rank} out of range [0, {self._world_size})"
-            )
-        return self._peer_imports[rank]
+        """Return the primary-segment peer-import record for one rank."""
+        return self.peer_import_segment(
+            rank,
+            self.primary_segment_descriptor().segment_id,
+        )
 
     def peer_import_metadata(self) -> list[dict[str, object]]:
         """Return peer-import metadata in JSON-friendly form."""
         return [imported.to_dict() for imported in self._peer_imports]
+
+    def peer_import_catalog_metadata(self) -> list[dict[str, object]]:
+        """Return peer-import metadata grouped by rank and segment."""
+        return [
+            {
+                "peer_rank": rank,
+                "segment_count": len(imports),
+                "segment_ids": [imported.segment_id for imported in imports],
+                "segments": [imported.to_dict() for imported in imports],
+            }
+            for rank, imports in enumerate(self._peer_import_catalog)
+        ]
 
     def peer_memory_map(self) -> tuple[PeerMemoryMapEntry, ...]:
         """Return the structured peer-memory mapping table."""
@@ -1080,7 +1201,9 @@ class SymmetricHeap:
             "segments": self.segment_metadata(),
             "exportable_segments": self.exportable_segment_metadata(),
             "peer_exports": self.peer_export_metadata(),
+            "peer_export_catalog": self.peer_export_catalog_metadata(),
             "peer_imports": self.peer_import_metadata(),
+            "peer_import_catalog": self.peer_import_catalog_metadata(),
             "peer_memory_map": self.peer_memory_map_metadata(),
         }
 
@@ -1108,10 +1231,7 @@ class SymmetricHeap:
         Converts a pointer within **this** rank's heap to the equivalent
         pointer in *to_rank*'s heap.
         """
-        if to_rank < 0 or to_rank >= self._world_size:
-            raise ValueError(
-                f"to_rank={to_rank} out of range [0, {self._world_size})"
-            )
+        self._validate_rank_argument(rank=to_rank, label="to_rank")
         offset = self.get_offset(local_ptr)
         return self.peer_import(to_rank).mapped_ptr + offset
 
@@ -1168,6 +1288,10 @@ class SymmetricHeap:
         self._heap_bases = None
         self._peer_exports = []
         self._peer_imports = []
+        self._peer_export_catalog = ()
+        self._peer_import_catalog = ()
+        self._peer_export_index = {}
+        self._peer_import_index = {}
         self._peer_buffers = None
         self._alloc_records.clear()
         self._bump_offset = 0
