@@ -54,6 +54,8 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert heap_metadata["allocator"]["capabilities"]["external_mapping"] is False
         assert heap_metadata["allocator"]["external_tensor_import_mode"] == "copy"
         assert heap_metadata["allocator"]["external_mapping_mode"] == "none"
+        assert heap_metadata["external_memory_interface"]["mapping_mode"] == "none"
+        assert heap_metadata["external_memory_interface"]["copy_import_supported"] is True
         assert heap_metadata["segment_layout"]["layout_kind"] == "single_exportable_segment"
         assert heap_metadata["segment_layout"]["primary_segment_id"] == "heap"
         assert len(heap_metadata["exportable_segments"]) == 1
@@ -88,6 +90,7 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         assert runtime_metadata["backend"] == device_info.backend
         assert runtime_metadata["has_heap"] is True
         assert runtime_metadata["heap"]["local_base"] == ctx.heap.local_base
+        assert ctx.heap.external_memory_interface()["mapping_mode"] == "none"
         assert ctx.heap.segment_layout()["primary_segment_id"] == "heap"
         assert ctx.heap.allocator_memory_model()["external_mapping_mode"] == "none"
 
@@ -121,6 +124,7 @@ def test_init_local_returns_attached_contexts(skip_no_multigpu, device_info) -> 
             assert int(ctx.heap_bases[rank].item()) == ctx.heap.local_base
             assert ctx.heap_metadata()["transport_strategy"] == "peer_access"
             assert ctx.heap_metadata()["segment_layout"]["exportable_segment_ids"] == ["heap"]
+            assert ctx.heap_metadata()["external_memory_interface"]["mapping_mode"] == "none"
             assert len(ctx.heap_metadata()["exportable_segments"]) == 1
             assert ctx.heap_metadata()["exportable_segments"][0]["segment_id"] == "heap"
             assert len(ctx.heap_metadata()["segments"]) == 1

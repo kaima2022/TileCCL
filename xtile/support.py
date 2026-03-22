@@ -224,6 +224,13 @@ def describe_runtime_support(
             else "Attach a heap to inspect allocator external-mapping capability. "
             "The current default torch_bump backend does not implement zero-copy external mapping.",
         ),
+        "symmetric_heap.external_memory_interface": SupportStatus(
+            "supported" if has_heap else "partial",
+            "Heap exposes the allocator's structured external-memory interface descriptor, "
+            "including import mode, mapping mode, and zero-copy capability flags."
+            if has_heap
+            else "Attach a heap before querying allocator external-memory interface metadata.",
+        ),
         "symmetric_heap.segment_metadata": SupportStatus(
             "supported" if has_heap else "partial",
             "Heap exposes allocator-owned local segment metadata for the active heap backend."

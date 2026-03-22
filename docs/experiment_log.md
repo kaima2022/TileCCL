@@ -2914,3 +2914,58 @@ XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
 
 - runtime 现在已经正式区分 full segment catalog 与 exportable segment catalog
 - 这一步是 segmented import-map 的准备接口，不代表 multi-segment backend 已落地
+
+### Part Y: external memory interface is now a first-class runtime surface (2026-03-22)
+
+继续往 external mapping 的准备接口推进，这一轮把 external interop 也正式收口成 descriptor。
+
+本轮完成：
+
+- `ExternalMemoryInterfaceDescriptor`
+- allocator metadata 新增 `external_memory_interface`
+- `SymmetricHeap.external_memory_interface_descriptor()` / `external_memory_interface()`
+- support matrix 新增 `memory["symmetric_heap.external_memory_interface"]`
+
+当前 `torch_bump` runtime 现在能正式表达：
+
+- `import_mode = "copy"`
+- `mapping_mode = "none"`
+- `copy_import_supported = true`
+- `zero_copy_mapping_supported = false`
+- `fd_passing = false`
+- `dmabuf_mapping = false`
+
+这一步的意义是：
+
+- external import / external mapping 不再只是 capability bool + mode string 的松散组合
+- future FD passing / DMA-BUF backend 可以直接在 `external_memory_interface` 上演进
+- 这让 external interop 层开始接近 canonical backend 需要的稳定 schema
+
+这一步没有做的事情：
+
+- 没有实现 zero-copy external mapping
+- 没有改变 `external_mapping=false`
+- 没有放大 public support 面
+
+回归：
+
+```bash
+python -m compileall xtile/memory/allocators.py xtile/memory/symmetric_heap.py xtile/support.py tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py
+
+pytest -q tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py
+
+pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py
+XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 \
+  pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py
+```
+
+结果：
+
+- `tests/test_memory/test_symmetric_heap.py tests/test_context.py tests/test_benchmark_results.py tests/test_support.py tests/test_cli_support.py` → `66 passed in 5.50s`
+- `allgather + gemm_allgather` → `2 passed in 37.79s`
+- opt-in `reduce_scatter + gemm_reducescatter` → `4 passed in 64.83s`
+
+结论：
+
+- `external_memory_interface` 现在已成为正式 runtime surface
+- 这一步是 external mapping 的准备接口，不代表 external mapping backend 已实现

@@ -108,6 +108,31 @@ class AllocatorSegmentLayoutDescriptor:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalMemoryInterfaceDescriptor:
+    """Structured description of one allocator's external-memory interface."""
+
+    allocator_name: str
+    import_mode: str
+    mapping_mode: str
+    copy_import_supported: bool
+    zero_copy_mapping_supported: bool
+    fd_passing: bool
+    dmabuf_mapping: bool
+
+    def to_dict(self) -> dict[str, object]:
+        """Return JSON-friendly external-memory interface metadata."""
+        return {
+            "allocator_name": self.allocator_name,
+            "import_mode": self.import_mode,
+            "mapping_mode": self.mapping_mode,
+            "copy_import_supported": self.copy_import_supported,
+            "zero_copy_mapping_supported": self.zero_copy_mapping_supported,
+            "fd_passing": self.fd_passing,
+            "dmabuf_mapping": self.dmabuf_mapping,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PeerMemoryExportDescriptor:
     """Structured description of one exportable peer-memory region."""
 
@@ -405,6 +430,23 @@ class BaseSymmetricAllocator(ABC):
         """Return JSON-friendly exportable segment-layout metadata."""
         return self.segment_layout_descriptor().to_dict()
 
+    def external_memory_interface_descriptor(self) -> ExternalMemoryInterfaceDescriptor:
+        """Return the allocator's structured external-memory interface descriptor."""
+        capabilities = self.capabilities()
+        return ExternalMemoryInterfaceDescriptor(
+            allocator_name=self.name,
+            import_mode=self.external_tensor_import_mode(),
+            mapping_mode=self.external_mapping_mode(),
+            copy_import_supported=bool(capabilities["external_import_copy"]),
+            zero_copy_mapping_supported=bool(capabilities["external_mapping"]),
+            fd_passing=bool(capabilities["fd_passing"]),
+            dmabuf_mapping=bool(capabilities["dmabuf_mapping"]),
+        )
+
+    def external_memory_interface(self) -> dict[str, object]:
+        """Return JSON-friendly external-memory interface metadata."""
+        return self.external_memory_interface_descriptor().to_dict()
+
     def describe(self) -> dict[str, object]:
         """Return structured allocator metadata for docs and diagnostics."""
         segments = self.segment_descriptors()
@@ -419,6 +461,7 @@ class BaseSymmetricAllocator(ABC):
             "capabilities": self.capabilities(),
             "external_tensor_import_mode": self.external_tensor_import_mode(),
             "external_mapping_mode": self.external_mapping_mode(),
+            "external_memory_interface": self.external_memory_interface(),
             "segment_layout": self.segment_layout(),
             "peer_transport_modes": list(self.peer_transport_modes()),
             "peer_import_access_kinds": list(self.peer_import_access_kinds()),

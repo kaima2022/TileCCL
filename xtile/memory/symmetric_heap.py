@@ -42,6 +42,7 @@ from xtile.memory.allocators import (
     AllocatorMemoryModelDescriptor,
     AllocatorSegmentLayoutDescriptor,
     BaseSymmetricAllocator,
+    ExternalMemoryInterfaceDescriptor,
     ImportedPeerMemory,
     MemorySegmentDescriptor,
     PeerMemoryExportDescriptor,
@@ -934,6 +935,16 @@ class SymmetricHeap:
         """Return allocator segment-layout metadata in JSON-friendly form."""
         return self._allocator.segment_layout()
 
+    def external_memory_interface_descriptor(
+        self,
+    ) -> ExternalMemoryInterfaceDescriptor:
+        """Return the allocator's structured external-memory interface descriptor."""
+        return self._allocator.external_memory_interface_descriptor()
+
+    def external_memory_interface(self) -> dict[str, object]:
+        """Return allocator external-memory interface metadata."""
+        return self._allocator.external_memory_interface()
+
     def segment_descriptors(self) -> tuple[MemorySegmentDescriptor, ...]:
         """Return the local allocator-owned segment descriptors."""
         return self._allocator.segment_descriptors()
@@ -1023,6 +1034,7 @@ class SymmetricHeap:
             "mode": self._mode,
             "transport_strategy": self._transport_strategy,
             "allocator": self.allocator_metadata(),
+            "external_memory_interface": self.external_memory_interface(),
             "segment_layout": self.segment_layout(),
             "segments": self.segment_metadata(),
             "exportable_segments": self.exportable_segment_metadata(),

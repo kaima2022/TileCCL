@@ -773,6 +773,15 @@ class TestSymmetricHeapUnit:
         assert metadata["capabilities"]["dmabuf_mapping"] is False
         assert metadata["external_tensor_import_mode"] == "copy"
         assert metadata["external_mapping_mode"] == "none"
+        assert metadata["external_memory_interface"] == {
+            "allocator_name": "torch_bump",
+            "import_mode": "copy",
+            "mapping_mode": "none",
+            "copy_import_supported": True,
+            "zero_copy_mapping_supported": False,
+            "fd_passing": False,
+            "dmabuf_mapping": False,
+        }
         assert metadata["segment_layout"] == {
             "allocator_name": "torch_bump",
             "layout_kind": "single_exportable_segment",
@@ -864,6 +873,23 @@ class TestSymmetricHeapUnit:
         assert exportable_metadata[0]["is_primary_segment"] is True
         assert exportable_metadata[0]["owner_rank"] == symmetric_heap.rank
         assert exportable_metadata[0]["is_local_rank"] is True
+
+    def test_external_memory_interface_accessor_reports_structured_schema(
+        self,
+        symmetric_heap,
+    ) -> None:
+        """Heap should expose the allocator external-memory interface directly."""
+        descriptor = symmetric_heap.external_memory_interface_descriptor()
+        interface = symmetric_heap.external_memory_interface()
+
+        assert descriptor.allocator_name == symmetric_heap.allocator_name
+        assert descriptor.import_mode == "copy"
+        assert descriptor.mapping_mode == "none"
+        assert descriptor.copy_import_supported is True
+        assert descriptor.zero_copy_mapping_supported is False
+        assert descriptor.fd_passing is False
+        assert descriptor.dmabuf_mapping is False
+        assert interface == descriptor.to_dict()
 
     def test_allocator_memory_model_accessor_reports_structured_schema(
         self,

@@ -89,6 +89,8 @@ def test_runtime_metadata_snapshot_from_context(
         assert payload["heap"]["allocator"]["capabilities"]["external_mapping"] is False
         assert payload["heap"]["allocator"]["external_tensor_import_mode"] == "copy"
         assert payload["heap"]["allocator"]["external_mapping_mode"] == "none"
+        assert payload["heap"]["external_memory_interface"]["mapping_mode"] == "none"
+        assert payload["heap"]["external_memory_interface"]["copy_import_supported"] is True
         assert payload["heap"]["segment_layout"]["primary_segment_id"] == "heap"
         assert payload["heap"]["segment_layout"]["exportable_segment_ids"] == ["heap"]
         assert payload["heap"]["exportable_segments"][0]["segment_id"] == "heap"
