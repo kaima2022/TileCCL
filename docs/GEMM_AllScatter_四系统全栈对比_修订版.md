@@ -538,244 +538,248 @@ translated_ptr 指向 GPU2 的内存地址
 
 ---
 
-## 系统四：XTile（设想）
+## 系统四：XTile（当前实现）
 
-【修订】本节保留“目标接口 / 设想 API”的表达方式，但不应再被理解为当前 `XTile/` 仓库已全部公开这些接口。当前真实实现与限制，请以《XTile现状流程_修订版.md》为准。
+【修订】本节按当前 `XTile/` 仓库代码重写，不再沿用“目标态伪接口”口径。当前真实公开入口包括：
 
-【新增核对】下面这节里的部分代码块仍然是“目标态伪接口”，例如 `ctx.randn(...)`、`ctx.empty(...)`、`xtile.fused_gemm_scatter(...)`。这些名字当前并不是仓库里可直接调用的一键 API。
+- `xtile.init(...)`、`xtile.init_local(...)`、`xtile.current_context()`
+- `xtile.ops.gemm_allscatter(...)`、`gemm_allscatter_sharded(...)`
+- `xtile.ops.gemm_allgather(...)`、`gemm_reducescatter(...)`
+- `xtile.ops.allgather(...)`、`allreduce(...)`、`reduce_scatter(...)`
+- `ctx.empty(...)`、`ctx.zeros(...)`、`ctx.randn(...)`、`ctx.workspace(...)`
+- `ctx.auto_select_pattern(...)` 和 `xtile.patterns.auto_select(...)`
 
-### 第 1 层：用户代码（Triton + XTile auto-select）
+也就是说，旧文里把 `ctx.randn(...)`、`ctx.empty(...)` 说成“目标态伪接口”已经不准确；真正不存在的是 `xtile.fused_gemm_scatter(...)` 这个名字。
+
+还要补一条实现层面的事实：当前 `gemm_allscatter(...)` 是 pattern-centric 主路径；而 `gemm_allgather(...)` / `gemm_reducescatter(...)` 虽然也有稳定公开 host API，但实现上更保守，分别复用验证过的 `allgather` / `reduce_scatter` 路径。
+
+### 第 1 层：用户代码（当前真实 host API）
 
 ```python
-import triton
-import triton.language as tl
+import torch
 import xtile
+from xtile import ops
+from xtile.patterns import auto_select
 
-# ====== 方式 A：一键自动（最简单，目标态伪代码）======
-def run_auto(rank, world_size):
-    ctx = xtile.init(backend="auto")  # 自动检测 NVIDIA / AMD
-    A = ctx.randn((M, K), dtype=torch.float16)
-    B = ctx.randn((K, N), dtype=torch.float16)
-    C = ctx.empty((M, N * world_size), dtype=torch.float16)
+# ====== 方式 A：稳定公开的高层 host API ======
+ctx = xtile.init(backend="auto", heap_size=1 << 30)
 
-    # auto-select 根据 (M,N,K,world_size,hw_info) 选择最优 pattern
-    result = xtile.fused_gemm_scatter(
-        A, B, C,
-        strategy="auto",  # 自动选择 pattern
-        ctx=ctx
-    )
-    # 【修订】如果代入当前仓库里的 heuristics：
-    #   N=4608, K=36864, 4 GPUs → N/world_size=1152
-    #   不满足 fused_sequential 的 < 1024 分支
-    #   → 更接近 ProducerConsumerPattern，而不是 fused_sequential
+# 这些 tensor 直接从 attached symmetric heap 分配，不是伪 API
+A = ctx.randn(8192, 36864, dtype=torch.float16)
+B = ctx.randn(36864, 4608, dtype=torch.float16)
+C = ctx.zeros(8192, 4608, dtype=torch.float16)
 
-# ====== 方式 B：手动控制（高级用户）======
-@triton.jit
-def manual_fused_gemm_allscatter(
-    A, B, C,
-    M, N, K,
-    cur_rank, world_size,
-    heap_bases,       # <--- 与 Iris 相同的 symmetric heap
-    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr,
-    BLOCK_K: tl.constexpr, NUM_SMS: tl.constexpr,
-):
-    pid = tl.program_id(0)
-    total_tiles = tl.cdiv(M, BLOCK_M) * tl.cdiv(N, BLOCK_N)
+# 当前稳定用户契约默认是 full/full，不是旧文里的“一键 fused_gemm_scatter”
+ops.gemm_allscatter(A, B, C, ctx=ctx, pattern="auto")
 
-    for tile_id in range(pid, total_tiles, NUM_SMS):
-        # --- GEMM 计算（与 Iris 完全相同）---
-        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
-        for k in range(tl.cdiv(K, BLOCK_K)):
-            a = tl.load(A_ptr)
-            b = tl.load(B_ptr)
-            acc += tl.dot(a, b)
-            A_ptr += BLOCK_K * stride_ak
-            B_ptr += BLOCK_K * stride_bk
 
-        c = acc.to(tl.float16)
+# ====== 方式 B：先 build plan，再重复执行 ======
+plan = ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="auto")
+plan.execute(A, B, C)
 
-        # --- 通信：与 Iris 原语级别相同 ---
-        mask = (rm[:, None] < M) & (rn[None, :] < N)
-        offset = rm[:, None] * stride_cm + (rn[None, :] + cur_rank * N) * stride_cn
 
-        for remote_rank in range(world_size):
-            xtile.tile_remote_store(         # <--- XTile 原语
-                C + offset, c,
-                cur_rank, remote_rank,
-                heap_bases, mask=mask
-            )
+# ====== 方式 C：直接拿 pattern 对象 ======
+pattern = auto_select(
+    "gemm_allscatter",
+    M=8192,
+    N=4608,
+    K=36864,
+    world_size=ctx.world_size,
+    ctx=ctx,
+)
+pattern.execute(A, B, C)
 
-# ====== 方式 C：Workgroup Specialization（用同一个库切换 pattern）======
-@triton.jit
-def wg_specialized_gemm_allscatter(
-    A, B, C, locks,
-    heap_bases,
-    COMPUTE_SMS: tl.constexpr, COMM_SMS: tl.constexpr,
-    ...
-):
-    pid = tl.program_id(0)
 
-    if pid < COMPUTE_SMS:
-        # 计算 worker：做 GEMM + signal
-        for tile_id in range(pid, total_tiles, COMPUTE_SMS):
-            acc = gemm_tile(A, B, tile_id, ...)
-            tl.store(C + offset, acc, mask=mask, cache_modifier=".wt")
-            xtile.tile_signal(locks, tile_id, sem="release", scope="gpu")
-    else:
-        # 通信 worker：wait + scatter
-        comm_pid = pid - COMPUTE_SMS
-        for tile_id in range(comm_pid, total_tiles, COMM_SMS):
-            xtile.tile_wait(locks, tile_id, sem="acquire", scope="gpu")
-            for remote_rank in range(world_size):
-                if remote_rank != cur_rank:
-                    xtile.tile_put(
-                        C + offset, C + offset,
-                        cur_rank, remote_rank,
-                        heap_bases, mask=mask
-                    )
-
-# ⚠️ 三种方式使用【同一套原语】，只是组合方式不同
-# ⚠️ 如果映射回当前仓库，auto-select 选择的是具体 pattern，而不是只有方式 B / C 两种
+# ====== 方式 D：专家模式 shard/shard 契约 ======
+B_shard = ctx.randn(36864, 1152, dtype=torch.float16)
+C_shard = ctx.zeros(8192, 1152, dtype=torch.float16)
+ops.gemm_allscatter_sharded(A, B_shard, C_shard, full_N=4608, ctx=ctx, pattern="auto")
 ```
 
-### 第 2 层：编译（标准 Triton，无特殊步骤）
+当前仓库里真正可选的 overlap pattern 是四个具体类：
+
+- `BulkSyncPattern`：先跑 GEMM kernel，再 `backend.synchronize()`，再跑 scatter kernel。
+- `FusedSequentialPattern`：单个 fused persistent Triton kernel。
+- `ProducerConsumerPattern`：两条 stream，上面分别跑 producer/consumer kernel，用 lock tensor 同步。
+- `WGSpecializedPattern`：单个 kernel，`pid < COMPUTE_SMS` 做计算，其余 workgroup 做通信。
+
+所以旧文“方式 A/B/C”的说法需要改成：当前 XTile 是“高层 host op + plan + pattern + primitives”四层并存，而不是只有一个伪造的一键 API。
+
+### 第 2 层：编译（标准 Triton JIT，无额外 distributed dialect）
 
 ```
-与 Iris 完全相同：标准 Triton 编译流水线。
-xtile.tile_remote_store 内部就是 `translate_ptr + tl.store`。
-【修订】xtile.tile_signal 内部是 `tl.atomic_xchg`；`tile_wait` 才是 `tl.atomic_cas` 自旋等待。
-编译器对所有操作完全可见。
+host 侧：
+  xtile.ops.* / build_*_plan(...)
+    → 校验 tensor 契约
+    → 解析 layout / storage_kind
+    → 选择 pattern（显式指定或 auto-select）
+    → 启动普通 Triton kernel
 
-唯一的差异在 host-side：
-  xtile.init(backend="auto")
-    → 检测硬件 → 选择 CUDA IPC 或 HIP IPC
-    → 建立 symmetric heap
-    → 返回 heap_bases tensor
+device 侧：
+  translate_ptr(...)
+  tile_remote_load/store(...)
+  tile_put/get(...)
+  tile_signal / tile_wait / tile_atomic_*
+    → 全部还是标准 Triton `@triton.jit` 函数
+    → 进入正常 Triton IR / GPU IR / backend codegen 流水线
 ```
 
-### 第 3 层：通信底层（统一的纯 Triton 实现）
+这里要把“完全可见”说得更精确一些：
+
+- `tile_remote_store` 的核心确实是 `translate_ptr + tl.store`
+- `tile_remote_load` 的核心是 `translate_ptr + tl.load`
+- `tile_signal` 是本地 lock 上的 `tl.atomic_xchg`
+- `tile_wait` 是本地 lock 上的 `tl.atomic_cas` 自旋等待
+
+因此，XTile 没有像 Triton-distributed 那样再引入一层额外 distributed dialect；但这不等于当前编译器已经自动完成了所有跨 GPU 调度优化，更准确的说法是“通信在 IR 形态上仍是 Triton 可见的 load/store/atomic 组合”。
+
+### 第 3 层：通信底层（真实 primitives）
+
+当前仓库里的 device-side 通信原语主要分三组：
 
 ```python
-@triton.jit
-def tile_remote_store(pointer, value, from_rank, to_rank, heap_bases, mask=None):
-    # 与 Iris 的 iris.store 实现完全相同
-    translated_ptr = __translate(pointer, from_rank, to_rank, heap_bases)
-    tl.store(translated_ptr, value, mask=mask)
+from xtile.memory.translation import translate_ptr
 
-@triton.jit
-def tile_signal(locks, tile_id, sem="release", scope="gpu"):
-    # 信号原语（借鉴 TileLink 的概念，用 Iris 的 atomic 实现）
-    tl.atomic_xchg(locks + tile_id, 1, sem=sem, scope=scope)
+from xtile.primitives.communication import (
+    tile_remote_load,
+    tile_remote_store,
+    tile_put,
+    tile_get,
+)
 
-@triton.jit
-def tile_wait(locks, tile_id, sem="acquire", scope="gpu"):
-    while tl.atomic_cas(locks + tile_id, 1, 0, sem=sem, scope=scope) == 0:
-        pass
+from xtile.sync.primitives import (
+    tile_atomic_add,
+    tile_atomic_cas,
+    tile_atomic_xchg,
+    tile_atomic_min,
+    tile_atomic_max,
+    tile_atomic_and,
+    tile_atomic_or,
+    tile_atomic_xor,
+    tile_signal,
+    tile_wait,
+)
 
-# 新增：tile 级 collective（Iris 没有的）
-@triton.jit
-def tile_allreduce(local_tile, heap_bases, rank, world_size, op="sum"):
-    # Ring AllReduce 的 tile 粒度实现
-    for step in range(world_size - 1):
-        peer = (rank + step + 1) % world_size
-        # 从 peer 读取对应 tile
-        peer_tile = tile_remote_load(buffer, peer, rank, heap_bases, mask)
-        # 本地 reduce
-        if op == "sum":
-            local_tile += peer_tile
-        # 同步
-        tile_signal(barriers, step, sem="release", scope="sys")
-        tile_wait(barriers, step + world_size, sem="acquire", scope="sys")
-    return local_tile
-
-# ⚠️ 所有通信都是 tl.load / tl.store / tl.atomic_*
-# ⚠️ 编译器完全可见
-# ⚠️ 在 NVIDIA 和 AMD 上用完全相同的 Triton 代码
+from xtile.primitives.collectives import (
+    tile_allreduce,
+    tile_allgather,
+    tile_scatter,
+    tile_reduce_scatter,
+    tile_broadcast,
+)
 ```
 
-### 第 4 层：内存建立（跨平台 HAL）
+应当这样理解它们：
+
+- `translate_ptr` 是核心地址翻译层，把一个 rank 的 heap 内指针映射成另一个 rank 可解引用的地址。
+- `tile_remote_load/store` 是寄存器和远端显存之间的 value-based 读写。
+- `tile_put/get` 是本地显存和远端显存之间的 pointer-based 拷贝。
+- `tile_atomic_*` 是“可远端”的 atomic，内部会先做 `translate_ptr`。
+- `tile_signal` / `tile_wait` 默认是本地同步原语，本身不做指针翻译；如果要跨 GPU 对锁地址操作，必须先把锁指针翻译到本 rank 地址空间。
+- `tile_allreduce`、`tile_allgather`、`tile_scatter`、`tile_reduce_scatter`、`tile_broadcast` 现在都已经有真实 device-side 实现，不应再写成“代码已写但仍只是设想”。
+
+### 第 4 层：内存建立（当前 runtime / symmetric heap）
+
+当前仓库里的内存建立路径不是旧文那种简化版“自动选 CUDA IPC 或 HIP IPC”一句话能概括完的，而是两个明确模式：
 
 ```python
-class XTileContext:
-    def __init__(self, backend="auto"):
-        # 自动检测硬件
-        if backend == "auto":
-            if torch.cuda.get_device_properties(0).name.startswith("NVIDIA"):
-                self.backend = CUDABackend()
-            else:
-                self.backend = HIPBackend()
+# 路径 A：单进程多 GPU，当前推荐入口
+contexts = xtile.init_local(world_size=2, heap_size=1 << 30)
+# 内部走 SymmetricHeap.create_all(...)
+# -> enable_peer_access
+# -> 直接交换 peer bases
+# -> heap.mode = "single_process"
+# -> transport_strategy = "peer_access"
 
-        self.heap = self.backend.create_symmetric_heap(size)
 
-    # ====== CUDA Backend ======
-    class CUDABackend:
-        def create_symmetric_heap(self, size):
-            ptr = cuda.cudaMalloc(size)
-            handle = cuda.cudaIpcGetMemHandle(ptr)
-            # ... 交换 handles（与 Iris 的 HIP 流程对称）
-            peer_ptr = cuda.cudaIpcOpenMemHandle(peer_handle)
-            return heap_bases
-
-    # ====== HIP Backend ======
-    class HIPBackend:
-        def create_symmetric_heap(self, size):
-            ptr = hip.hipMalloc(size)
-            handle = hip.hipIpcGetMemHandle(ptr)
-            # ... 交换 handles（与 Iris 完全相同）
-            peer_ptr = hip.hipIpcOpenMemHandle(peer_handle)
-            return heap_bases
-
-    # ⚠️ Host-side 是唯一有平台差异的地方
-    # ⚠️ Device-side 的 __translate / tl.store 在两个平台完全相同
+# 路径 B：rank-local / 多进程初始化
+ctx = xtile.init(backend="auto", heap_size=1 << 30)
+# 如果 world_size > 1，这条路径要求 torch.distributed 已经初始化
+# 内部 heap.mode = "multiprocess"
+# 默认公开 transport 是 ctypes_ipc
 ```
+
+这里需要把“当前实现已 fully solved 的跨平台 HAL”改成更保守、更贴近代码的说法：
+
+- `SymmetricHeap` 当前明确区分 `single_process` 和 `multiprocess` 两种模式。
+- 单进程路径很强，`SymmetricHeap.create_all(...)` 会启用 peer access，并把各 rank heap base 直接放进 `heap_bases`。
+- 多进程路径当前默认公开 transport 只有 `ctypes_ipc`；`pytorch_ipc` 和 `peer_access_pointer_exchange` 只保留在显式 force-transport 的诊断路径里。
+- feature gate 明确把“validated public multiprocess device remote access / device collectives”限制在 `world_size=2` 且 `transport_strategy='ctypes_ipc'`。
+- allocator-backed symmetric heap 已经存在，当前默认 allocator 是 `torch_bump`。
+- `as_symmetric()` / `import_external_tensor()` 可用，但属于导入/物化路径；canonical segmented peer import/map 仍未实现，zero-copy external mapping 也还不支持。
 
 ### 第 5 层：硬件执行
 
 ```
-NVIDIA H100:
-  tl.store(translated_ptr) → SM → L2 miss → NVLink → 远端 GPU HBM
+kernel 内部：
+  local ptr
+    → translate_ptr(...)
+    → remote-accessible ptr
+    → tl.load / tl.store / tl.atomic_*
 
-AMD MI300X:
-  tl.store(translated_ptr) → CU → L2 miss → Infinity Fabric → 远端 GPU HBM
+运行时前提：
+  single_process: peer_access
+  multiprocess: imported peer mapping / IPC transport
 
-# 硬件行为完全相同：一个 store 指令写到远端地址
-# GPU 的 memory controller 自动路由
-# XTile 不关心底层是 NVLink 还是 Infinity Fabric
+硬件实际路由：
+  由当前 backend、heap mode、transport_strategy、机器拓扑共同决定
 ```
 
-### 新增：Auto-Select 引擎
+因此，XTile 这层最稳妥的总结不是“完全不关心底层链路”，而是：
 
-【修订】如果把这一节从“设想”落回当前仓库，真实签名更接近
-`auto_select(op, M, N, K, world_size, hw_info=None, ctx=None)`；
-而对本例 `M=8192, N=4608, K=36864, world_size=4`，当前 heuristics 会更接近 `ProducerConsumerPattern`。
+- device-side 表达统一成“翻译后的远端地址 + Triton memory op”
+- host/runtime 侧仍然要负责把远端 heap 映射成当前 GPU 可解引用的地址
+- 真正走 NVLink、PCIe、Infinity Fabric 或其他互连，取决于运行环境和拓扑，不由 Python API 单独决定
+
+### 新增：Auto-Select 引擎（当前源码 heuristic）
+
+当前真实签名是：
+
+`auto_select(op, M, N, K, world_size, hw_info=None, ctx=None)`
+
+几个必须和代码对齐的点：
+
+- 当前源码接受的 `op` 有 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`
+- 传 `ctx` 时返回“已绑定上下文的 pattern 实例”；不传 `ctx` 时返回 pattern 类本身
+- heuristic 里真正参与分支的不只是 `M/N/K`，还有 `bw_scale`、`total_tiles_128`、`sm_count`
 
 ```python
 def auto_select(op, M, N, K, world_size, hw_info=None, ctx=None):
-    """
-    更接近当前仓库实现的 heuristic（省略了 bw_scale / total_tiles 等细节）：
+    n_per_rank = N // max(world_size, 1)
+    total_tiles_128 = ((M + 127) // 128) * ((n_per_rank + 127) // 128)
 
-    输入: M=8192, N=4608, K=36864, world_size=4
-    """
-    n_per_rank = N // world_size  # 1152
+    if hw_info is not None:
+        sm_count = getattr(hw_info, "compute_units", 132)
+        bw_gb_s = getattr(hw_info, "link_bandwidth_gbps", 300.0)
+    else:
+        sm_count, bw_gb_s = _detect_hardware_info()
+
+    bw_scale = bw_gb_s / 300.0 if bw_gb_s > 0 else 1.0
+    compute_intensity = (2 * M * n_per_rank * K) / max(M * n_per_rank * 2, 1)
 
     if M < 256:
-        return BulkSyncPattern(ctx)
-
-    elif n_per_rank < 1024 and K > 12288:
-        return FusedSequentialPattern(ctx)
-
-    elif n_per_rank < 2048 and K > 6144:
-        return ProducerConsumerPattern(ctx)
-
-    elif N > 4096 and K > 8192:
-        return WGSpecializedPattern(ctx)
-
+        selected = BulkSyncPattern
+    elif n_per_rank < 1024 and K > int(12288 * bw_scale):
+        selected = FusedSequentialPattern
+    elif n_per_rank < 2048 and K > int(6144 * bw_scale):
+        selected = ProducerConsumerPattern
+    elif total_tiles_128 >= sm_count and K > int(4096 * bw_scale):
+        selected = WGSpecializedPattern
+    elif N > 4096 and K > int(8192 * bw_scale):
+        selected = WGSpecializedPattern
+    elif compute_intensity > 256 and total_tiles_128 > 16:
+        selected = FusedSequentialPattern
     else:
-        return BulkSyncPattern(ctx)  # 安全默认
-
-    # 本例: n_per_rank=1152 < 2048, K=36864 > 6144
-    # → 更接近 ProducerConsumerPattern ✓
+        selected = BulkSyncPattern
 ```
+
+对本文例子 `M=8192, N=4608, K=36864, world_size=4`：
+
+- `n_per_rank = 1152`
+- `total_tiles_128 = 64 * 9 = 576`
+- 在当前源码默认回退硬件参数 `sm_count=132, bw_gb_s=300.0` 下，会命中 `ProducerConsumerPattern`
+
+所以，旧文这里如果写成 “`fused_gemm_scatter(..., strategy="auto")` 自动选某个抽象策略”，不如直接改成：当前 XTile 是 `xtile.ops.*` 或 `ctx.auto_select_pattern(...)` 选择四个真实 pattern 类之一。
 
 ---
 
@@ -785,14 +789,14 @@ def auto_select(op, M, N, K, world_size, hw_info=None, ctx=None):
 
 | 方面 | TileScale | Triton-distributed | Iris | XTile |
 | --- | --- | --- | --- | --- |
-| 用户写通信的方式 | `putmem_*` / `put_block` / `get_block` / `wait_eq` 等 distributed primitives | `wait/notify/symm_at` + `libshmem_device.*` | `iris.store` / `iris.put` + for-loop | 当前以 pattern + primitives 组合为主 |
-| 编译器看到什么 | mixed：`putmem_*` 是 NVSHMEM 调用；`put_block/get_block` 是 remap + `cp_*` extern | distributed ops + backend-specific lowering（NVIDIA 含 PTX；SHMEM 调用仍不透明） | `tl.load` + `tl.store`，透明 | `tl.load` + `tl.store`，透明 |
-| overlap 谁决定 | 用户写原语 + 编译器/硬件配合 | 用户写 low-level sync/comm | 用户手写 pattern | heuristics + pattern |
-| 通信底层实现 | `putmem_*` → NVSHMEM；`put_block/get_block` → remapped address + `tl::cp_*` helper | `wait/notify/symm_at` lowering + SHMEM device primitives（随 backend 不同） | `__translate + tl.store` | `__translate + tl.store` |
-| 外部依赖 | `torch.distributed` + NVSHMEM / `pynvshmem` | `torch.distributed` + NVSHMEM / ROCSHMEM / MORI SHMEM | PyTorch + `torch.distributed` + ROCm runtime | CUDA 或 HIP；现状仍需手工补齐 pattern ctx |
-| 硬件平台 | NVIDIA | NVIDIA / HIP 路径也在扩展 | AMD / ROCm | NVIDIA + AMD（代码目标） |
-| tile collective | 未见公开高层 tile collective API；当前更多是 distributed primitives + examples 组合 | 尚无已发布高层 tile collective API | 无公开 tile collective 抽象；以 `store` / `put` / `get` 为主 | 代码已写出，但验证未完全稳定 |
-| 【修订】当前文档最易误导处 | 把低层 put/copy 写成 `T.scatter()` | 把未来 `BlockChannel` 写成现状 | 把 heap 建立仍写成旧式 HIP IPC 主路径 | 把设想接口和当前仓库现状混写 |
+| 用户写通信的方式 | `putmem_*` / `put_block` / `get_block` / `wait_eq` 等 distributed primitives | `wait/notify/symm_at` + `libshmem_device.*` | `iris.store` / `iris.put` + for-loop | 高层 `xtile.ops.*` + `build_*_plan(...)` + `patterns.*` + `primitives.*` |
+| 编译器看到什么 | mixed：`putmem_*` 是 NVSHMEM 调用；`put_block/get_block` 是 remap + `cp_*` extern | distributed ops + backend-specific lowering（NVIDIA 含 PTX；SHMEM 调用仍不透明） | `tl.load` + `tl.store`，透明 | 标准 Triton op + 内联 `translate_ptr` / `tl.load` / `tl.store` / `tl.atomic_*`；无额外 distributed dialect |
+| overlap 谁决定 | 用户写原语 + 编译器/硬件配合 | 用户写 low-level sync/comm | 用户手写 pattern | 显式 pattern 或 `pattern=\"auto\"` / `ctx.auto_select_pattern(...)` |
+| 通信底层实现 | `putmem_*` → NVSHMEM；`put_block/get_block` → remapped address + `tl::cp_*` helper | `wait/notify/symm_at` lowering + SHMEM device primitives（随 backend 不同） | `__translate + tl.store` | `translate_ptr + tl.load/store/atomic_*`，并补上 `tile_put/get` 与 `tile_*` collectives |
+| 外部依赖 | `torch.distributed` + NVSHMEM / `pynvshmem` | `torch.distributed` + NVSHMEM / ROCSHMEM / MORI SHMEM | PyTorch + `torch.distributed` + ROCm runtime | PyTorch + Triton + CUDA/HIP backend runtime；多进程自动建 heap 仍依赖 `torch.distributed` |
+| 硬件平台 | NVIDIA | NVIDIA / HIP 路径也在扩展 | AMD / ROCm | NVIDIA / AMD 都有 backend 与 kernel 路径，但 public validation 取决于 heap mode / transport |
+| tile collective | 未见公开高层 tile collective API；当前更多是 distributed primitives + examples 组合 | 尚无已发布高层 tile collective API | 无公开 tile collective 抽象；以 `store` / `put` / `get` 为主 | 仓库里已有真实 `tile_*` collectives 与 host-side `ops.*` collectives；多进程 public surface 目前较保守 |
+| 【修订】当前文档最易误导处 | 把低层 put/copy 写成 `T.scatter()` | 把未来 `BlockChannel` 写成现状 | 把 heap 建立仍写成旧式 HIP IPC 主路径 | 把旧“设想 API”写成当前事实，且把多进程 runtime 支持说得过强 |
 
 ---
 
@@ -804,7 +808,7 @@ def auto_select(op, M, N, K, world_size, hw_info=None, ctx=None):
 
 ```
 TileScale 用 TVM 编译器（基于 Apache TVM 项目）
-Iris 和 TileLink 用 Triton JIT 编译器（基于 OpenAI Triton 项目）
+Iris、TileLink、XTile 用 Triton JIT 编译器（基于 OpenAI Triton 项目）
 ```
 
 **TVM 编译器**是什么：
@@ -848,13 +852,13 @@ cubin（NVIDIA）或 HSACO（AMD）
 
 **关键区别**：
 
-| 方面     | TVM（TileScale 用）            | Triton JIT（Iris/TileLink 用） |
-| -------- | ------------------------------ | ------------------------------ |
-| 编译时机 | 可以提前编译（AOT）            | 第一次调用时编译（JIT）        |
-| IR 基础  | TVM PrimFunc                   | Triton 自研 IR → LLVM IR       |
-| 代码生成 | 生成 CUDA C 源码 → nvcc 编译   | 直接生成 LLVM IR → 直出机器码  |
-| 硬件支持 | 很广（CPU/GPU/TPU/各种加速器） | GPU 为主（NVIDIA + AMD）       |
-| 社区     | 学术界为主                     | 工业界广泛使用（PyTorch 生态） |
+| 方面     | TVM（TileScale 用）            | Triton JIT（Iris/TileLink/XTile 用） |
+| -------- | ------------------------------ | ------------------------------------ |
+| 编译时机 | 可以提前编译（AOT）            | 第一次调用时编译（JIT）              |
+| IR 基础  | TVM PrimFunc                   | Triton 自研 IR → LLVM IR             |
+| 代码生成 | 生成 CUDA C 源码 → nvcc 编译   | 直接生成 LLVM IR → 直出机器码        |
+| 硬件支持 | 很广（CPU/GPU/TPU/各种加速器） | GPU 为主（NVIDIA + AMD）             |
+| 社区     | 学术界为主                     | 工业界广泛使用（PyTorch 生态）       |
 
 ### AST 是什么
 
@@ -1081,7 +1085,7 @@ tt.store %remote_ptr, %acc, %mask                  # 存储到远端
 
 2. examples 里的 overlap 仍主要来自用户显式写出的 pattern、同步和 kernel 结构。
 
-3. 因此这里更稳妥的表述应是：Iris 保留了更多编译器分析空间，但这不等于当前仓库已经实现了自动通信调度优化。
+3. 因此这里更稳妥的表述应是：Iris / XTile 保留了更多编译器分析空间，但这不等于当前仓库已经实现了自动通信调度优化。
 
 ---
 
