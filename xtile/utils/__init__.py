@@ -4,6 +4,8 @@ from xtile.utils.topology import TopologyDetector
 from xtile.utils.profiling import TileProfiler
 from xtile.utils.benchmark_results import (
     canonical_benchmark_run,
+    default_collective_bulk_sync_benchmark_path,
+    default_collective_comm_only_benchmark_path,
     default_gemm_benchmark_path,
     default_p2p_benchmark_path,
     default_pattern_benchmark_path,
@@ -35,6 +37,8 @@ __all__ = [
     "TileProfiler",
     "project_root",
     "figures_data_dir",
+    "default_collective_bulk_sync_benchmark_path",
+    "default_collective_comm_only_benchmark_path",
     "default_gemm_benchmark_path",
     "default_p2p_benchmark_path",
     "default_pattern_benchmark_path",

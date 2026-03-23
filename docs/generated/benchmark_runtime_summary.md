@@ -1,6 +1,6 @@
 # XTile Benchmark Runtime Summary
 
-> Generated at UTC: `2026-03-23T08:49:03.122299+00:00`
+> Generated at UTC: `2026-03-23T15:07:11.288646+00:00`
 > This file is auto-generated from canonical benchmark JSON artifacts.
 
 ## Artifact Status
@@ -10,12 +10,21 @@
 | GEMM | available | `figures/data/gemm_latest.json` |
 | P2P | available | `figures/data/p2p_latest.json` |
 | Pattern | available | `figures/data/pattern_overlap_latest.json` |
+| Comm-only Collectives | available | `figures/data/collective_comm_only_latest.json` |
+| Collective vs bulk_sync | available | `figures/data/collective_bulk_sync_latest.json` |
+
+## Host Topology
+
+- GPU SKU: `2 x NVIDIA H100 PCIe`
+- GPU-GPU interconnect for multi-GPU runs: `NVLink (NV12)`
 
 ## Runtime Support Snapshots
 
 - GEMM: source=gemm_latest.json | run=2026-03-23 | backend=cuda, ws=1, heap=none | cmd=/home/makai/XTile/tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json
 - P2P: source=p2p_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access, reduce_scatter=supported | cmd=/home/makai/XTile/tests/benchmarks/bench_p2p_translate.py --output-json figures/data/p2p_latest.json
 - Pattern: source=pattern_overlap_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access, gemm_allscatter=supported | cmd=/home/makai/XTile/tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json figures/data/pattern_overlap_latest.json
+- Comm-only collectives: source=collective_comm_only_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=multiprocess, transport=ctypes_ipc | cmd=/home/makai/XTile/tests/benchmarks/bench_collective_comm_only.py
+- Collective vs bulk_sync: source=collective_bulk_sync_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access | cmd=/home/makai/XTile/tests/benchmarks/bench_collective_bulk_sync.py
 
 ## Execution Paths
 
@@ -39,3 +48,20 @@
 
 - best speedup vs bulk_sync: 1.635×
 - best size: 8192×4608×36864, pattern=wg_specialized, speedup=1.635×
+
+### Comm-only Collectives
+
+- allreduce: XTile peak 0.16 GB/s, NCCL peak 1.41 GB/s, best ratio 0.124×
+- allgather: XTile peak 0.26 GB/s, NCCL peak 0.52 GB/s, best ratio 0.495×
+- scatter: XTile peak 0.67 GB/s, NCCL peak 0.85 GB/s, best ratio 0.781×
+- reduce_scatter: XTile peak 0.60 GB/s, NCCL peak 1.30 GB/s, best ratio 0.525×
+- broadcast: XTile peak 0.70 GB/s, NCCL peak 1.37 GB/s, best ratio 0.533×
+
+### Collective vs bulk_sync
+
+- best speedup vs bulk_sync: 2.221× (reduce_scatter, 64 KiB)
+- allreduce: best speedup 2.049×
+- allgather: best speedup 1.782×
+- scatter: best speedup 1.001×
+- reduce_scatter: best speedup 2.221×
+- broadcast: best speedup 0.652×

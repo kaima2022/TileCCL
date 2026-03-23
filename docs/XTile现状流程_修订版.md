@@ -540,14 +540,14 @@ def _setup_multiprocess(self):
 ## 第 5 层：硬件执行
 
 ```
-GPU0 上的 warp 执行 tl.store(translated_ptr, tile_data, cache_modifier=".wt")
+  GPU0 上的 warp 执行 tl.store(translated_ptr, tile_data, cache_modifier=".wt")
     │
     ▼
-translated_ptr 指向 GPU2 的 HBM 地址
+translated_ptr 指向 GPU1 的 HBM 地址
     │
     ▼
 H100 NVLink 硬件自动路由：
-  GPU0 SM → tl.store → L2 miss → NVLink (NV12, 300 GB/s) → GPU2 HBM
+  GPU0 SM → tl.store → L2 miss → NVLink (NV12, 300 GB/s) → GPU1 HBM
 
 P2P benchmark 最新 canonical serial rerun 显示 best read ≈ 248.74 GB/s、best write ≈ 248.43 GB/s；scatter 更相关的是写带宽，量级约 82.8%–82.9% 峰值。
 ```
@@ -1089,3 +1089,301 @@ benchmark / JSON / plot / 文档导出在当前范围内已经建立起第一版
 - **已经实现的，不应再写成“待做计划”。**
 - **没有实现的，也不能被“第一版跑通”掩盖。**
 - **XTile 现在已经有了可继续工程化推进的坚实基础，但还没有达到 Iris 那种 canonical substrate 完整度，更没有达到理想通信库的最终形态。**
+
+## 与 NCCL 的差距归因及未来方向
+
+这一章单独回答一个更尖锐、也更实际的问题：**如果把 XTile 当成“独立通信库”来衡量，它和 NCCL 现在到底差在哪里，下一步应当怎么补。**
+
+### 当前对比口径
+
+当前结论基于最新 communication-only 结构化 benchmark，而不是主观印象：
+
+- 数据文件：`figures/data/collective_comm_only_latest.json`
+- 图文件：`figures/fig6_collective_comm_only.png`
+- 生成时间：`2026-03-23T11:52:00+00:00`
+- 机器环境：`GPU SKU = 2 x NVIDIA H100 PCIe`，`GPU-GPU interconnect = NVLink (NV12)`
+- runtime 口径：`world_size=2`、`dtype=float32`、`transport=ctypes_ipc`
+- 消息尺寸：`4 KiB`、`64 KiB`
+- benchmark 口径：对比当前**稳定 public primitive surface**，而不是只测内部某个实验性 raw kernel
+
+这里必须特别说明：当前这组数据代表的是“**今天真实可部署、真实可回归的 XTile collective 层**”，不是“理论上如果把内部 fast path 全部写满后可能达到的上限”。
+
+### 当前结果
+
+在当前 compact canonical run 中，5 个 communication-only collective 的最佳点如下：
+
+| collective | 最佳消息尺寸 | XTile | NCCL | XTile / NCCL |
+|------|------|------|------|------|
+| `allreduce` | `64 KiB` | `0.16 GB/s` | `1.41 GB/s` | `0.11x` |
+| `allgather` | `64 KiB` | `0.26 GB/s` | `0.52 GB/s` | `0.49x` |
+| `scatter` | `64 KiB` | `0.67 GB/s` | `0.85 GB/s` | `0.78x` |
+| `reduce_scatter` | `64 KiB` | `0.60 GB/s` | `1.30 GB/s` | `0.47x` |
+| `broadcast` | `64 KiB` | `0.70 GB/s` | `1.37 GB/s` | `0.51x` |
+
+这组结果说明：
+
+- **XTile 现在最弱的是 `allreduce`。**
+- `scatter` 相对最好，说明简单 direct-push / root-push 形态已经有一定基础。
+- `allgather`、`reduce_scatter`、`broadcast` 都明显落后，说明“collective 架构层”还没有真正收口成高性能实现。
+
+### 补充内部口径：XTile vs `bulk_sync`
+
+如果当前目标不是和 NCCL 正面对标，而是向项目申请材料说明“XTile 的 collective-specific kernel 相比 naive internal baseline 到底带来了什么”，那么更合适的补充口径是：
+
+- 数据文件：`figures/data/collective_bulk_sync_latest.json`
+- 图文件：`figures/fig7_collective_bulk_sync.png`
+- 生成时间：`2026-03-23T13:30:30+00:00`
+- 机器环境：`GPU SKU = 2 x NVIDIA H100 PCIe`，`GPU-GPU interconnect = NVLink (NV12)`
+- runtime 口径：`world_size=2`、`dtype=float32`、`transport=peer_access`
+- baseline 定义：`bulk_sync = single-process peer_access 下，由更低级 point-to-point copy + 显式阶段同步 拼成的 host-orchestrated internal baseline`
+
+这张图的用途要说清楚：
+
+- 它**不是**“XTile 已经超过外部成熟通信库”的证据。
+- 它是“在 XTile 自己的通信栈内部，collective-specific kernel 相对 naive bulk_sync baseline 的结构性收益”。
+- 这更适合说明：XTile 已经不只是“能通信”，而是开始具备“专用 collective kernel 的体系化收益”。
+
+当前 best speedup 如下：
+
+| collective | best speedup vs `bulk_sync` | best size |
+|------|------|------|
+| `allreduce` | `2.05x` | `4 KiB` |
+| `allgather` | `1.78x` | `16 KiB` |
+| `scatter` | `1.00x` | `64 KiB` |
+| `reduce_scatter` | `2.22x` | `64 KiB` |
+| `broadcast` | `0.65x` | `16 KiB` |
+
+### XTile / bulk_sync / NCCL 端到端执行流程对比
+
+| 阶段 | `XTile` | `bulk_sync` | `NCCL` |
+|------|------|------|------|
+| 公开抽象 | tile-level collective | tile-level bulk-synchronous composition | tensor-level collective |
+| 输入单元 | 每个 rank 提供一个或多个 tile / shard | 每个 rank 提供一个或多个 tile / shard | 每个 rank 提供一个 tensor / tensor shard |
+| 数据布局前提 | symmetric heap 上的对称分配，跨 rank 偏移一致 | symmetric heap 上的对称分配，跨 rank 偏移一致 | 常规 device tensor，由 NCCL 直接接管 |
+| 地址语义 | 先建立 `translate_ptr` 语义，再在设备侧访问 peer 对应地址 | 使用 mirror pointer 确定目标槽位，再做 peer copy | 不暴露远端地址翻译，地址与传输由 NCCL 内部管理 |
+| 调度入口 | XTile collective primitive / launcher | host 侧 phase-by-phase 编排 | NCCL collective API |
+| 执行粒度 | tile granularity | tile granularity | tensor granularity |
+| 核心执行方式 | 设备侧 collective kernel 直接完成 gather / scatter / reduce / broadcast 语义 | 将 collective 拆成低级 point-to-point copy、局部归约、阶段同步后逐步拼装 | 由 NCCL 内部 collective engine 完成 tensor 级传输、归约、分发 |
+| 数据移动方式 | tile 直接读写本地与 peer 对应 tile 槽位 | tile 在各 phase 中显式 copy 到 stage / dst 槽位 | tensor / chunk 在 NCCL 内部通道中流动 |
+| 归约发生位置 | 设备侧 collective 路径内部完成 | host 编排下由各 rank 本地显式 `add`/reduce 完成 | NCCL 内部完成 |
+| 同步方式 | collective 路径内部同步，必要时由 host barrier 收口 | 每个 phase 结束后由 host 显式同步 | 由 NCCL collective 语义与内部调度收口 |
+| `allreduce` 形态 | 当前实现等价于 `reduce_scatter -> allgather` 收口 | 先朴素 reduce-scatter，再朴素 allgather | 单个 tensor collective，由 NCCL 内部实现 |
+| 输出形态 | 结果写回目标 tile / shard / gathered buffer | 结果逐 phase 落到目标 tile / shard / gathered buffer | 结果写回目标 tensor / tensor shard |
+| 工程控制面 | kernel、heap、pointer translation、runtime glue 都在 XTile 内部 | phase、copy、stage buffer、同步都在 XTile host 侧显式控制 | 算法、协议、通道、调度都在 NCCL 内部 |
+
+这组内部对比更准确地说明了当前状态：
+
+- `allgather` 和 `reduce_scatter` 已经能稳定体现出 **collective-specific kernel** 相对 bulk-synchronous 朴素拼装的收益。
+- `allreduce` 也能在较小消息上体现优势，但大消息仍不稳定，说明它的 public path 仍然过厚。
+- `scatter` 基本接近持平，说明 root-push 场景里当前 kernel 还没有明显赢过简单 bulk copy 组合。
+- `broadcast` 仍落后于 bulk baseline，说明 flat root-push 版本还没有形成真正值得公开宣称的高性能形态。
+
+因此，对外口径应当拆开：
+
+- 如果是说明“XTile 相比成熟通信库还有多远”，看 `fig6_collective_comm_only.png`。
+- 如果是说明“XTile 当前专用 collective kernel 已经比 naive internal baseline 好在哪里”，看 `fig7_collective_bulk_sync.png`。
+
+### 差距归因
+
+#### 1. `allreduce` 当前不是单一路径的高性能 collective，而是厚路径组合
+
+当前 `xtile.primitives.collectives.allreduce(...)` 的真实实现并不是一个成熟的单阶段设备侧 collective，而是：
+
+```python
+def allreduce(
+    tensor: torch.Tensor,
+    heap: "xtile.memory.SymmetricHeap",
+    op: str = "sum",
+) -> None:
+    shard, gathered = _allreduce_workspaces(tensor, heap=heap)
+    reduce_scatter(
+        tensor,
+        shard,
+        heap,
+        op=op,
+        implementation="auto",
+    )
+    heap.barrier()
+    allgather(shard, gathered, heap)
+    heap.barrier()
+    tensor.copy_(gathered.reshape(tensor.shape))
+```
+
+这条路径的问题不是“能不能工作”，而是：
+
+- 它把一个本应统一优化的问题拆成了 `reduce_scatter + barrier + allgather + barrier + copy`
+- host-side barrier 和额外 materialization 都在延迟路径上
+- 当前 public `allreduce` 还没有收敛成真正的单一路径设备实现
+
+所以 `allreduce` 落后最明显，不是偶然，而是架构结果。
+
+#### 2. `reduce_scatter` 当前明确是 correctness-first，而不是 performance-first
+
+`tile_reduce_scatter(...)` 当前真实实现采用的是“每个 rank 直接读取所有 peer 的对应 chunk，然后本地归约写回自身”的保守路径。源码注释已经把设计意图写得很清楚：这是一个**correctness-first** 的 multiprocess/device path。
+
+这意味着它当前缺少：
+
+- pipelined ring
+- 分块流式 forwarding
+- channel 化并发
+- double buffer
+- 更成熟的 cross-rank staging / synchronization
+
+所以当前它虽然已经能作为 stable public surface 的基础，但还不能拿来和 NCCL 的成熟 reduce-scatter 内核正面对打。
+
+#### 3. `allgather` / `scatter` / `broadcast` 仍然是朴素 flat collective
+
+当前几类 device primitive 的风格都比较直接：
+
+- `tile_allgather(...)`：每个 rank 直接把自己的 tile 写到所有 peer 的目标位置
+- `tile_scatter(...)`：只有 root 干活，逐个 target 推送
+- `tile_broadcast(...)`：当前仍是 flat root push
+
+这几类实现的优点是：
+
+- 逻辑直白
+- 容易验证
+- 对 `translate_ptr + tl.store` 路径暴露充分
+
+但它们缺少 NCCL 那种成熟 collective 的关键要素：
+
+- 拓扑感知
+- 多 CTA / 多 channel 并发
+- 分块流水化
+- 大消息 protocol 分层
+- 更细粒度的 launch / sync 设计
+
+因此当前只能说“功能成立”，不能说“性能形态已经成立”。
+
+#### 4. 底层内存模型仍然偏 fallback-first，而不是 canonical collective substrate
+
+当前 multiprocess device path 的真实 auto transport 只有 `ctypes_ipc`；`pytorch_ipc` 与 `peer_access_pointer_exchange` 仍然只适合作为 forced diagnostics。
+
+这带来的影响不是只有“transport 少两个”这么简单，而是：
+
+- collective 层目前还建立在 transport-aware bring-up 之上
+- 还没有真正落到 allocator / export / import / map / access 统一底座
+- 还没有形成一个与具体 bring-up 细节解耦的 canonical communication substrate
+
+这也是 XTile 与 NCCL、以及与 Iris 当前更偏 allocator-first / import-map 的路线之间的核心差距之一。
+
+#### 5. 当前 benchmark 已经放大了小消息延迟问题，但这不是主要借口
+
+当前 communication-only canonical run 是 compact sweep，只覆盖 `4 KiB` 和 `64 KiB` 两个点。这会放大小消息上的 launch / barrier / host orchestration 成本。
+
+但这不能被用来掩盖核心问题，因为：
+
+- NCCL 是在**同一台机器、同一组 GPU、同一轮 benchmark 口径**下对比出来的
+- 即使只看 `64 KiB` 这个当前 best point，XTile 的 `allreduce` 仍然只有 `0.11x NCCL`
+- 说明主问题不是“图选得不巧”，而是 collective 路径本身还比较原型化
+
+更准确的判断应当是：**小消息 sweep 放大了问题，但没有制造问题。**
+
+### 当前判断
+
+如果只从“XTile 是不是已经是一套接近 NCCL 的通信库”来问，当前答案必须是：
+
+- **还不是。**
+
+更细一点地说：
+
+- XTile 的 **P2P substrate** 与 **GEMM 基础路径** 并不弱，至少已经形成了可继续工程化推进的底子。
+- 真正明显落后的，是 **collective 层的架构收口程度**。
+- 当前 communication-only layer 更接近“**正确性优先、可验证、可演进的原型级实现**”，还不是“成熟、高吞吐、可与 NCCL 同级竞争的工业级 collective runtime”。
+
+所以文档口径也必须继续保持克制：
+
+- 不能把当前 XTile 写成“已经达到 NCCL 级别”
+- 也不能因为 collective 还弱，就把已经完成的 contract / benchmark / support matrix 基础说成“什么都没有”
+
+### 未来方向
+
+如果目标是逐步缩小和 NCCL 的差距，而不是只把功能继续堆上去，那么优先级应当非常明确。
+
+#### 方向 1：先把 `allreduce` 重写成真正的单一路径 public collective
+
+这是最高优先级。
+
+当前 `allreduce` 最差，不是参数没调，而是架构本身太厚。第一步应当把它从“host-side 组合路径”收敛成一个真正的设备侧 public fast path：
+
+- 减少 host barrier
+- 去掉额外 gather materialization / copy
+- 明确单一路径的 workspace / staging / synchronization 语义
+- 让 public `allreduce(...)` 与内部 fast path 不再长期分裂
+
+如果这一项不做，继续调 `allgather` 或继续补 transport，收益都会被 `allreduce` 的厚路径天花板压住。
+
+#### 方向 2：把 `reduce_scatter` / `allgather` 做成 pipelined、chunked、多 CTA collective
+
+这是第二优先级。
+
+当前这两类操作实际上决定了后续 `allreduce`、`gemm_reducescatter`、`gemm_allgather` 的上限。下一阶段应当把它们从 correctness-first 原型推进到性能导向版本：
+
+- pipelined ring / tree
+- chunk / tile 级双缓冲
+- 多 CTA 并发
+- 更清晰的 rank-local / peer-local staging
+- 消息尺寸分层，而不是一个 kernel 跑所有区间
+
+#### 方向 3：把 `scatter` / `broadcast` 从 flat root-push 推到 topology-aware 版本
+
+这两项相对当前最好，但不应被当前 `0.78x` 的 `scatter` 掩盖。
+
+下一步应当补：
+
+- tree / hierarchical broadcast
+- 更明确的大消息 chunking
+- root hot-spot 规避
+- launch geometry 与 message regime 的匹配
+
+目标不是只让它“更快一点”，而是让它们从“简单 direct push”进化成可维护的 collective family。
+
+#### 方向 4：把底层 substrate 向 canonical memory model 收口
+
+这一项和性能不是分开的，而是性能能否持续推进的前提。
+
+正确方向不是简单照抄 NCCL 或 Iris，而是：
+
+- 保留 XTile 当前 `support matrix + feature gate + diagnostics` 的工程透明度
+- 同时把底层逐步收口到 allocator / export / import / map / access 的统一状态机
+- 让 collective 层不再直接依赖“当前 transport 恰好怎么 bring-up 成功”
+
+只有这样，后面做 `world_size > 2`、更多 transport、更多平台，才不会每往前走一步就重新撕开一次运行时语义。
+
+#### 方向 5：把性能验证环境和制度补齐
+
+当前 communication-only benchmark 已经说明问题，但它还不是完整 perf system。
+
+下一步要补的是：
+
+- 更安静、更独占的 benchmark 环境
+- 更大的消息尺寸 sweep
+- `world_size > 2`
+- 固定 headline
+- 固定 regression threshold
+- 失败 case 自动归因
+
+否则后面即使把 collective kernel 写快了，也很难稳定判断“到底是真的提升，还是环境噪声”。
+
+### 对后续工作的直接结论
+
+如果只看和 NCCL 的差距，当前最该避免的事情有两类：
+
+1. **不要把精力继续分散在次要 transport bring-up 上**
+   - `pytorch_ipc`、`peer_access_pointer_exchange` 可以继续保留为 diagnostics
+   - 但当前不应把主要工程时间继续投在“让更多 transport 勉强可跑”
+   - 真正决定对 NCCL 差距的，不是 transport 数量，而是 collective 架构
+
+2. **不要用局部参数微调替代架构收口**
+   - 现在不是缺少一个 `num_warps` 或 `num_stages` 调参
+   - 而是缺少单路径 collective、pipelining、multi-CTA、canonical substrate 这些基础结构
+
+因此，就“与 NCCL 的差距”这件事本身，当前最准确的路线图是：
+
+1. 先重构 `allreduce`
+2. 再重构 `reduce_scatter / allgather`
+3. 然后推进 `scatter / broadcast` 的 topology-aware 版本
+4. 同时把底层 substrate 向 canonical allocator/import-map/access 收口
+5. 最后在更干净的环境里建立完整 perf regression system
+
+这条路线比“继续堆功能”更难，但如果目标真的是长期可维护、工业级、专业严谨的通信库，这一条才是正确主线。

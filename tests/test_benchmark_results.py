@@ -10,6 +10,8 @@ import sys
 import xtile
 from xtile.utils.benchmark_results import (
     canonical_benchmark_run,
+    default_collective_bulk_sync_benchmark_path,
+    default_collective_comm_only_benchmark_path,
     default_gemm_benchmark_path,
     describe_runtime_metadata_snapshot,
     describe_runtime_support_snapshot,
@@ -150,7 +152,9 @@ def test_describe_runtime_metadata_snapshot_without_heap(
 
 def test_is_canonical_benchmark_output_matches_figures_data() -> None:
     """Canonical benchmark outputs should be recognized by directory."""
+    assert is_canonical_benchmark_output(default_collective_bulk_sync_benchmark_path())
     assert is_canonical_benchmark_output(default_gemm_benchmark_path())
+    assert is_canonical_benchmark_output(default_collective_comm_only_benchmark_path())
     assert not is_canonical_benchmark_output(Path("/tmp/not_xtile_benchmark.json"))
 
 

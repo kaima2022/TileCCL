@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """XTile — publication-quality figures showing the latest validated status.
 
-Generates 5 figures in Nature/Science style:
+Generates 7 figures in Nature/Science style:
   1. GEMM: XTile vs cuBLAS (official helper, median of 3 repeats)
   2. P2P bandwidth vs transfer size (saturation curve)
   3. Pattern speedup vs bulk_sync (full 6-size rerun)
   4. 6-layer architecture diagram
   5. Roofline model (GEMM position analysis)
+  6. Communication-only collectives: XTile vs NCCL
+  7. Communication-only speedup vs bulk_sync baseline
 
 Output: figures/ directory — PDF (vector) + PNG (300 DPI)
 """
@@ -63,6 +65,8 @@ from _benchmark_reporting import benchmark_footer_text, load_json_payload
 GEMM_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "gemm_latest.json"
 P2P_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "p2p_latest.json"
 PATTERN_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "pattern_overlap_latest.json"
+COLLECTIVE_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "collective_comm_only_latest.json"
+COLLECTIVE_BULK_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "collective_bulk_sync_latest.json"
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +128,8 @@ _FALLBACK_PATTERN_SPEEDUPS = {
 GEMM_PAYLOAD = load_json_payload(GEMM_BENCHMARK_JSON)
 P2P_PAYLOAD = load_json_payload(P2P_BENCHMARK_JSON)
 PATTERN_PAYLOAD = load_json_payload(PATTERN_BENCHMARK_JSON)
+COLLECTIVE_PAYLOAD = load_json_payload(COLLECTIVE_BENCHMARK_JSON)
+COLLECTIVE_BULK_PAYLOAD = load_json_payload(COLLECTIVE_BULK_BENCHMARK_JSON)
 
 
 def _format_size_label(M, N, K):
@@ -232,10 +238,90 @@ def _load_pattern_speedups():
     }, payload.get("summary", {})
 
 
+def _load_collective_comm_only():
+    if not COLLECTIVE_PAYLOAD:
+        return {}, {}
+
+    payload = COLLECTIVE_PAYLOAD
+    cases = payload.get("cases", [])
+    if not isinstance(cases, list) or not cases:
+        return {}, payload.get("summary", {})
+
+    per_collective: dict[str, dict[str, list[float]]] = {}
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        collective = case.get("collective")
+        xtile = case.get("xtile")
+        nccl = case.get("nccl")
+        if not isinstance(collective, str):
+            continue
+        if not isinstance(xtile, dict) or not isinstance(nccl, dict):
+            continue
+        bucket = per_collective.setdefault(
+            collective,
+            {
+                "size_mib": [],
+                "xtile_bw": [],
+                "nccl_bw": [],
+                "ratio": [],
+            },
+        )
+        bucket["size_mib"].append(float(case["size_mib"]))
+        bucket["xtile_bw"].append(float(xtile["median_bandwidth_gbps"]))
+        bucket["nccl_bw"].append(float(nccl["median_bandwidth_gbps"]))
+        bucket["ratio"].append(float(case["xtile_vs_nccl_bandwidth_ratio"]))
+
+    for bucket in per_collective.values():
+        order = np.argsort(bucket["size_mib"])
+        bucket["size_mib"] = [bucket["size_mib"][idx] for idx in order]
+        bucket["xtile_bw"] = [bucket["xtile_bw"][idx] for idx in order]
+        bucket["nccl_bw"] = [bucket["nccl_bw"][idx] for idx in order]
+        bucket["ratio"] = [bucket["ratio"][idx] for idx in order]
+
+    return per_collective, payload.get("summary", {})
+
+
+def _load_collective_bulk_speedups():
+    if not COLLECTIVE_BULK_PAYLOAD:
+        return {}, {}
+
+    payload = COLLECTIVE_BULK_PAYLOAD
+    cases = payload.get("cases", [])
+    if not isinstance(cases, list) or not cases:
+        return {}, payload.get("summary", {})
+
+    by_collective: dict[str, dict[str, list[float]]] = {}
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        collective = case.get("collective")
+        if not isinstance(collective, str):
+            continue
+        bucket = by_collective.setdefault(
+            collective,
+            {
+                "size_kib": [],
+                "speedup": [],
+            },
+        )
+        bucket["size_kib"].append(float(case["size_kib"]))
+        bucket["speedup"].append(float(case["speedup_vs_bulk"]))
+
+    for bucket in by_collective.values():
+        order = np.argsort(bucket["size_kib"])
+        bucket["size_kib"] = [bucket["size_kib"][idx] for idx in order]
+        bucket["speedup"] = [bucket["speedup"][idx] for idx in order]
+
+    return by_collective, payload.get("summary", {})
+
+
 GEMM_BARS, GEMM_ENV = _load_gemm_bars()
 GEMM_ROOFLINE = _load_gemm_roofline_points()
 P2P_CURVE, P2P_ENV = _load_p2p_curve()
 PATTERN_SPEEDUPS, PATTERN_SUMMARY = _load_pattern_speedups()
+COLLECTIVE_SERIES, COLLECTIVE_SUMMARY = _load_collective_comm_only()
+COLLECTIVE_BULK_SERIES, COLLECTIVE_BULK_SUMMARY = _load_collective_bulk_speedups()
 
 
 def _gemm_aggregation_label() -> str:
@@ -269,6 +355,14 @@ def _save_with_footer(fig, name, footer: str | None):
         )
         fig.tight_layout(rect=(0, 0.08, 1, 1))
     _save(fig, name)
+
+
+def _format_message_size_mib(value: float) -> str:
+    if value < 1.0:
+        kib = value * 1024.0
+        if kib >= 1:
+            return f"{kib:.0f} KiB"
+    return f"{value:g} MiB"
 
 
 # ===================================================================
@@ -579,6 +673,222 @@ def fig5_roofline():
 
 
 # ===================================================================
+# Figure 6: Communication-only collectives
+# ===================================================================
+def fig6_collective_comm_only():
+    if not COLLECTIVE_SERIES:
+        print("  Skipping fig6_collective_comm_only (no structured benchmark JSON)")
+        return
+
+    op_order = [
+        ("allreduce", "tile_allreduce"),
+        ("allgather", "tile_allgather"),
+        ("scatter", "tile_scatter"),
+        ("reduce_scatter", "tile_reduce_scatter"),
+        ("broadcast", "tile_broadcast"),
+    ]
+
+    fig, axes = plt.subplots(2, 3, figsize=(10.6, 6.2), sharex=False, sharey=True)
+    axes = axes.flatten()
+    peak_xtile = []
+    peak_nccl = []
+    peak_labels = []
+
+    legend_handles = None
+    legend_labels = None
+    for ax, (collective, title) in zip(axes[:5], op_order):
+        series = COLLECTIVE_SERIES.get(collective)
+        if not series:
+            ax.set_axis_off()
+            continue
+
+        size_mib = series["size_mib"]
+        xtile_bw = series["xtile_bw"]
+        nccl_bw = series["nccl_bw"]
+        ratio = series["ratio"]
+        peak_xtile.append(max(xtile_bw))
+        peak_nccl.append(max(nccl_bw))
+        peak_labels.append(collective.replace("_", "\n"))
+
+        ax.plot(size_mib, nccl_bw, "s--", color=COLORS[0], linewidth=1.4, markersize=4.5, label="NCCL")
+        ax.plot(size_mib, xtile_bw, "o-", color=COLORS[1], linewidth=1.6, markersize=4.5, label="XTile")
+        if legend_handles is None:
+            legend_handles, legend_labels = ax.get_legend_handles_labels()
+
+        best_idx = int(np.argmax(ratio))
+        ax.text(
+            0.04,
+            0.93,
+            f"best {ratio[best_idx]:.2f}×",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=7,
+            color=COLORS[1],
+            bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.88),
+        )
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(size_mib)
+        ax.set_xticklabels([_format_message_size_mib(v) for v in size_mib], fontsize=8)
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel("Message Size")
+        ax.grid(True, which="major", alpha=0.25)
+
+    ymax = max(
+        max(max(series["xtile_bw"]), max(series["nccl_bw"]))
+        for series in COLLECTIVE_SERIES.values()
+    ) * 1.18
+    for ax in axes[:5]:
+        if ax.axison:
+            ax.set_ylim(0, ymax)
+
+    axes[0].set_ylabel("Median Effective BW (GB/s)")
+    axes[3].set_ylabel("Median Effective BW (GB/s)")
+    axes[5].bar(
+        np.arange(len(peak_labels)) - 0.18,
+        peak_nccl,
+        width=0.36,
+        color=COLORS[0],
+        edgecolor="white",
+        linewidth=0.5,
+    )
+    axes[5].bar(
+        np.arange(len(peak_labels)) + 0.18,
+        peak_xtile,
+        width=0.36,
+        color=COLORS[1],
+        edgecolor="white",
+        linewidth=0.5,
+    )
+    axes[5].set_title("Peak BW Summary", fontsize=11)
+    axes[5].set_ylabel("Median Effective BW (GB/s)")
+    axes[5].set_xticks(np.arange(len(peak_labels)))
+    axes[5].set_xticklabels(peak_labels, fontsize=8)
+    axes[5].set_ylim(0, ymax)
+
+    if legend_handles and legend_labels:
+        fig.legend(legend_handles, legend_labels, loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=2)
+    fig.suptitle("Communication-only Collectives: XTile vs NCCL", fontsize=14, y=1.02)
+
+    _save_with_footer(
+        fig,
+        "fig6_collective_comm_only",
+        benchmark_footer_text(
+            COLLECTIVE_PAYLOAD,
+            source_name="collective_comm_only_latest.json",
+            include_command=False,
+        ),
+    )
+
+
+# ===================================================================
+# Figure 7: Communication-only speedup vs bulk_sync
+# ===================================================================
+def fig7_collective_bulk_sync():
+    if not COLLECTIVE_BULK_SERIES:
+        print("  Skipping fig7_collective_bulk_sync (no structured benchmark JSON)")
+        return
+
+    collective_order = ["allreduce", "allgather", "scatter", "reduce_scatter", "broadcast"]
+    labels = [
+        "allreduce",
+        "allgather",
+        "scatter",
+        "reduce\nscatter",
+        "broadcast",
+    ]
+    size_keys = sorted(
+        {
+            size
+            for bucket in COLLECTIVE_BULK_SERIES.values()
+            for size in bucket["size_kib"]
+        }
+    )
+
+    x = np.arange(len(collective_order))
+    width = 0.22 if len(size_keys) >= 3 else 0.28
+    offsets = np.linspace(-width, width, len(size_keys))
+
+    fig, ax = plt.subplots(figsize=(7.8, 4.0))
+    best_collective = None
+    best_size = None
+    best_speedup = 0.0
+
+    for idx, size_kib in enumerate(size_keys):
+        values = []
+        for collective in collective_order:
+            bucket = COLLECTIVE_BULK_SERIES.get(collective, {})
+            size_list = bucket.get("size_kib", [])
+            speedup_list = bucket.get("speedup", [])
+            speedup = next(
+                (speedup_list[pos] for pos, size in enumerate(size_list) if size == size_kib),
+                0.0,
+            )
+            values.append(speedup)
+            if speedup > best_speedup:
+                best_collective = collective
+                best_size = size_kib
+                best_speedup = speedup
+
+        ax.bar(
+            x + offsets[idx],
+            values,
+            width,
+            label=_format_message_size_mib(size_kib / 1024.0),
+            color=COLORS[idx],
+            edgecolor="white",
+            linewidth=0.5,
+        )
+
+    ax.axhline(1.0, color="gray", linestyle="-", linewidth=0.8, alpha=0.55)
+
+    ymax = max(
+        1.1,
+        max(
+            max(bucket["speedup"])
+            for bucket in COLLECTIVE_BULK_SERIES.values()
+            if bucket["speedup"]
+        ) * 1.28,
+    )
+    ax.set_ylim(0, ymax)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=9)
+    ax.set_ylabel("Speedup vs bulk_sync")
+    ax.set_xlabel("Communication-only Collective")
+    ax.set_title("Communication-only XTile Speedup vs bulk_sync", fontsize=13)
+
+    if best_collective is not None and best_size is not None:
+        best_idx = collective_order.index(best_collective)
+        best_on_right = best_idx >= (len(collective_order) // 2)
+        text_dx = -0.42 if best_on_right else 0.42
+        text_x = x[best_idx] + text_dx
+        text_ha = "right" if best_on_right else "left"
+        ax.annotate(
+            f"best stable\n{best_speedup:.3f}×",
+            xy=(x[best_idx], best_speedup),
+            xytext=(text_x, min(best_speedup + 0.14, ymax - 0.16)),
+            fontsize=8,
+            fontweight="bold",
+            color=COLORS[1],
+            arrowprops=dict(arrowstyle="-", color=COLORS[1], lw=0.8),
+            ha=text_ha,
+            bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.9),
+        )
+
+    ax.legend(loc="upper left", ncol=min(3, len(size_keys)))
+
+    _save_with_footer(
+        fig,
+        "fig7_collective_bulk_sync",
+        benchmark_footer_text(
+            COLLECTIVE_BULK_PAYLOAD,
+            source_name="collective_bulk_sync_latest.json",
+            include_command=False,
+        ),
+    )
+
+
+# ===================================================================
 # Main
 # ===================================================================
 def main():
@@ -590,8 +900,10 @@ def main():
     fig3_pattern_overlap()
     fig4_architecture()
     fig5_roofline()
+    fig6_collective_comm_only()
+    fig7_collective_bulk_sync()
 
-    print(f"\nAll 5 figures saved to {OUTDIR}/")
+    print(f"\nAll 7 figures saved to {OUTDIR}/")
 
 
 if __name__ == "__main__":

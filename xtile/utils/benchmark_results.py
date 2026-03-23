@@ -37,6 +37,16 @@ def default_p2p_benchmark_path() -> Path:
     return figures_data_dir() / "p2p_latest.json"
 
 
+def default_collective_comm_only_benchmark_path() -> Path:
+    """Return the canonical latest comm-only collective benchmark JSON path."""
+    return figures_data_dir() / "collective_comm_only_latest.json"
+
+
+def default_collective_bulk_sync_benchmark_path() -> Path:
+    """Return the canonical latest collective-vs-bulk-sync benchmark JSON path."""
+    return figures_data_dir() / "collective_bulk_sync_latest.json"
+
+
 def canonical_benchmark_lock_path() -> Path:
     """Return the repo-global lock used for canonical benchmark runs."""
     return figures_data_dir() / ".canonical_benchmark.lock"

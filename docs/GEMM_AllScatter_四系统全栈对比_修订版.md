@@ -773,13 +773,13 @@ XTile 通过 `xtile.ops.*` 或 `ctx.auto_select_pattern(...)` 选择四个真实
 
 | 方面 | TileScale | Triton-distributed | Iris | XTile |
 | --- | --- | --- | --- | --- |
-| 用户写通信的方式 | `putmem_*` / `put_block` / `get_block` / `wait_eq` 等 distributed primitives | `wait/notify/symm_at` + `libshmem_device.*` | `iris.store` / `iris.put` + for-loop | 高层 `xtile.ops.*` + `build_*_plan(...)` + `patterns.*` + `primitives.*` |
-| 编译器看到什么 | mixed：`putmem_*` 是 NVSHMEM 调用；`put_block/get_block` 是 remap + `cp_*` extern | distributed ops + backend-specific lowering（NVIDIA 含 PTX；SHMEM 调用仍不透明） | `tl.load` + `tl.store`，透明 | 标准 Triton op + 内联 `translate_ptr` / `tl.load` / `tl.store` / `tl.atomic_*`；无额外 distributed dialect |
-| overlap 谁决定 | 用户写原语 + 编译器/硬件配合 | 用户写 low-level sync/comm | 用户手写 pattern | 显式 pattern 或 `pattern=\"auto\"` / `ctx.auto_select_pattern(...)` |
-| 通信底层实现 | `putmem_*` → NVSHMEM；`put_block/get_block` → remapped address + `tl::cp_*` helper | `wait/notify/symm_at` lowering + SHMEM device primitives（随 backend 不同） | `__translate + tl.store` | `translate_ptr + tl.load/store/atomic_*`，并补上 `tile_put/get` 与 `tile_*` collectives |
-| 外部依赖 | `torch.distributed` + NVSHMEM / `pynvshmem` | `torch.distributed` + NVSHMEM / ROCSHMEM / MORI SHMEM | PyTorch + `torch.distributed` + ROCm runtime | PyTorch + Triton + CUDA/HIP backend runtime；多进程自动建 heap 仍依赖 `torch.distributed` |
-| 硬件平台 | NVIDIA | NVIDIA / HIP 路径也在扩展 | AMD / ROCm | NVIDIA / AMD 都有 backend 与 kernel 路径，但 public validation 取决于 heap mode / transport |
-| tile collective | 未见公开高层 tile collective API；当前更多是 distributed primitives + examples 组合 | 尚无已发布高层 tile collective API | 无公开 tile collective 抽象；以 `store` / `put` / `get` 为主 | 仓库里已有真实 `tile_*` collectives 与 host-side `ops.*` collectives；多进程 public surface 目前较保守 |
+| 用户接口层级 | TileLang distributed primitives | Triton distributed low-level ops | Triton kernel 内远端访存原语 | Host ops + patterns + primitives |
+| 编译表示 | TVM IR + extern / NVSHMEM 调用 | Distributed dialect + backend lowering | 标准 Triton load/store | 标准 Triton + pointer translation / load / store / atomic |
+| overlap 控制 | 用户编排，编译器与硬件配合 | 用户显式同步与通信 | 用户手写 kernel pattern | 显式 pattern 或 auto-select |
+| 通信机制 | NVSHMEM 与远端拷贝 helper | SHMEM runtime + distributed op lowering | Pointer translation + remote load/store | Pointer translation + load/store/atomic + tile collectives |
+| 运行时依赖 | `torch.distributed` + NVSHMEM | `torch.distributed` + SHMEM runtime | PyTorch + `torch.distributed` + ROCm runtime | PyTorch + Triton + CUDA/HIP runtime |
+| 目标硬件 | NVIDIA | NVIDIA / AMD | AMD / ROCm | NVIDIA / AMD |
+| collective 抽象 | distributed primitives 组合 | low-level primitives 组合 | 远端访存原语组合 | host collective ops + tile collectives |
 
 ---
 

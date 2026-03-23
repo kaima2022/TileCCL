@@ -1,0 +1,849 @@
+{
+  "benchmark": "collective_bulk_sync",
+  "cases": [
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.4951581358909607,
+        "mean_ms": 0.48942044377326965,
+        "median_bandwidth_gbps": 0.008391873270513887,
+        "median_ms": 0.48809126019477844,
+        "min_ms": 0.4843026399612427
+      },
+      "collective": "allreduce",
+      "size_bytes": 4096,
+      "size_kib": 4.0,
+      "speedup_vs_bulk": 2.048803752931978,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.24816393852233887,
+        "mean_ms": 0.24092569947242737,
+        "median_bandwidth_gbps": 0.017193301450758404,
+        "median_ms": 0.2382323145866394,
+        "min_ms": 0.23565441370010376
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.5025602877140045,
+        "mean_ms": 0.49627870321273804,
+        "median_bandwidth_gbps": 0.0329812261800075,
+        "median_ms": 0.49676746129989624,
+        "min_ms": 0.48876553773880005
+      },
+      "collective": "allreduce",
+      "size_bytes": 16384,
+      "size_kib": 16.0,
+      "speedup_vs_bulk": 1.3994416925531021,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.3646351397037506,
+        "mean_ms": 0.3579281270503998,
+        "median_bandwidth_gbps": 0.04615530298782638,
+        "median_ms": 0.35497546195983887,
+        "min_ms": 0.35160407423973083
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.4866085946559906,
+        "mean_ms": 0.4861660301685333,
+        "median_bandwidth_gbps": 0.1348339200019621,
+        "median_ms": 0.4860498011112213,
+        "min_ms": 0.4858933389186859
+      },
+      "collective": "allreduce",
+      "size_bytes": 65536,
+      "size_kib": 64.0,
+      "speedup_vs_bulk": 0.6370192072962337,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.792190432548523,
+        "mean_ms": 0.7689520716667175,
+        "median_bandwidth_gbps": 0.08589179683629368,
+        "median_ms": 0.7630065083503723,
+        "min_ms": 0.7574707269668579
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.26199594140052795,
+        "mean_ms": 0.22463500499725342,
+        "median_bandwidth_gbps": 0.01913591889338299,
+        "median_ms": 0.21404772996902466,
+        "min_ms": 0.21374598145484924
+      },
+      "collective": "allgather",
+      "size_bytes": 4096,
+      "size_kib": 4.0,
+      "speedup_vs_bulk": 1.7357863573197994,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.13267993927001953,
+        "mean_ms": 0.12472867965698242,
+        "median_bandwidth_gbps": 0.03321586694991239,
+        "median_ms": 0.12331455945968628,
+        "min_ms": 0.12143701314926147
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.24068355560302734,
+        "mean_ms": 0.224439799785614,
+        "median_bandwidth_gbps": 0.07359023009008768,
+        "median_ms": 0.22263824939727783,
+        "min_ms": 0.21570175886154175
+      },
+      "collective": "allgather",
+      "size_bytes": 16384,
+      "size_kib": 16.0,
+      "speedup_vs_bulk": 1.7817130250722952,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.13167038559913635,
+        "mean_ms": 0.1253187656402588,
+        "median_bandwidth_gbps": 0.13111667146957637,
+        "median_ms": 0.12495741248130798,
+        "min_ms": 0.11963397264480591
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.24664774537086487,
+        "mean_ms": 0.22452473640441895,
+        "median_bandwidth_gbps": 0.29676927823370836,
+        "median_ms": 0.2208314836025238,
+        "min_ms": 0.215090811252594
+      },
+      "collective": "allgather",
+      "size_bytes": 65536,
+      "size_kib": 64.0,
+      "speedup_vs_bulk": 1.6260423524248409,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.1424849033355713,
+        "mean_ms": 0.13487860560417175,
+        "median_bandwidth_gbps": 0.4825594153065613,
+        "median_ms": 0.13580918312072754,
+        "min_ms": 0.128868967294693
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.12498721480369568,
+        "mean_ms": 0.12464374303817749,
+        "median_bandwidth_gbps": 0.03284477320396702,
+        "median_ms": 0.12470781803131104,
+        "min_ms": 0.12400373816490173
+      },
+      "collective": "scatter",
+      "size_bytes": 4096,
+      "size_kib": 4.0,
+      "speedup_vs_bulk": 0.9800913455908186,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.1404993236064911,
+        "mean_ms": 0.12828558683395386,
+        "median_bandwidth_gbps": 0.032190877965101304,
+        "median_ms": 0.12724101543426514,
+        "min_ms": 0.12283772230148315
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.12639909982681274,
+        "mean_ms": 0.12353062629699707,
+        "median_bandwidth_gbps": 0.13321762013400376,
+        "median_ms": 0.12298673391342163,
+        "min_ms": 0.12199953198432922
+      },
+      "collective": "scatter",
+      "size_bytes": 16384,
+      "size_kib": 16.0,
+      "speedup_vs_bulk": 0.9651523124598024,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.1432076096534729,
+        "mean_ms": 0.12969523668289185,
+        "median_bandwidth_gbps": 0.12857529413272525,
+        "median_ms": 0.12742727994918823,
+        "min_ms": 0.1217573881149292
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.3912821412086487,
+        "mean_ms": 0.38430169224739075,
+        "median_bandwidth_gbps": 0.1712118231882512,
+        "median_ms": 0.38277730345726013,
+        "min_ms": 0.3789179027080536
+      },
+      "collective": "scatter",
+      "size_bytes": 65536,
+      "size_kib": 64.0,
+      "speedup_vs_bulk": 1.0008766717643507,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.4489496350288391,
+        "mean_ms": 0.39459019899368286,
+        "median_bandwidth_gbps": 0.17136191975936335,
+        "median_ms": 0.38244202733039856,
+        "min_ms": 0.3711208701133728
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.9010732173919678,
+        "mean_ms": 0.8838251233100891,
+        "median_bandwidth_gbps": 0.004672192051943858,
+        "median_ms": 0.8766762912273407,
+        "min_ms": 0.8737780153751373
+      },
+      "collective": "reduce_scatter",
+      "size_bytes": 4096,
+      "size_kib": 4.0,
+      "speedup_vs_bulk": 2.1975272903846332,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.4156827926635742,
+        "mean_ms": 0.3991365432739258,
+        "median_bandwidth_gbps": 0.010267269540064806,
+        "median_ms": 0.3989376127719879,
+        "min_ms": 0.38590654730796814
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.6695277988910675,
+        "mean_ms": 0.6543613970279694,
+        "median_bandwidth_gbps": 0.0251352851041806,
+        "median_ms": 0.6518326699733734,
+        "min_ms": 0.6472952663898468
+      },
+      "collective": "reduce_scatter",
+      "size_bytes": 16384,
+      "size_kib": 16.0,
+      "speedup_vs_bulk": 1.8449688419321166,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.37986040115356445,
+        "mean_ms": 0.35844892263412476,
+        "median_bandwidth_gbps": 0.04637381785029366,
+        "median_ms": 0.35330280661582947,
+        "min_ms": 0.34014880657196045
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.892147421836853,
+        "mean_ms": 0.8762247860431671,
+        "median_bandwidth_gbps": 0.07448603420434327,
+        "median_ms": 0.8798427879810333,
+        "min_ms": 0.8549019694328308
+      },
+      "collective": "reduce_scatter",
+      "size_bytes": 65536,
+      "size_kib": 64.0,
+      "speedup_vs_bulk": 2.220601923673596,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.422745943069458,
+        "mean_ms": 0.4008963704109192,
+        "median_bandwidth_gbps": 0.16540383084098195,
+        "median_ms": 0.3962181508541107,
+        "min_ms": 0.3854408860206604
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.24086609482765198,
+        "mean_ms": 0.23894309997558594,
+        "median_bandwidth_gbps": 0.01710876089652382,
+        "median_ms": 0.23940950632095337,
+        "min_ms": 0.2344176173210144
+      },
+      "collective": "broadcast",
+      "size_bytes": 4096,
+      "size_kib": 4.0,
+      "speedup_vs_bulk": 0.6087582528962101,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.4327818751335144,
+        "mean_ms": 0.3966987133026123,
+        "median_bandwidth_gbps": 0.010415099392586839,
+        "median_ms": 0.3932751715183258,
+        "min_ms": 0.37004798650741577
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.2457164227962494,
+        "mean_ms": 0.24393200874328613,
+        "median_bandwidth_gbps": 0.06712627651679665,
+        "median_ms": 0.24407729506492615,
+        "min_ms": 0.24170801043510437
+      },
+      "collective": "broadcast",
+      "size_bytes": 16384,
+      "size_kib": 16.0,
+      "speedup_vs_bulk": 0.6523977376827179,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.4037097096443176,
+        "mean_ms": 0.37901028990745544,
+        "median_bandwidth_gbps": 0.0437930309386227,
+        "median_ms": 0.3741234540939331,
+        "min_ms": 0.3676377236843109
+      }
+    },
+    {
+      "bulk_sync": {
+        "correct": true,
+        "max_ms": 0.18064677715301514,
+        "mean_ms": 0.17542541027069092,
+        "median_bandwidth_gbps": 0.3733486002634975,
+        "median_ms": 0.1755356788635254,
+        "min_ms": 0.1710839569568634
+      },
+      "collective": "broadcast",
+      "size_bytes": 65536,
+      "size_kib": 64.0,
+      "speedup_vs_bulk": 0.6245940536313145,
+      "xtile": {
+        "correct": true,
+        "max_ms": 0.29197707772254944,
+        "mean_ms": 0.2832338213920593,
+        "median_bandwidth_gbps": 0.23319131565615514,
+        "median_ms": 0.28103962540626526,
+        "min_ms": 0.2729371190071106
+      }
+    }
+  ],
+  "command": "/home/makai/XTile/tests/benchmarks/bench_collective_bulk_sync.py",
+  "environment": {
+    "dtype": "float32",
+    "gpu_name": "NVIDIA H100 PCIe",
+    "iters": 5,
+    "message_sizes_bytes": [
+      4096,
+      16384,
+      65536
+    ],
+    "mode": "single_process",
+    "transport_strategy": "peer_access",
+    "visible_gpus": 2,
+    "warmup": 2,
+    "world_size": 2
+  },
+  "generated_at_utc": "2026-03-23T13:30:30.210192+00:00",
+  "methodology": {
+    "allreduce_note": "allreduce optimized path is measured as device reduce_scatter + device allgather composition because the raw single-kernel tile_allreduce path is not the stable benchmark surface here",
+    "bulk_sync_baseline": "host-orchestrated composition of lower-level point-to-point steps with explicit synchronization between phases",
+    "optimized_path": "single-process peer_access device collective kernels"
+  },
+  "runtime_metadata": {
+    "backend": "cuda",
+    "device": "cuda:0",
+    "has_heap": true,
+    "heap": {
+      "allocator": {
+        "bytes_allocated": 131072,
+        "bytes_free": 268304384,
+        "capabilities": {
+          "dmabuf_mapping": false,
+          "external_import_copy": true,
+          "external_mapping": false,
+          "fd_passing": false,
+          "multi_segment": false,
+          "peer_export": true,
+          "peer_import": true
+        },
+        "device": "cuda:0",
+        "exportable_segments": [
+          {
+            "allocator_name": "torch_bump",
+            "base_ptr": 140280510545920,
+            "device": "cuda:0",
+            "segment_id": "heap",
+            "segment_kind": "device_heap",
+            "size_bytes": 268435456
+          }
+        ],
+        "external_mapping_mode": "none",
+        "external_memory_interface": {
+          "allocator_name": "torch_bump",
+          "copy_import_supported": true,
+          "dmabuf_mapping": false,
+          "fd_passing": false,
+          "import_mode": "copy",
+          "mapping_mode": "none",
+          "zero_copy_mapping_supported": false
+        },
+        "external_tensor_import_mode": "copy",
+        "memory_model": {
+          "allocator_name": "torch_bump",
+          "external_mapping_mode": "none",
+          "external_tensor_import_mode": "copy",
+          "local_segment_layout": "single_contiguous_device_heap",
+          "peer_import_model": "per_rank_transport_resolved_imports",
+          "peer_mapping_model": "rank_ordered_import_table"
+        },
+        "name": "torch_bump",
+        "peer_import_access_kinds": [
+          "local",
+          "peer_direct",
+          "mapped_remote",
+          "remote_pointer"
+        ],
+        "peer_transport_modes": [
+          "ctypes_ipc",
+          "pytorch_ipc",
+          "peer_access_pointer_exchange"
+        ],
+        "segment_count": 1,
+        "segment_layout": {
+          "allocator_name": "torch_bump",
+          "exportable_segment_count": 1,
+          "exportable_segment_ids": [
+            "heap"
+          ],
+          "layout_kind": "single_exportable_segment",
+          "multi_segment": false,
+          "primary_segment_id": "heap",
+          "segment_count": 1
+        },
+        "segments": [
+          {
+            "allocator_name": "torch_bump",
+            "base_ptr": 140280510545920,
+            "device": "cuda:0",
+            "segment_id": "heap",
+            "segment_kind": "device_heap",
+            "size_bytes": 268435456
+          }
+        ],
+        "size_bytes": 268435456
+      },
+      "backend": "cuda",
+      "device": "cuda:0",
+      "exportable_segments": [
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140280510545920,
+          "device": "cuda:0",
+          "is_local_rank": true,
+          "is_primary_segment": true,
+          "owner_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456
+        }
+      ],
+      "external_memory_interface": {
+        "allocator_name": "torch_bump",
+        "copy_import_supported": true,
+        "dmabuf_mapping": false,
+        "fd_passing": false,
+        "import_mode": "copy",
+        "mapping_mode": "none",
+        "zero_copy_mapping_supported": false
+      },
+      "local_base": 140280510545920,
+      "mode": "single_process",
+      "peer_export_catalog": [
+        {
+          "peer_rank": 0,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "allocator_name": "torch_bump",
+              "base_ptr": 140280510545920,
+              "device": "cuda:0",
+              "payload_type": "int",
+              "peer_rank": 0,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 268435456,
+              "transport": "peer_access"
+            }
+          ]
+        },
+        {
+          "peer_rank": 1,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "allocator_name": "torch_bump",
+              "base_ptr": 140280242110464,
+              "device": "cuda:1",
+              "payload_type": "int",
+              "peer_rank": 1,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 268435456,
+              "transport": "peer_access"
+            }
+          ]
+        }
+      ],
+      "peer_exports": [
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140280510545920,
+          "device": "cuda:0",
+          "payload_type": "int",
+          "peer_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456,
+          "transport": "peer_access"
+        },
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140280242110464,
+          "device": "cuda:1",
+          "payload_type": "int",
+          "peer_rank": 1,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456,
+          "transport": "peer_access"
+        }
+      ],
+      "peer_import_catalog": [
+        {
+          "peer_rank": 0,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "access_kind": "local",
+              "allocator_name": "torch_bump",
+              "cleanup_kind": "none",
+              "device": "cuda:0",
+              "exported_base_ptr": 140280510545920,
+              "mapped_ptr": 140280510545920,
+              "peer_rank": 0,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 268435456,
+              "transport": "peer_access"
+            }
+          ]
+        },
+        {
+          "peer_rank": 1,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "access_kind": "peer_direct",
+              "allocator_name": "torch_bump",
+              "cleanup_kind": "none",
+              "device": "cuda:1",
+              "exported_base_ptr": 140280242110464,
+              "mapped_ptr": 140280242110464,
+              "peer_rank": 1,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 268435456,
+              "transport": "peer_access"
+            }
+          ]
+        }
+      ],
+      "peer_imports": [
+        {
+          "access_kind": "local",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "none",
+          "device": "cuda:0",
+          "exported_base_ptr": 140280510545920,
+          "mapped_ptr": 140280510545920,
+          "peer_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456,
+          "transport": "peer_access"
+        },
+        {
+          "access_kind": "peer_direct",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "none",
+          "device": "cuda:1",
+          "exported_base_ptr": 140280242110464,
+          "mapped_ptr": 140280242110464,
+          "peer_rank": 1,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456,
+          "transport": "peer_access"
+        }
+      ],
+      "peer_memory_map": [
+        {
+          "access_kind": "local",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "none",
+          "device": "cuda:0",
+          "exported_base_ptr": 140280510545920,
+          "is_local_rank": true,
+          "mapped_ptr": 140280510545920,
+          "peer_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456,
+          "transport": "peer_access"
+        },
+        {
+          "access_kind": "peer_direct",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "none",
+          "device": "cuda:1",
+          "exported_base_ptr": 140280242110464,
+          "is_local_rank": false,
+          "mapped_ptr": 140280242110464,
+          "peer_rank": 1,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456,
+          "transport": "peer_access"
+        }
+      ],
+      "rank": 0,
+      "segment_layout": {
+        "allocator_name": "torch_bump",
+        "exportable_segment_count": 1,
+        "exportable_segment_ids": [
+          "heap"
+        ],
+        "layout_kind": "single_exportable_segment",
+        "multi_segment": false,
+        "primary_segment_id": "heap",
+        "segment_count": 1
+      },
+      "segments": [
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140280510545920,
+          "device": "cuda:0",
+          "is_local_rank": true,
+          "owner_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 268435456
+        }
+      ],
+      "size_bytes": 268435456,
+      "transport_strategy": "peer_access",
+      "world_size": 2
+    },
+    "rank": 0,
+    "world_size": 2
+  },
+  "runtime_support": {
+    "collectives": {
+      "collectives.allgather_launcher": {
+        "detail": "Host launcher + high-level op are validated on single-process peer-access heaps.",
+        "state": "supported"
+      },
+      "collectives.allreduce_launcher": {
+        "detail": "Host launcher + high-level op are validated on single-process peer-access heaps.",
+        "state": "supported"
+      },
+      "collectives.reduce_scatter_launcher": {
+        "detail": "Single-process reference reduce_scatter path is validated; the explicit device override is intentionally rejected for this mode until proven correct.",
+        "state": "supported"
+      }
+    },
+    "context": {
+      "backend": "cuda",
+      "device": "cuda:0",
+      "has_heap": true,
+      "heap_mode": "single_process",
+      "rank": 0,
+      "transport_strategy": "peer_access",
+      "world_size": 2
+    },
+    "contracts": {
+      "allreduce.in_place": {
+        "detail": "Stable public in-place host contract: tensor.numel must be divisible by world_size, and the tensor must reside in the attached symmetric heap.",
+        "state": "supported"
+      },
+      "gemm_allgather.shard/full": {
+        "detail": "Stable public host contract: A(M,K) full LHS, B(K,N/world_size) rank-local RHS shard, C(M,N) full output. Runtime availability inherits the validated allgather path for the current heap mode/transport.",
+        "state": "supported"
+      },
+      "gemm_allscatter.full/full": {
+        "detail": "Stable public contract for full RHS and full output buffers.",
+        "state": "supported"
+      },
+      "gemm_allscatter.full/shard": {
+        "detail": "High-level wrapper materializes a heap-backed full output, then returns the rank-local shard.",
+        "state": "supported"
+      },
+      "gemm_allscatter.shard/full": {
+        "detail": "Rejected intentionally: current shard/shard gemm_allscatter execution is a peer-scatter contract, not a stable local-shard basis for full-output assembly.",
+        "state": "unsupported"
+      },
+      "gemm_allscatter.shard/shard": {
+        "detail": "Expert contract available via gemm_allscatter_sharded(...).",
+        "state": "supported"
+      },
+      "gemm_reducescatter.full/shard": {
+        "detail": "Stable public host contract: A(M,K) local contribution, B(K,N) full RHS, C(M,N/world_size) rank-local shard. Runtime availability inherits the validated reduce_scatter path for the current heap mode/transport.",
+        "state": "supported"
+      }
+    },
+    "execution_paths": {
+      "reduce_scatter.device": {
+        "detail": "Single-process device override is intentionally rejected because it is not yet correct.",
+        "state": "unsupported"
+      },
+      "reduce_scatter.reference": {
+        "detail": "Validated on single-process peer-access heaps.",
+        "state": "supported"
+      }
+    },
+    "memory": {
+      "symmetric_heap.allocator_memory_model": {
+        "detail": "Heap exposes the allocator memory-model descriptor, including local segment layout, peer import/mapping model, and current external import/mapping modes.",
+        "state": "supported"
+      },
+      "symmetric_heap.current_runtime": {
+        "detail": "Attached heap mode='single_process', transport_strategy='peer_access'.",
+        "state": "supported"
+      },
+      "symmetric_heap.device_remote_access": {
+        "detail": "Single-process peer-access heaps are directly device-dereferenceable.",
+        "state": "supported"
+      },
+      "symmetric_heap.exportable_segment_metadata": {
+        "detail": "Heap exposes the current exportable segment descriptors separately from the full allocator-owned segment catalog.",
+        "state": "supported"
+      },
+      "symmetric_heap.external_import": {
+        "detail": "Heap exposes import_external_tensor()/as_symmetric() via the active allocator.",
+        "state": "supported"
+      },
+      "symmetric_heap.external_mapping": {
+        "detail": "The active allocator does not yet implement zero-copy external mapping (FD passing / DMA-BUF import-map).",
+        "state": "unsupported"
+      },
+      "symmetric_heap.external_memory_interface": {
+        "detail": "Heap exposes the allocator's structured external-memory interface descriptor, including import mode, mapping mode, and zero-copy capability flags.",
+        "state": "supported"
+      },
+      "symmetric_heap.peer_import_metadata": {
+        "detail": "Heap exposes structured peer-import records for the active transport strategy.",
+        "state": "supported"
+      },
+      "symmetric_heap.peer_mapping_metadata": {
+        "detail": "Heap exposes allocator-owned peer export descriptors, peer-import records, plus structured peer mapping metadata.",
+        "state": "supported"
+      },
+      "symmetric_heap.peer_segment_catalog": {
+        "detail": "Heap exposes segment-scoped peer export/import catalogs keyed by peer rank and segment id, in addition to the flat per-record metadata.",
+        "state": "supported"
+      },
+      "symmetric_heap.segment_layout": {
+        "detail": "Heap exposes the allocator's exportable segment-layout descriptor, including primary segment id and exportable segment ids.",
+        "state": "supported"
+      },
+      "symmetric_heap.segment_metadata": {
+        "detail": "Heap exposes allocator-owned local segment metadata for the active heap backend.",
+        "state": "supported"
+      },
+      "symmetric_heap_allocator_first_import_map": {
+        "detail": "Allocator-backed heap runtime is implemented with a torch_bump backend, allocator-owned local segment metadata, peer export/import descriptors, and copy-based external import/as_symmetric materialization. Canonical segmented peer import/map is still not implemented.",
+        "state": "partial"
+      }
+    },
+    "ops": {
+      "allgather": {
+        "detail": "Host launcher + high-level op are validated on single-process peer-access heaps.",
+        "state": "supported"
+      },
+      "allreduce": {
+        "detail": "Host launcher + high-level op are validated on single-process peer-access heaps.",
+        "state": "supported"
+      },
+      "gemm_allgather": {
+        "detail": "High-level host plan is validated on single-process peer-access heaps via local GEMM materialization plus allgather execution.",
+        "state": "supported"
+      },
+      "gemm_allscatter": {
+        "detail": "High-level plan API is validated on single-process peer-access heaps.",
+        "state": "supported"
+      },
+      "gemm_reducescatter": {
+        "detail": "High-level host plan is validated on single-process peer-access heaps via local GEMM materialization plus reduce_scatter reference execution.",
+        "state": "supported"
+      },
+      "reduce_scatter": {
+        "detail": "Single-process reference reduce_scatter path is validated; the explicit device override is intentionally rejected for this mode until proven correct.",
+        "state": "supported"
+      }
+    }
+  },
+  "schema_version": 1,
+  "summary": {
+    "best_case": {
+      "collective": "reduce_scatter",
+      "size_bytes": 65536,
+      "size_kib": 64.0,
+      "speedup_vs_bulk": 2.220601923673596
+    },
+    "best_speedup_vs_bulk": 2.220601923673596,
+    "peak_by_collective": {
+      "allgather": {
+        "best_speedup_vs_bulk": 1.7817130250722952,
+        "peak_bulk_bandwidth_gbps": 0.29676927823370836,
+        "peak_xtile_bandwidth_gbps": 0.4825594153065613
+      },
+      "allreduce": {
+        "best_speedup_vs_bulk": 2.048803752931978,
+        "peak_bulk_bandwidth_gbps": 0.1348339200019621,
+        "peak_xtile_bandwidth_gbps": 0.08589179683629368
+      },
+      "broadcast": {
+        "best_speedup_vs_bulk": 0.6523977376827179,
+        "peak_bulk_bandwidth_gbps": 0.3733486002634975,
+        "peak_xtile_bandwidth_gbps": 0.23319131565615514
+      },
+      "reduce_scatter": {
+        "best_speedup_vs_bulk": 2.220601923673596,
+        "peak_bulk_bandwidth_gbps": 0.07448603420434327,
+        "peak_xtile_bandwidth_gbps": 0.16540383084098195
+      },
+      "scatter": {
+        "best_speedup_vs_bulk": 1.0008766717643507,
+        "peak_bulk_bandwidth_gbps": 0.1712118231882512,
+        "peak_xtile_bandwidth_gbps": 0.17136191975936335
+      }
+    }
+  }
+}

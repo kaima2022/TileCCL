@@ -531,6 +531,30 @@ def _broadcast_kernel(
     )
 
 
+@triton.jit
+def _scatter_kernel(
+    src_ptr,
+    dst_ptr,
+    heap_bases_ptr,
+    rank,
+    world_size,
+    root,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Kernel wrapper for :func:`tile_scatter`."""
+    offsets = tl.arange(0, BLOCK_SIZE)
+    tile_scatter(
+        src_ptr,
+        dst_ptr,
+        offsets,
+        rank,
+        world_size,
+        root,
+        heap_bases_ptr,
+        BLOCK_SIZE,
+    )
+
+
 # -----------------------------------------------------------------------
 # Python host-side launchers
 # -----------------------------------------------------------------------
@@ -658,6 +682,64 @@ def broadcast(
 
     _broadcast_kernel[(1,)](
         tensor,
+        heap_bases,
+        heap.rank,
+        world_size,
+        root,
+        BLOCK_SIZE=block_size,
+    )
+
+
+def scatter(
+    tensor: torch.Tensor,
+    output: torch.Tensor,
+    heap: "xtile.memory.SymmetricHeap",
+    *,
+    root: int = 0,
+) -> None:
+    """Host-side launcher for :func:`tile_scatter`.
+
+    ``tensor`` must contain ``world_size`` contiguous rank-local chunks and
+    ``output`` must contain one chunk. After the call, rank ``i`` receives
+    chunk ``i`` from ``root``.
+    """
+    world_size = heap.world_size
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
+    if root < 0 or root >= world_size:
+        raise ValueError(f"root={root} out of range [0, {world_size})")
+
+    block_size = output.numel()
+    expected_input = block_size * world_size
+    if tensor.numel() != expected_input:
+        raise ValueError(
+            f"Input size ({tensor.numel()}) must equal "
+            f"world_size * output.numel() ({expected_input})."
+        )
+    if tensor.device != output.device:
+        raise ValueError(
+            f"tensor/output must be on the same device, got {tensor.device} vs {output.device}"
+        )
+    if not tensor.is_contiguous():
+        raise ValueError("scatter currently requires tensor to be contiguous")
+    if not output.is_contiguous():
+        raise ValueError("scatter currently requires output to be contiguous")
+
+    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
+    _require_tensor_on_heap(output, heap=heap, name="output")
+    _require_device_remote_access_transport(
+        heap,
+        operation="xtile.primitives.scatter(...)",
+    )
+
+    heap_bases = heap.get_heap_bases()
+    _scatter_kernel[(1,)](
+        tensor,
+        output,
         heap_bases,
         heap.rank,
         world_size,
