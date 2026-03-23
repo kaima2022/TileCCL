@@ -116,6 +116,17 @@ plan.execute(A, B, C)
 | 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.gemm_allgather(...)` / `xtile.ops.allgather(...)` / `xtile.ops.allreduce(...)` / `xtile.ops.reduce_scatter(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入，并统一走显式 `plan` 主链 | 在当前 public multiprocess surface（`world_size=2 + ctypes_ipc`）上，`allgather / allreduce / reduce_scatter / gemm_allscatter / gemm_allgather / gemm_reducescatter` 已完成同级别 host contract、回归和结构化 benchmark 验收；当前差距已转为更大 world size、更多 transport、stress 与性能门禁 |
 | full-shape correctness path 与 benchmark shard path | 两者都存在，但都已开始通过显式 contract + plan builder 收敛 | 仍需把更多调用点统一迁到高层 op API，并继续弱化直接 `pattern.execute(...)` 的 public 角色 |
 
+### 当前高层 op 家族与公共主链
+
+当前第 1 层已经不再只有 `gemm_allscatter(...)` 一个入口，而是形成了同一套 host-side 公共形态：
+
+- `gemm_allscatter(...)`：默认 public `full/full` contract，expert 路径可显式声明 `full/shard` 或 `shard/shard`
+- `gemm_allgather(...)`：`A(M, K)` full、`B(K, N / world_size)` shard、`C(M, N)` full
+- `gemm_reducescatter(...)`：`A(M, K)` 本 rank contribution、`B(K, N)` full、`C(M, N / world_size)` shard
+- `allgather(...)`、`allreduce(...)`、`reduce_scatter(...)`：都已经有稳定高层 host contract
+
+这几类入口现在都走 `build_*_plan(...) -> plan.execute(...)` 主链，而不是继续依赖调用方手工拼 `pattern.execute(...)`。当前真正保守处理的边界，不是“有没有 API”，而是 multiprocess 正式支持面仍只收口到 `world_size=2 + ctypes_ipc`。
+
 ---
 
 ## 第 2 层：Pattern 层（以 FusedSequential 为例）
@@ -529,11 +540,24 @@ def _setup_multiprocess(self):
 
 **XTile 应该如何向 Iris 对齐，而不是简单照抄？**
 
-总纲不变，但详细动作已经并入下文“当前实现状态、差距与下一步计划”。核心原则只有三条：
+总纲不变，但详细动作已经并入下文“当前差距与下一步计划”。核心原则只有三条：
 
 1. 保留 XTile 当前“多 transport 显式实现 + 受控强制诊断”的工程优势，但 auto path 继续只走已验证的 device-safe transport。
 2. 吸收 Iris 的 allocator-first / export-import-map canonical path，把 allocator、segment metadata、FD/DMA-BUF 映射能力做成底层后端抽象。
 3. 对上统一为稳定 public contract：逻辑 shape、layout metadata、heap ownership、external import 语义不能再跟具体 fallback 路径绑死。
+
+### 当前底座已落地的部分
+
+当前第 4 层已经不再只是一个“能分配对称堆、能交换 base pointer”的 bring-up 原型，而是进入了 allocator-first 的第一阶段：
+
+- `xtile.memory.allocators` 已建立 allocator backend 边界，默认 backend 为 `torch_bump`
+- `SymmetricHeap` 已公开 segment metadata、peer export/import metadata、segment-scoped peer catalog
+- `heap_bases` 已从 primary-segment import catalog 派生，而不是继续依赖平铺记录的隐式顺序
+- `import_external_tensor(...)` / `as_symmetric(...)` 与 `XTileContext.as_symmetric(...)` 已接入，当前 external import 语义明确是 copy-based
+- `xtile.describe_runtime_support(ctx)` / `ctx.support_matrix()` / `xtile support --json` 已形成统一状态出口
+- `figures/data/*.json`、`scripts/plot_figures.py`、`docs/generated/benchmark_runtime_summary.md` 已开始共享同一套结构化数据源
+
+这部分要写准确：它说明 XTile 的 allocator-first v1 已经落地，但**不等于** canonical `allocator + export/import-map/access` backend 已经完成。
 
 ---
 
@@ -603,492 +627,94 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 ---
 
-## 当前实现状态、差距与下一步计划
+## 当前差距与下一步计划
 
-本节按 2026-03-22 当前仓库源码、测试和结构化实验产物重新整理，不再把已经落地的事项继续写成“待做计划”，而是直接回答四个问题：
+前文已经把当前用户层、pattern contract、通信 helper、对称堆建立方式和硬件执行主链直接展示出来。本节不再重复“已实现清单”，只保留当前仍未收口的差距与后续优先级。
 
-1. 哪些已经实现了。
-2. 哪些还没有实现。
-3. 现在和 Iris 的差距到底在哪里。
-4. 距离理想通信库还差什么，以及下一步该先做什么。
+### 当前主要差距
 
-### 状态总览
+#### 1. canonical memory backend 仍未完成
 
-当前文档和代码主链已经**基本对齐**。需要处理的重点不是“代码还没做”，而是把“已经落地的第一版基础能力”和“尚未闭环的工业级验证面”明确区分开。
+当前 XTile 已经进入 allocator-first v1，但离 Iris 风格的 canonical `allocator + export/import-map/access` 统一底座还有实质差距。
 
-当前更准确的结论应当是：
+当前缺口主要是：
 
-- **XTile 的基础框架已经搭起来了。**
-  - `XTileContext`、`SymmetricHeap`、4 种 overlap pattern、`translate_ptr` 5 指令、runtime support matrix、高层 `ops` 主链、benchmark JSON、plot、文档导出，这些都已经形成第一版闭环。
-- **高层 public contract 的第一版已经成立。**
-  - `xtile.ops.gemm_allscatter(...)`
-  - `xtile.ops.gemm_allgather(...)`
-  - `xtile.ops.allgather(...)`
-  - `xtile.ops.reduce_scatter(...)`
-  - `xtile.ops.gemm_reducescatter(...)`
-  - 现在都已经进入“build plan -> execute plan”主链，而不是继续停留在“直接裸调 pattern.execute(...)”。
-- **allocator-first memory substrate 已经落地第一阶段。**
-  - `xtile.memory.allocators` 已引入 allocator backend 边界。
-  - 当前默认 backend 是 `torch_bump`。
-  - `SymmetricHeap.import_external_tensor(...)` / `as_symmetric(...)` 与 `XTileContext.as_symmetric(...)` 已接入。
-  - 这还不是 Iris 风格的 canonical import/map，但已经不再是“所有内存语义都硬编码在 SymmetricHeap 里”。
-- **和 Iris 的最大差距，不再是有没有 kernel，而是有没有 canonical allocator / export-import-map / runtime substrate。**
-  - 这一层 Iris 更整、更统一。
-  - XTile 当前更像“显式 fallback + 显式 gate + 显式 contract”的 bring-up 体系。
-- **距离理想通信库，当前主要还差四类东西：**
-  - 统一内存语义到底层；
-  - 收敛公共契约到更少、更稳的 API；
-  - 把 multiprocess 支持面从“已验证的局部路径”扩成“可信的完整支持面”；
-  - 补齐性能、压力、长稳和生产化验证。
+- 还没有把 export / import / map / access 收成单一状态机
+- external mapping 仍未实现，`fd passing + DMA-BUF` 仍缺位
+- segmented import-map 还没有形成正式主路径
 
-### 已实现
+所以当前准确口径应是：**allocator-first 第一阶段已落地，但 canonical backend 仍未完成。**
 
-#### 1. shape / layout / output contract 主链已经统一
+#### 2. 高层公共语义还要继续收口
 
-当前 shape / layout / output contract 主链已经统一，边界 contract 仍有限制。
+当前 public host-side op 家族已经建立，但还没有完全收成“普通用户只接触稳定 contract，expert 才接触内部细节”的最终形态。
 
-已经落地的事实包括：
+当前仍需继续处理的点是：
 
-- `xtile/patterns/contracts.py` 已新增 `PatternExecutionSpec`，pattern 不再从裸 tensor shape 猜逻辑语义。
-- 4 个主 pattern 已统一先走 `resolve_execution(...)` / `resolve_pattern_execution(...)`。
-- benchmark 路径已经显式传入 `full_N + b_layout + c_layout`。
-- `scatter_tile_to_peer(...)` 已显式消费 `src_col_offset / valid_cols / dst_leading_dim / dst_col_offset`。
-- `full/full`、`full/shard`、`shard/shard` 已有明确 contract；`shard/full` 现在是**有意识地拒绝**，而不是“还没想清楚先放着”。
+- `gemm_allscatter.shard/full` 仍应保持 unsupported；这不是少一个 wrapper，而是当前并不存在稳定 local-shard basis
+- `pattern.execute(...)` 虽然已不再是推荐主入口，但在仓库中仍偏显眼，后续还要继续退到 expert/internal surface
+- public contract 命名、benchmark contract spelling 与文档术语还需要继续统一，避免消费层分叉重新出现
 
-这意味着当前的问题不是“contract 主链没搭起来”，而是“contract 主链已经搭起来了，但还没有覆盖所有想象中的 layout 组合”。
+#### 3. multiprocess 正式支持面仍然偏窄
 
-#### 2. 高层 `ops` 第一版基础已经齐备
+当前真正可以保守写成正式支持面的，是：
 
-当前真实主链已经是“高层 contract -> build plan -> plan.execute(...)”。
+- `world_size=2`
+- `transport_strategy=ctypes_ipc`
+- 代表性 dtype / shape 下的 correctness 与结构化 benchmark
 
-源码摘录如下，来自 `xtile/ops.py`：
-
-```python
-def build_gemm_reducescatter_plan(
-    A: Any,
-    B: Any,
-    C: Any,
-    *,
-    ctx: xtile.XTileContext | None = None,
-    implementation: str = "auto",
-    storage_kind: str = "symmetric",
-) -> GemmReduceScatterPlan:
-    """Resolve a reusable host-side plan for GEMM + reduce-scatter.
-
-    Public contract:
-    - ``A``: local rank contribution of shape ``(M, K)``
-    - ``B``: full RHS matrix of shape ``(K, N)``
-    - ``C``: rank-local output shard of shape ``(M, N / world_size)``
-    """
-    ...
-    reduce_scatter_plan = ReduceScatterPlan(...)
-    return GemmReduceScatterPlan(...)
-
-
-def gemm_reducescatter(
-    A: Any,
-    B: Any,
-    C: Any,
-    *,
-    ctx: xtile.XTileContext | None = None,
-    implementation: str = "auto",
-    storage_kind: str = "symmetric",
-) -> Any:
-    plan = build_gemm_reducescatter_plan(...)
-    return plan.execute(A, B, C, validate=False)
-```
-
-这段代码本身已经说明两点：
-
-- `gemm_reducescatter(...)` 已经不再是占位符，也不再是 `NotImplementedError`。
-- 高层 public API 现在确实在复用 plan 对象，而不是靠文档假设。
-
-当前已经落地的高层能力包括：
-
-- `GemmAllScatterPlan` + `build_gemm_allscatter_plan(...)`
-- `gemm_allscatter(...)`
-- `gemm_allscatter_sharded(...)`
-- `GemmAllGatherContract` + `GemmAllGatherPlan`
-- `build_gemm_allgather_plan(...)`
-- `gemm_allgather(...)`
-- `AllGatherPlan` + `build_allgather_plan(...)`
-- `allgather(...)`
-- `ReduceScatterPlan` + `build_reduce_scatter_plan(...)`
-- `reduce_scatter(...)`
-- `GemmReduceScatterPlan` + `build_gemm_reducescatter_plan(...)`
-- `gemm_reducescatter(...)`
-
-当前更准确的表述是：
-
-- `gemm_allscatter(...)`：单进程主路径已成立；`world_size=2 + ctypes_ipc` 的 multiprocess public baseline correctness 与结构化 benchmark 已闭环。
-- `gemm_allgather(...)`：单进程主路径已成立；`world_size=2 + ctypes_ipc` 已完成 `2 shapes × 3 dtypes × 2 transport selections = 12/12` 真机矩阵。
-- `allgather(...)`：单进程主路径已成立；`world_size=2 + ctypes_ipc` 的 primitive / kernel / high-level API 结构化矩阵已闭环。
-- `allreduce(...)`：高层 `AllReducePlan` / `build_allreduce_plan(...)` / `xtile.ops.allreduce(...)` 已落地；single-process 顺序调用与 multiprocess `ctypes_ipc` 两阶段 composed path 均已补齐验证。
-- `reduce_scatter(...)`：单进程 reference 与 multiprocess device 路径都已在当前 public surface 上完成真实验收；更大 world size / 更多 transport 仍未闭环。
-- `gemm_reducescatter(...)`：稳定 host-side contract 已成立；`world_size=2 + ctypes_ipc` 的 dtype × transport 结构化矩阵与高层 API 验收已闭环。
-
-#### 3. runtime support / capability matrix 第一版已经完成
-
-runtime support / capability matrix 第一版已经完成，当前已经有统一源码出口、CLI 出口和测试出口。
-
-源码摘录如下，来自 `xtile/support.py`：
-
-```python
-ops = {
-    "gemm_allscatter": gemm_allscatter_status,
-    "gemm_allgather": gemm_allgather_status,
-    "allgather": allgather_status,
-    "reduce_scatter": SupportStatus(
-        reduce_scatter_state,
-        reduce_scatter_detail,
-    ),
-    "gemm_reducescatter": gemm_reducescatter_status,
-}
-
-contracts = {
-    "gemm_allscatter.full/full": SupportStatus("supported", ...),
-    "gemm_allscatter.shard/shard": SupportStatus("supported", ...),
-    "gemm_allscatter.full/shard": SupportStatus("supported", ...),
-    "gemm_allscatter.shard/full": SupportStatus("unsupported", ...),
-    "gemm_allgather.shard/full": SupportStatus(...),
-    "gemm_reducescatter.full/shard": SupportStatus(
-        gemm_reducescatter_status.state,
-        ...
-    ),
-}
-```
-
-这意味着：
-
-- `xtile.describe_runtime_support(ctx)` 已经存在。
-- `ctx.support_matrix()` 已经存在。
-- `xtile support --json` 已经存在。
-- benchmark JSON、plot 和文档导出已经开始消费这份 `runtime_support` snapshot；其中 benchmark JSON 现同时携带 `runtime_metadata`，pattern benchmark 还会按 size 记录对应 heap/runtime metadata。
-- 当前状态判断已经是 `heap_mode + transport_strategy + operation contract` 感知，而不是只看“有没有函数名”。
-
-#### 4. allocator-first memory substrate 第一阶段已经落地
-
-当前已经完成的部分是：
-
-- `xtile.memory.allocators` 已建立 allocator backend 抽象。
-- 默认 allocator backend 已显式命名为 `torch_bump`，而不是继续把分配细节完全藏在 `SymmetricHeap` 私有实现里。
-- multiprocess heap bring-up 已开始通过 allocator-owned export/import surface 收口：
-  - `export_peer_memory(...)`
-  - `import_peer_memory(...)`
-  - `PeerMemoryExportDescriptor`
-- `SymmetricHeap.peer_export_descriptors()` / `peer_export_metadata()` / `peer_memory_map()` / `peer_memory_map_metadata()` 已接入，peer export/import/map 元数据不再只能靠调试器看内部状态。
-- `MemorySegmentDescriptor`、`SymmetricHeap.segment_descriptors()` / `segment_metadata()` 已接入，allocator-owned local segment catalog 现已显式可见；`peer_exports` / `peer_imports` / `peer_memory_map` 也已带 `segment_id` / `segment_kind`。
-- `ImportedPeerMemory`、`SymmetricHeap.peer_imports()` / `peer_import_metadata()` 已接入，peer import state 不再只是 `mapped_ptr + cleanup resource` 的内部临时结构，而是正式结构化 surface。
-- `PeerMemoryExportDescriptor` / `ImportedPeerMemory` 现都显式带 `peer_rank`；peer export/import records 不再只靠列表位置隐式表达 rank。
-- `peer_imports` 现在已经是 `SymmetricHeap` import-map 的单一真实状态源；当前 `translate()` 通过 primary `segment_id` 走 `peer_import_segment(...)`，`heap_bases` 也已改为从 primary-segment import catalog 派生，`peer_memory_map()` 则继续从结构化 peer import records 构建，不再额外维护 `_remote_ptrs` / `_peer_map` 这类并行派生缓存。
-- `heap_bases` 的刷新链路也已经收口到 `_refresh_heap_bases()`；`create_all(...)`、single-rank init 与 multiprocess transport setup 不再各自手工覆写 `_heap_bases`。
-- `SymmetricHeap._validate_peer_mapping_state(...)` 已接入；`peer_exports` / `peer_imports` 现在在发布前会校验 world-size、segment metadata、export/import 对齐关系，以及 local-rank import 是否仍精确指向 `local_base`。
-- `SymmetricHeap._apply_peer_mapping_state(...)` 现在会先按 `peer_rank` 归一化 incoming peer records，再进行校验与发布；内部 contract 不再要求调用方手工先按 rank 排序。
-- `_apply_peer_mapping_state(...)` 现在是 fail-closed 的：非法 peer state 不会污染 `_peer_exports`、`_peer_imports` 或 `heap_bases`。
-- `context` / benchmark artifact 侧的回归也已经补上：`peer_exports`、`peer_imports`、`peer_memory_map` 的 `peer_rank` 可见性现在有消费层测试锁定。
-- `SymmetricHeap.peer_export_descriptor(rank)` / `peer_import(rank)` 已接入；host-side peer lookup 现已有显式 rank-addressed accessor，不必再直接依赖内部列表下标。
-- allocator metadata 现已不只暴露 capability flags，还显式带 `external_tensor_import_mode`；当前 `torch_bump` 的真实语义已明确写成 `copy`。
-- `ImportedPeerMemory` / `peer_memory_map` 现已显式带 `access_kind`；当前 runtime 已能区分 `transport`（建立路径）与 `access_kind`（local / peer_direct / mapped_remote / remote_pointer 的访问语义）。
-- allocator metadata 现还显式带 `peer_transport_modes` 与 `peer_import_access_kinds`；这表示 allocator surface 自身能表达的 peer 语义目录，不等同于 public support matrix 的验证结论。
-- allocator metadata 现已新增结构化 `memory_model`，把 `local_segment_layout`、`peer_import_model`、`peer_mapping_model`、`external_tensor_import_mode`、`external_mapping_mode` 收口到统一 schema。
-- `SymmetricHeap.allocator_memory_model_descriptor()` / `allocator_memory_model()` 已接入，allocator `memory_model` 不再只能通过嵌套 metadata 间接读取。
-- allocator metadata / heap surface 现已新增结构化 `segment_layout`；当前单 exportable segment 的现状已能通过 `layout_kind`、`primary_segment_id`、`exportable_segment_ids` 正式表达。
-- allocator metadata / heap surface 现还显式区分 `segments` 与 `exportable_segments`；当前两者仍相同，但边界已正式建立，便于后续 multi-segment / segmented import-map 扩展。
-- `SymmetricHeap.segment_descriptor(segment_id)` / `exportable_segment_descriptor(segment_id)` 已接入；single-segment runtime 现在也有显式的 `segment_id` lookup surface，而不再只能默认“主 segment 就是唯一 segment”。
-- allocator metadata / heap surface 现还显式带结构化 `external_memory_interface`；当前 external interop 语义已能正式表达 `import_mode=copy`、`mapping_mode=none`、`zero_copy_mapping_supported=false`。
-- allocator metadata 现已显式带 `capabilities`，包括 `external_import_copy`、`external_mapping`、`fd_passing`、`dmabuf_mapping` 等布尔能力位；这让“copy-based import 已有、zero-copy external mapping 未有”可以直接从 runtime metadata 读取。
-- `SymmetricHeap._validate_peer_mapping_state(...)` 现在除了校验 world-size、rank 对齐和 local-base 一致性，还会显式校验 peer export 的 `segment_id` 必须存在于 allocator `exportable_segments`，且 `segment_kind` 必须与 exportable segment catalog 一致。
-- `SymmetricHeap` 现还维护 segment-scoped peer export/import catalog：`peer_export_segments(rank)` / `peer_export_segment(rank, segment_id)` / `peer_import_segments(rank)` / `peer_import_segment(rank, segment_id)` 已接入，host-side peer state 不再只能按 flat list 消费。
-- 现有 `peer_export_descriptor(rank)` / `peer_import(rank)` 也已经改为通过 primary `segment_id` 走 segment-scoped catalog；当前仍是单 exportable segment runtime，但 host-side access shape 已不再把“一 rank 一条记录”写死成唯一形式。
-- heap metadata 现已新增 `peer_export_catalog` / `peer_import_catalog` 两个 grouped surface；context、benchmark artifact 与 support matrix 现都能显式消费 segment-scoped peer catalog。
-- `heap_bases` 的刷新链路也已进一步收口：当前地址表不再直接扫 flat `peer_imports`，而是显式从每个 rank 的 primary-segment peer import catalog 派生。
-- `SymmetricHeap.allocate_tensor(...)`、ownership 检查、`import_external_tensor(...)`、`as_symmetric(...)` 已统一走 allocator。
-- `XTileContext.as_symmetric(...)` / `is_symmetric(...)` 已接入，普通 device tensor 现可显式 materialize 到 heap。
-- `XTileContext.heap_metadata()` / `runtime_metadata()` 已接入，runtime / heap / peer-map 现在有统一结构化出口。
-- `tests/benchmarks/bench_gemm.py`、`tests/benchmarks/bench_p2p_translate.py`、`tests/benchmarks/bench_patterns.py` 生成的结构化 JSON 已统一带出 `runtime_metadata`；其中 pattern benchmark 因 heap size 随 problem size 变化，额外按 size 记录对应 runtime metadata。
-- support matrix 已把 `symmetric_heap_allocator_first_import_map` 从完全未开始提升为 `partial`，并新增 `symmetric_heap.external_import`、`symmetric_heap.external_mapping`、`symmetric_heap.segment_metadata`、`symmetric_heap.peer_import_metadata`、`symmetric_heap.peer_segment_catalog` 与 `symmetric_heap.peer_mapping_metadata` 状态。
-
-当前准确口径是：
-
-- **allocator-first 的第一阶段已经实现。**
-- **canonical import/map 还没有实现。**
-
-也就是说，XTile 现在已经具备 allocator boundary、allocator-owned peer export/import surface 与 external import surface，但还没有做到 Iris 那种 allocator/export/import/map/access 一体化底座。
-
-#### 5. `gemm_allgather(...)` 的第一版基础工作已经完成
-
-`xtile/ops.py` 里的 `gemm_allgather(...)` 已经作为独立 public host contract 落地，不再需要继续把 `shard/full` 塞进 `gemm_allscatter(...)`。
-
-当前已经完成的部分是：
-
-- public contract 已固定：
-  - `A(M, K)` 是完整 LHS；
-  - `B(K, N / world_size)` 是本 rank RHS shard；
-  - `C(M, N)` 是 full output。
-- 当前实现是保守但稳定的 host-side 组合：
-  - `local GEMM materialize`
-  - `allgather` 到 `rank-major shard` workspace
-  - 再 materialize 成 full output
-- `C` 必须位于 attached symmetric heap；
-  - `A/B_shard` 可以是普通 device tensor。
-- single-process correctness 已有真实回归。
-- multiprocess `ctypes_ipc` 已有 2-GPU baseline correctness 矩阵。
-
-当前直接证据包括：
-
-- `docs/generated/gemm_allgather_multiprocess_matrix.json`
-- `tests/test_gemm_allgather_multiprocess.py`
-- `tests/test_e2e/_run_gemm_allgather_multiprocess.py`
-
-当前矩阵结论是：
-
-- 共 `12` 个 case。
-- `6` 个通过，`6` 个失败。
-- 通过面是 `auto/ctypes_ipc` 与 forced `ctypes_ipc`，`dtype = fp16 / bf16 / fp32`。
-- `pytorch_ipc` 和 `peer_access_pointer_exchange` 当前仍失败，因此 multiprocess 仍需保持 `partial`。
-
-同时还要把“支持面内扩验”和“全 transport 矩阵”区分开写：
-
-- 全 transport 矩阵仍然是 `6/12`。
-- 但在当前正式支持面 `auto/ctypes_ipc + forced ctypes_ipc` 内，已经新增两组 shape 的真机扩验：
-  - `128x256x128`
-  - `256x512x256`
-- 这组 `2 shapes × 3 dtypes × 2 transport selections` 的 shape-grid 结果为 `12/12` 全通过。
-- 因此当前更准确的表述不是“只在一个最小 baseline case 上成立”，而是“**在当前收窄后的正式支持面内，已经开始形成更可信的多 shape baseline**”。
-
-#### 6. `gemm_reducescatter(...)` 的第一版基础工作已经完成
-
-`xtile/ops.py` 里的 `gemm_reducescatter(...)` 已经不是“待做项”，而是已经落地的第一版 public host contract。
-
-当前已经完成的部分是：
-
-- public contract 已固定：
-  - `A(M, K)` 是本 rank 本地贡献；
-  - `B(K, N)` 是完整 RHS；
-  - `C(M, N / world_size)` 是本 rank 输出 shard。
-- 当前实现是保守但稳定的 host-side 组合：
-  - `local GEMM materialize`
-  - `按 rank-major 列分片 pack`
-  - `复用 ReduceScatterPlan`
-- `C` 必须位于 attached symmetric heap；
-  - 这是 reduce-scatter 输出与 workspace 的要求。
-  - `A/B` 可以是普通 device tensor，不需要强行一起放进 heap。
-- single-process correctness 已有真实回归。
-- opt-in multiprocess `ctypes_ipc` 已有 2-GPU baseline correctness 证据。
-- support matrix、测试和文档口径已经同步。
-
-当前直接证据包括：
-
-- `docs/generated/gemm_reducescatter_multiprocess_matrix.json`
-- `tests/test_gemm_reducescatter_multiprocess.py`
-- `tests/test_e2e/_run_gemm_reducescatter_multiprocess.py`
-
-当前矩阵结论也要写准确：
-
-- 共 `12` 个 case。
-- `6` 个通过，`6` 个失败。
-- 通过面是 `auto/ctypes_ipc` 与 forced `ctypes_ipc`，`dtype = fp16 / bf16 / fp32`。
-- `pytorch_ipc` 和 `peer_access_pointer_exchange` 当前仍失败，因此还不能把 multiprocess 写成 fully supported。
-
-#### 7. benchmark / JSON / plot / 文档导出已经开始同源
-
-benchmark / JSON / plot / 文档导出在当前范围内已经建立起第一版闭环：
-
-- `tests/benchmarks/bench_patterns.py` 输出 `figures/data/pattern_overlap_latest.json`
-- `tests/benchmarks/bench_gemm.py` 输出 `figures/data/gemm_latest.json`
-- `tests/benchmarks/bench_p2p_translate.py` 输出 `figures/data/p2p_latest.json`
-- benchmark JSON 已携带 `runtime_support` 快照
-- `scripts/plot_figures.py` 已优先从 JSON 出图
-- `scripts/export_benchmark_summary.py` 已导出 `docs/generated/benchmark_runtime_summary.md`
-- 写入 `figures/data/` 的 canonical benchmark 已有 repo-global lock，避免并发实验污染正式结果
-
-因此这部分当前准确的结论是：
-
-- **正式图已经有统一结构化数据源。**
-- **剩下的主要是展示层增强和更多实验覆盖，不是主链没搭起来。**
-
-### 未实现
-
-#### 1. allocator-first canonical backend 还没有收口完成
-
-这是当前和 Iris 最大的实质差距，也是 XTile 还没有真正“工程化收口”的地方。
-
-现在的 XTile 已经具备：
-
-- allocator abstraction
-- `torch_bump` allocator backend
-- allocator capability metadata
-- copy-based `import_external_tensor(...)` / `as_symmetric(...)`
-- local segment metadata
-- peer import metadata
-- transport-aware fallback + gate + support matrix
-
-但它还没有做到：
-
-- export/import canonical path
-- external mapping / segmented import-map
-- 统一 import-map-access 运行时
-
-这一整层 canonical substrate。
-
-所以这一项当前必须明确记为：**第一阶段已实现，但 canonical backend 仍未完成。**
-
-#### 2. 高层 GEMM op 家族还没有完全收口
-
-这里需要把“已经完成的”和“还没完成的”分开写清楚。
-
-已经完成的部分：
-
-- `gemm_allscatter.full/full`
-- `gemm_allscatter.full/shard`
-- `gemm_allscatter.shard/shard`
-- `gemm_allgather.shard/full`
-- `gemm_reducescatter.full/shard`
-
-这些 contract 现在都已经有明确的 public host-side 入口或 expert 入口。
-
-当前仍未完成的部分是：
-
-- `gemm_allscatter.shard/full` 仍然应保持 unsupported；
-  - 这不是“少一个 wrapper”，而是因为当前 `gemm_allscatter_sharded(...)` 暴露的是 peer-scatter ownership contract，不是 stable local-shard basis。
-- `pattern.execute(...)` 虽然已经不再是推荐 public 主入口，但在仓库里仍然偏显眼，后续还要继续退到 expert/internal surface。
-- 当前 multiprocess public support 明确只覆盖 `world_size=2 + ctypes_ipc`；
-  - 这不是文案保守，而是当前真实验证边界。
-- `gemm_allgather(...)`、`gemm_reducescatter(...)`、`allreduce(...)` 虽然已经完成当前 public surface 的 contract / benchmark / 回归闭环，但更大 world size、更多 shape、更多 transport 与长时间 stress 仍未完成。
-
-#### 3. multiprocess 支持面还没有闭环
-
-当前有直接证据的 multiprocess 支持面是：
-
-- `ctypes_ipc`
-- 2-GPU
-- 代表性 dtype
-- baseline correctness
-
-当前还没有闭环的是：
+当前还不能写成“已支持”的，是：
 
 - `pytorch_ipc`
 - `peer_access_pointer_exchange`
 - `world_size > 2`
-- 更大 shape
-- 长时间 stress
-- performance contract
+- 更大 shape 与更长时间 stress
+- 更明确的 performance contract
 
-所以当前所有 multiprocess 相关 public 口径都必须继续保守，不应写成 fully supported。
+所以 multiprocess 相关 public 口径仍必须保持 conservative；当前问题不是“完全不能用”，而是“正式支持面还太窄”。
 
-#### 4. tile collective 的生产级验证还没有完成
+#### 4. collective 的生产级验证与性能闭环仍不足
 
-当前不能把 collective 写得过满，但也不能再把已经闭环的部分写成“未完成”。更准确的状态是：
+当前 collective 层已经有稳定高层 contract，但离“成熟通信库”的标准还差两层闭环：
 
-- `allgather`、`allreduce`、`reduce_scatter` 的高层 contract 都已经有真实可跑的 public 主链。
-- `world_size=2 + ctypes_ipc` 这一当前 public surface 上，collective correctness 与结构化 benchmark 已经闭环：
-  - `pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_collectives_host.py tests/test_ops.py` → `67 passed`
-  - `pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py tests/test_gemm_allscatter_multiprocess.py tests/test_gemm_allscatter_auto_patterns_multiprocess.py tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py tests/test_allreduce_multiprocess.py` → `15 passed`
-  - `docs/generated/allgather_multiprocess_matrix.json` → `6/6` cases passed
-  - `docs/generated/reduce_scatter_multiprocess_matrix.json` → `6/6` cases passed
-  - `docs/generated/allreduce_multiprocess_matrix.json` → `6/6` cases passed
-  - `docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json` → `12/12` cases passed
-  - `docs/generated/gemm_reducescatter_multiprocess_matrix.json` → `6/6` cases passed
-  - `docs/generated/gemm_allscatter_multiprocess_matrix.json` → `12/12` cases passed
-  - `docs/generated/gemm_allscatter_multiprocess_auto_patterns.json` → `8/8` cases passed
-- 还没有完成的是 broader public surface，而不是当前 public surface 本身：
-  - `pytorch_ipc`
-  - `peer_access_pointer_exchange`
-  - `world_size > 2`
-  - 更大 shape
-  - 长时间 stress
-  - performance contract
+- **支持面闭环**：当前 public surface 主要还是 `world_size=2 + ctypes_ipc`
+- **性能闭环**：P2P 仍约 `82.8% - 83.0%` 峰值，`8192^3` GEMM 仍约 `83.0% - 83.5%` of cuBLAS，comm-only collective 与 NCCL 也仍有明显差距
 
-#### 5. 性能闭环还没有完成
+所以当前准确说法只能是：**功能基础已建立，但性能、stress、长稳和更大支持面还没有闭环。**
 
-当前文档如果要保持严谨，必须把“基础能力已成立”和“性能目标已达成”分开写。
+### 对 Iris 的差距归纳
 
-截至当前：
+与 Iris 的实质差异前文已经在第 4 层展开；这里仅保留对当前工程差距的收口判断：
 
-- P2P 仍只有约 `82.8% - 83.0%` 峰值，离 `>=95%` 目标有明显差距。
-- `8192^3` GEMM 最新 canonical rerun 仍只有约 `83.0% - 83.5%` of cuBLAS，未达到 `>=90%` 目标。
-
-所以当前不能把 XTile 写成“已经完成性能闭环”，只能写成“功能基础已建立，但性能目标尚未达标”。
-
-### 与 Iris 的主要差异
-
-当前 Iris 和 XTile 的差异，不宜再简单写成“谁 transport 多、谁 transport 少”。真正要看的，是体系结构的收口位置。
-
-| 维度 | Iris 当前形态 | XTile 当前形态 | 当前判断 |
-|------|---------------|----------------|----------|
-| 底层内存语义 | allocator + fd passing + DMA-BUF 映射，偏 canonical import/map | fallback-first，多 transport bring-up + gate | **Iris 更整** |
-| public contract 表达 | 更偏底层内存/映射体系之上的 op 组合 | contract 显式化、`full/shard` 语义更直白 | **XTile 的上层语义更容易讲清** |
-| multiprocess bring-up | 底层路径更统一 | 显式区分 `ctypes_ipc` / `pytorch_ipc` / `peer_access_pointer_exchange` | **XTile 诊断更透明，但收口不够** |
-| 运行时状态表达 | 更偏底层实现能力本身 | 已有 support matrix，可表达 mode/transport/contract | **XTile 现阶段的可观测性更强** |
-| 长期工程形态 | 更像 canonical substrate | 更像务实演进中的实验型通信库 | **Iris 更接近长期目标形态** |
-
-因此，当前更准确的判断是：
-
-- **Iris 在底层 substrate 完整性上更强。**
-- **XTile 在“显式 contract + 显式 support matrix + 显式 gate”这层的工程透明度上有明显优点。**
-- **XTile 不应该简单照抄 Iris；正确方向是保留现在这套显式 contract / support / diagnostics，再把 allocator-first canonical backend 补到底层。**
-
-### 距离目标形态的主要差距
-
-如果目标不是“论文 demo 可跑”，而是“长期可维护、工业级、专业严谨的通信库”，那当前还差下面几层能力：
-
-1. **单一 canonical memory model**
-   - 不再让 public 语义依赖具体 transport 细节。
-   - allocator / export / import / map / access 要统一成同一状态机。
-
-2. **更收口的 API 分层**
-   - 普通用户只接触稳定 contract。
-   - `pattern.execute(...)` 继续保留，但应明确为 expert/internal surface。
-
-3. **支持面要由真实证据驱动**
-   - `supported / partial / unsupported` 必须继续只由代码 + 测试 + 结构化实验决定。
-   - 不能靠文档口径“先写成支持”。
-
-4. **性能与回归要制度化**
-   - P2P、GEMM、collective 都需要固定 headline、固定环境、固定出图脚本、固定回归阈值。
-   - 现在第一版数据链已经有了，但离完整 perf regression system 还有距离。
-
-5. **生产级验证与可观测性**
-   - 长时间 stress
-   - 更大 world size
-   - 错误分类
-   - debug dump / trace / runtime metadata
-   - 更明确的故障边界
-
-总体上，当前 XTile 已经不是“基础还没搭起来”，而是“基础已经搭起来，但离理想通信库还差工程化收口和生产级验证”。
+- Iris 更接近 canonical substrate，优势在 allocator-first、fd passing、DMA-BUF、统一 import/map 语义
+- XTile 当前优势在显式 contract、显式 support matrix、显式 feature gate 与诊断透明度
+- XTile 不应简单照抄 Iris；正确方向是保留现在这套可观测和可诊断的工程外壳，同时把底层逐步收口到 canonical allocator/import-map/access
 
 ### 下一步优先级
 
-基于当前代码和实验状态，下一阶段应避免回到“补 plan、补 API 名字”这类已完成事项，而应按下面顺序推进：
+1. **P0-next：完成 canonical allocator/import-map/access 底座**
+   - 把当前 allocator-first v1 继续推进成统一 export / import / map / access 运行时
+   - 为后续 `fd passing + DMA-BUF` 和更稳定的 multiprocess substrate 打底
 
-1. **P0-next：把 allocator-first v1 继续推进成 canonical backend**
-   - 当前 allocator abstraction 与 external import surface 已存在。
-   - 下一步是补 export / import / map / access 统一语义。
-   - 把当前 multiprocess fallback 能力收口到底层 canonical layer。
+2. **P1：继续收紧公共语义面**
+   - 让默认用户路径继续收敛到 `xtile.ops.*`
+   - 进一步弱化直接 `pattern.execute(...)` 的 public 可见度
+   - 持续统一 contract 命名与文档术语
 
-2. **P2：把 multiprocess 支持面从“局部成立”扩成“可信成立”**
-   - 继续修 `pytorch_ipc` / `peer_access_pointer_exchange`。
-   - 扩到 `world_size > 2`。
-   - 补更大 shape、stress 和 performance 验收。
+3. **P2：扩大 multiprocess 的真实证据面**
+   - 在不放松标准的前提下扩到 `world_size > 2`
+   - 补更大 shape、更多 dtype、更多 stress
+   - 只有通过真实矩阵的 transport 才能进入正式支持面
 
-3. **P3：继续收紧 public surface，并弱化 direct pattern surface**
-   - 继续把更多 public 调用点收敛到 `build plan -> execute plan` 主链。
-   - 让 `pattern.execute(...)` 更明确地退到 expert/internal surface。
-   - 统一 public contract 命名与 benchmark contract spelling，避免 `full/full` / `full_full` 这类消费层分叉再次出现。
+4. **P3：建立更严格的性能与回归门禁**
+   - 固定 canonical headline、环境口径、出图脚本和阈值
+   - 在当前 public surface 之上继续推进 P2P、GEMM 与 collective 的 perf regression
 
-4. **P4：继续收紧 collective 与性能闭环**
-   - 把 P2P 与大尺寸 GEMM 拉向既定目标。
-   - 在已闭环的当前 public surface 之上，增加 performance regression threshold。
-
-5. **P5：最后再做跨节点和跨平台扩展**
+5. **P4：最后再做跨节点与跨平台扩展**
    - UCX / GDR
    - AMD 真机验证
 
-当前结论可以稳定写成：
-
-- **已经实现的，不应再写成“待做计划”。**
-- **没有实现的，也不能被“第一版跑通”掩盖。**
-- **XTile 现在已经有了可继续工程化推进的坚实基础，但还没有达到 Iris 那种 canonical substrate 完整度，更没有达到理想通信库的最终形态。**
+当前更稳妥的结论是：XTile 已经具备继续工程化推进的基础，但距离理想通信库仍差 canonical substrate、broader support surface，以及完整的性能与生产级验证闭环。
 
 ## 与 NCCL 的差距归因及未来方向
 
