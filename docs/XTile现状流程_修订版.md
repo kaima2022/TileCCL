@@ -7,7 +7,7 @@
 
 ## 任务定义
 
-与设想文档相同：4 个 GPU，每个 GPU 持有 A[M,K] 和 B[K,N]。
+当前讨论的问题是：4 个 GPU，每个 GPU 持有 A[M,K] 和 B[K,N]。
 先算 C_local = A × B（本地 GEMM），然后把 C_local scatter 到所有其他 GPU。
 
 M=8192, N=4608, K=36864, 4 GPUs.
@@ -104,17 +104,17 @@ plan.execute(A, B, C)
 
 需要特别注意：benchmark 路径已经**不再依赖 `B.shape[1]` 隐式猜 full-N**；并且 benchmark / CLI helper / 高层 op 现在已经开始共享同一条 `build_gemm_allscatter_plan(...)` 主链。
 
-### 与设想的差距
+### 当前状态与边界
 
-| 设想 | 现状 | 差距 |
+| 主题 | 当前状态 | 当前边界 |
 |------|------|------|
-| `xtile.fused_gemm_scatter(A, B, C, strategy="auto")` | `xtile.ops.gemm_allscatter(...)` 已可用 | 高层 API 已开始建立，但命名与最终 op 集合仍可继续收敛 |
-| `ctx.randn(...)` 直接在堆上分配 | `XTileContext` 已支持 `empty/zeros/randn()` | 这一项已打通 |
-| 自动检测后端 `backend="auto"` | `xtile.init()` 默认就是 `backend="auto"` | 这一项已集成 |
-| `xtile.init()` 返回的 ctx 可直接执行 pattern | `xtile.init(..., heap=...)` / `heap_size=...` / `init_local(...)` 都可直接返回可运行 pattern 的真实 ctx | runtime ctx 主路径已统一 |
-| benchmark / tests / CLI 与 runtime 入口一致 | 已统一到 `XTileContext` | 这一项已打通 |
-| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.gemm_allgather(...)` / `xtile.ops.allgather(...)` / `xtile.ops.allreduce(...)` / `xtile.ops.reduce_scatter(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入，并统一走显式 `plan` 主链 | 在当前 public multiprocess surface（`world_size=2 + ctypes_ipc`）上，`allgather / allreduce / reduce_scatter / gemm_allscatter / gemm_allgather / gemm_reducescatter` 已完成同级别 host contract、回归和结构化 benchmark 验收；当前差距已转为更大 world size、更多 transport、stress 与性能门禁 |
-| full-shape correctness path 与 benchmark shard path | 两者都存在，但都已开始通过显式 contract + plan builder 收敛 | 仍需把更多调用点统一迁到高层 op API，并继续弱化直接 `pattern.execute(...)` 的 public 角色 |
+| 用户入口 | `xtile.ops.gemm_allscatter(...)` 已可用 | 高层 API 命名与最终 op 集合仍可继续收敛 |
+| 堆上张量分配 | `XTileContext` 已支持 `empty/zeros/randn()` | 已打通 |
+| 后端检测 | `xtile.init()` 默认就是 `backend="auto"` | 已集成 |
+| runtime ctx 主路径 | `xtile.init(..., heap=...)` / `heap_size=...` / `init_local(...)` 都可直接返回可运行 pattern 的真实 ctx | 主路径已统一 |
+| benchmark / tests / CLI / runtime 一致性 | 已统一到 `XTileContext` | 已打通 |
+| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.gemm_allgather(...)` / `xtile.ops.allgather(...)` / `xtile.ops.allreduce(...)` / `xtile.ops.reduce_scatter(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入，并统一走显式 `plan` 主链 | 在当前 public multiprocess surface（`world_size=2 + ctypes_ipc`）上，上述入口已完成同级别 host contract、回归和结构化 benchmark 验收；更大 world size、更多 transport、stress 与性能门禁仍未完成 |
+| correctness / benchmark 双路径 | 两者都存在，但都已开始通过显式 contract + plan builder 收敛 | 仍需把更多调用点统一迁到高层 op API，并继续弱化直接 `pattern.execute(...)` 的 public 角色 |
 
 ### 当前高层 op 家族与公共主链
 
@@ -311,15 +311,14 @@ for tile_id in range(pid, total_tiles, NUM_SMS):
             )
 ```
 
-### 与设想的对比
+### 当前实现要点
 
-**一致**：
-- Persistent kernel + round-robin 调度 ✅
-- 每算完一个 tile 立刻 scatter ✅
-- `scatter_tile_to_peer` 使用 `translate_ptr` + `tl.store` ✅
-- `heap_bases` 作为 kernel 参数传入 ✅
-
-**差异**：核心通信原理接近 Iris。当前 XTile 已经把 full/shard 语义提升成显式 host-side contract，而不是继续在 pattern 中隐式猜 `B.shape[1]`。现在真正还没完全收敛的，是“默认 public API 是否全部走 `xtile.ops.*`”以及“是否继续保留多种输出 layout 模型”。
+- Persistent kernel + round-robin 调度已经落地
+- 每算完一个 tile 就立刻进入 scatter
+- `scatter_tile_to_peer` 使用 `translate_ptr` + `tl.store`
+- `heap_bases` 作为 kernel 参数直接传入
+- full/shard 语义已经提升成显式 host-side contract，不再依赖 pattern 内部猜 `B.shape[1]`
+- 当前仍未完全收敛的，是默认 public API 是否全部走 `xtile.ops.*`，以及是否继续保留多种输出 layout 模型
 
 ---
 
@@ -375,10 +374,11 @@ def translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT: tl.constexpr = 0):
     return translated
 ```
 
-### 与设想的对比
+### 当前实现要点
 
-**基本一致**：`translate_ptr + tl.store` 这条核心路径成立，编译器也确实全可见；现在 scatter helper 已经不再把 full-buffer / shard-buffer 语义写死在 device helper 里，而是显式消费 host-side contract 传下来的 offset / leading-dim 元数据。
-**额外优化**：默认使用 `.wt` (write-through) cache modifier 减少 L2 污染。
+`translate_ptr + tl.store` 这条核心路径已经成立，编译器也确实全可见；现在 scatter helper 已经不再把 full-buffer / shard-buffer 语义写死在 device helper 里，而是显式消费 host-side contract 传下来的 offset / leading-dim 元数据。
+
+当前还额外做了一个直接的工程优化：默认使用 `.wt` (write-through) cache modifier 减少 L2 污染。
 
 ---
 
@@ -494,14 +494,14 @@ def _setup_multiprocess(self):
 - 但它 **不是 Triton device-side remote dereference 可用 transport**
 - 所以它不能继续作为 XTile multiprocess device path 的自动 fallback
 
-### 与设想的对比
+### 当前状态与边界
 
-| 设想 | 现状 | 状态 |
+| 主题 | 当前状态 | 当前边界 |
 |------|------|------|
-| cudaIpcGetMemHandle + Open | ctypes Structure by-value 修复 | ✅ 调用约定已修正 |
-| IPC 在 ptrace_scope=1 下工作 | 当前真实环境下 `ctypes_ipc` 已复测通过 | ✅ 已解决 |
-| 多进程模式（torchrun） | auto path 已收窄为 `ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 仅保留 forced diagnostics | ✅ 已收口 |
-| 跨节点 IPC | 不支持 | ⚠️ 需 UCX/GDR |
+| IPC 调用约定 | `ctypes` Structure by-value 修复已落地 | 调用约定已修正 |
+| `ptrace_scope=1` 环境 | 当前真实环境下 `ctypes_ipc` 已复测通过 | 当前问题已不在 host-side bring-up，而在 device-side remote dereference 能否成立 |
+| 多进程 auto path | 已收窄为 `ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 仅保留 forced diagnostics | multiprocess 正式支持面仍偏窄 |
+| 跨节点 IPC | 当前不支持 | 后续需 UCX / GDR |
 
 **与 Iris 的区别**：不能再简单写成“Iris 仅使用 HIP IPC 单一路径”。当前 Iris 的主实现已经演进到 allocator + fd passing + DMA-BUF 映射；XTile 的特点也不应再表述成“三条 transport 同等可用”。更准确的表述是：XTile 显式实现了 `ctypes_ipc` / `pytorch_ipc` / `peer_access_pointer_exchange` 三条 bring-up 策略，并且已经通过真实矩阵确认只有 `ctypes_ipc` 可作为当前 multiprocess device path 的 auto transport。
 
@@ -576,12 +576,12 @@ H100 NVLink 硬件自动路由：
 P2P benchmark 最新 canonical serial rerun 显示 best read ≈ 248.74 GB/s、best write ≈ 248.43 GB/s；scatter 更相关的是写带宽，量级约 82.8%–82.9% 峰值。
 ```
 
-### 与设想的差距
+### 当前硬件与性能边界
 
-| 设想 | 现状 | 差距 |
+| 主题 | 当前状态 | 当前边界 |
 |------|------|------|
-| NVIDIA + AMD 均可运行 | 仅在 NVIDIA H100 上实测 | AMD 待硬件验证（代码已就绪） |
-| ≥ 95% P2P 带宽 | 当前约 82.7%–82.9% 峰值 | NVLink 协议开销 + Triton PTX 限制 |
+| 硬件验证范围 | 仅在 NVIDIA H100 上实测 | AMD 待硬件验证，代码路径已就绪 |
+| P2P 带宽 | 当前约 82.7%–82.9% 峰值 | 距离更高目标仍受 NVLink 协议开销与 Triton/PTX 路径限制 |
 
 ---
 
@@ -618,12 +618,12 @@ def auto_select(op, M, N, K, world_size, ctx=None):
         return BulkSyncPattern
 ```
 
-### 与设想的差距
+### 当前实现特征
 
-**基本一致**，但需要补两点：
+当前实现需要明确补两点：
 - `auto_select(...)` 当前识别的 op 名包括 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`，不是 `gemm_scatter`；其中 `gemm_reducescatter(...)` 现已具备稳定 host-side public contract，但当前并不走 Triton fused pattern auto-select，而是“local GEMM materialize + packed reduce_scatter”主链。
 - 对本例 `N=4608, world_size=4`，`n_per_rank = 1152`，不会命中 `fused_sequential` 的 `< 1024` 分支，而会更接近 `producer_consumer` 分支。
-- 当前实现还带 `compute_intensity` 与 `N > 4096` 的补充分支，不再只是最初那三条简单规则。
+- 当前实现还带 `compute_intensity` 与 `N > 4096` 的补充分支，不只依赖少量固定规则。
 
 ---
 
