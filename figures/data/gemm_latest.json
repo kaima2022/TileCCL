@@ -1,6 +1,6 @@
 {
   "benchmark": "gemm_comparison",
-  "command": "tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json",
+  "command": "/home/makai/XTile/tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json",
   "environment": {
     "aggregation": "median_of_full_runs",
     "device": "cuda:0",
@@ -10,7 +10,7 @@
     "visible_gpus": 2,
     "warmup": 10
   },
-  "generated_at_utc": "2026-03-21T20:32:25.457483+00:00",
+  "generated_at_utc": "2026-03-23T08:47:10.615307+00:00",
   "results": [
     {
       "K": 1024,
@@ -18,12 +18,12 @@
       "N": 1024,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.4887,
-      "ratio_pct": 48.9,
-      "torch_ms": 0.029,
-      "torch_tflops": 73.54,
-      "xtile_ms": 0.06,
-      "xtile_tflops": 35.94
+      "ratio": 0.5359,
+      "ratio_pct": 53.6,
+      "torch_ms": 0.032,
+      "torch_tflops": 67.53,
+      "xtile_ms": 0.059,
+      "xtile_tflops": 36.43
     },
     {
       "K": 1024,
@@ -31,12 +31,12 @@
       "N": 1024,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.4969,
+      "ratio": 0.4974,
       "ratio_pct": 49.7,
-      "torch_ms": 0.029,
-      "torch_tflops": 72.94,
-      "xtile_ms": 0.059,
-      "xtile_tflops": 36.24
+      "torch_ms": 0.03,
+      "torch_tflops": 70.89,
+      "xtile_ms": 0.061,
+      "xtile_tflops": 35.26
     },
     {
       "K": 2048,
@@ -44,12 +44,12 @@
       "N": 2048,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.9426,
-      "ratio_pct": 94.3,
-      "torch_ms": 0.07,
-      "torch_tflops": 244.18,
-      "xtile_ms": 0.074,
-      "xtile_tflops": 231.41
+      "ratio": 0.9409,
+      "ratio_pct": 94.1,
+      "torch_ms": 0.073,
+      "torch_tflops": 234.78,
+      "xtile_ms": 0.077,
+      "xtile_tflops": 224.21
     },
     {
       "K": 2048,
@@ -57,12 +57,12 @@
       "N": 2048,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.8943,
-      "ratio_pct": 89.4,
-      "torch_ms": 0.062,
-      "torch_tflops": 275.37,
-      "xtile_ms": 0.07,
-      "xtile_tflops": 246.25
+      "ratio": 0.8883,
+      "ratio_pct": 88.8,
+      "torch_ms": 0.068,
+      "torch_tflops": 250.81,
+      "xtile_ms": 0.077,
+      "xtile_tflops": 222.78
     },
     {
       "K": 4096,
@@ -70,12 +70,12 @@
       "N": 4096,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.949,
-      "ratio_pct": 94.9,
-      "torch_ms": 0.314,
-      "torch_tflops": 438.01,
-      "xtile_ms": 0.329,
-      "xtile_tflops": 417.52
+      "ratio": 0.9542,
+      "ratio_pct": 95.4,
+      "torch_ms": 0.326,
+      "torch_tflops": 421.99,
+      "xtile_ms": 0.326,
+      "xtile_tflops": 421.05
     },
     {
       "K": 4096,
@@ -83,12 +83,12 @@
       "N": 4096,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.9106,
-      "ratio_pct": 91.1,
-      "torch_ms": 0.314,
-      "torch_tflops": 437.13,
-      "xtile_ms": 0.351,
-      "xtile_tflops": 391.69
+      "ratio": 0.9192,
+      "ratio_pct": 91.9,
+      "torch_ms": 0.302,
+      "torch_tflops": 454.36,
+      "xtile_ms": 0.327,
+      "xtile_tflops": 419.91
     },
     {
       "K": 8192,
@@ -96,12 +96,12 @@
       "N": 8192,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.8302,
-      "ratio_pct": 83.0,
-      "torch_ms": 2.382,
-      "torch_tflops": 461.68,
-      "xtile_ms": 2.908,
-      "xtile_tflops": 378.14
+      "ratio": 0.8218,
+      "ratio_pct": 82.2,
+      "torch_ms": 2.377,
+      "torch_tflops": 462.54,
+      "xtile_ms": 2.892,
+      "xtile_tflops": 380.13
     },
     {
       "K": 8192,
@@ -109,22 +109,30 @@
       "N": 8192,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.8353,
-      "ratio_pct": 83.5,
-      "torch_ms": 2.26,
-      "torch_tflops": 486.61,
-      "xtile_ms": 2.74,
-      "xtile_tflops": 401.24
+      "ratio": 0.844,
+      "ratio_pct": 84.4,
+      "torch_ms": 2.325,
+      "torch_tflops": 472.87,
+      "xtile_ms": 2.726,
+      "xtile_tflops": 403.29
     }
   ],
+  "runtime_metadata": {
+    "backend": "cuda",
+    "device": "cuda:0",
+    "has_heap": false,
+    "heap": null,
+    "rank": 0,
+    "world_size": 1
+  },
   "runtime_support": {
     "collectives": {
       "collectives.allgather_launcher": {
-        "detail": "Host launcher exists, but requires an attached symmetric heap to execute.",
+        "detail": "High-level plan API exists, but execution requires an attached symmetric heap.",
         "state": "partial"
       },
       "collectives.allreduce_launcher": {
-        "detail": "Host launcher exists, but benchmark/prod validation is not fully closed.",
+        "detail": "High-level plan API exists, but execution requires an attached symmetric heap.",
         "state": "partial"
       },
       "collectives.reduce_scatter_launcher": {
@@ -142,6 +150,14 @@
       "world_size": 1
     },
     "contracts": {
+      "allreduce.in_place": {
+        "detail": "Stable public in-place host contract: tensor.numel must be divisible by world_size, and the tensor must reside in the attached symmetric heap.",
+        "state": "partial"
+      },
+      "gemm_allgather.shard/full": {
+        "detail": "Stable public host contract: A(M,K) full LHS, B(K,N/world_size) rank-local RHS shard, C(M,N) full output. Runtime availability inherits the validated allgather path for the current heap mode/transport.",
+        "state": "partial"
+      },
       "gemm_allscatter.full/full": {
         "detail": "Stable public contract for full RHS and full output buffers.",
         "state": "supported"
@@ -151,12 +167,16 @@
         "state": "supported"
       },
       "gemm_allscatter.shard/full": {
-        "detail": "Public wrapper for assembling a full output from shard inputs is not implemented yet.",
+        "detail": "Rejected intentionally: current shard/shard gemm_allscatter execution is a peer-scatter contract, not a stable local-shard basis for full-output assembly.",
         "state": "unsupported"
       },
       "gemm_allscatter.shard/shard": {
         "detail": "Expert contract available via gemm_allscatter_sharded(...).",
         "state": "supported"
+      },
+      "gemm_reducescatter.full/shard": {
+        "detail": "Stable public host contract: A(M,K) local contribution, B(K,N) full RHS, C(M,N/world_size) rank-local shard. Runtime availability inherits the validated reduce_scatter path for the current heap mode/transport.",
+        "state": "partial"
       }
     },
     "execution_paths": {
@@ -170,27 +190,79 @@
       }
     },
     "memory": {
+      "symmetric_heap.allocator_memory_model": {
+        "detail": "Attach a heap before querying allocator memory-model metadata.",
+        "state": "partial"
+      },
       "symmetric_heap.current_runtime": {
         "detail": "Context is valid without a heap, but collective/high-level heap-backed ops are unavailable.",
         "state": "partial"
       },
+      "symmetric_heap.device_remote_access": {
+        "detail": "No attached symmetric heap; Triton remote device access is unavailable.",
+        "state": "partial"
+      },
+      "symmetric_heap.exportable_segment_metadata": {
+        "detail": "Attach a heap before querying exportable segment metadata.",
+        "state": "partial"
+      },
+      "symmetric_heap.external_import": {
+        "detail": "Attach a heap before using external import/as_symmetric helpers.",
+        "state": "partial"
+      },
+      "symmetric_heap.external_mapping": {
+        "detail": "Attach a heap to inspect allocator external-mapping capability. The current default torch_bump backend does not implement zero-copy external mapping.",
+        "state": "partial"
+      },
+      "symmetric_heap.external_memory_interface": {
+        "detail": "Attach a heap before querying allocator external-memory interface metadata.",
+        "state": "partial"
+      },
+      "symmetric_heap.peer_import_metadata": {
+        "detail": "Attach a heap before querying peer-import metadata.",
+        "state": "partial"
+      },
+      "symmetric_heap.peer_mapping_metadata": {
+        "detail": "Attach a heap before querying peer export/import mapping metadata.",
+        "state": "partial"
+      },
+      "symmetric_heap.peer_segment_catalog": {
+        "detail": "Attach a heap before querying segment-scoped peer export/import catalogs.",
+        "state": "partial"
+      },
+      "symmetric_heap.segment_layout": {
+        "detail": "Attach a heap before querying allocator segment-layout metadata.",
+        "state": "partial"
+      },
+      "symmetric_heap.segment_metadata": {
+        "detail": "Attach a heap before querying allocator-owned segment metadata.",
+        "state": "partial"
+      },
       "symmetric_heap_allocator_first_import_map": {
-        "detail": "Allocator-first canonical import/map layer is not implemented yet.",
+        "detail": "Allocator-first canonical import/map layer requires an attached heap.",
         "state": "unsupported"
       }
     },
     "ops": {
       "allgather": {
-        "detail": "Implementation exists, but execution requires an attached symmetric heap.",
+        "detail": "High-level plan API exists, but execution requires an attached symmetric heap.",
+        "state": "partial"
+      },
+      "allreduce": {
+        "detail": "High-level plan API exists, but execution requires an attached symmetric heap.",
+        "state": "partial"
+      },
+      "gemm_allgather": {
+        "detail": "High-level host contract exists, but execution requires an attached symmetric heap for the local shard workspace and allgather output path.",
         "state": "partial"
       },
       "gemm_allscatter": {
-        "detail": "High-level plan API is wired via build_gemm_allscatter_plan(...).",
-        "state": "supported"
+        "detail": "High-level plan API exists, but current execution still requires an attached symmetric heap.",
+        "state": "partial"
       },
       "gemm_reducescatter": {
-        "detail": "Public high-level API is still a placeholder; no stable fused contract yet.",
-        "state": "unsupported"
+        "detail": "High-level host contract exists, but execution requires an attached symmetric heap for the reduce_scatter output path and workspaces.",
+        "state": "partial"
       },
       "reduce_scatter": {
         "detail": "No attached symmetric heap; execution path is unavailable.",
@@ -200,8 +272,8 @@
   },
   "schema_version": 1,
   "summary": {
-    "max_ratio": 0.949,
-    "min_ratio": 0.4887,
+    "max_ratio": 0.9542,
+    "min_ratio": 0.4974,
     "result_count": 8,
     "target_ratio": 0.9
   }
