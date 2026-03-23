@@ -85,6 +85,17 @@ def _split_csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _normalize_contract(contract: str) -> str:
+    """Map user-facing contract spellings onto the e2e runner contract ids."""
+    normalized = contract.strip().replace("/", "_")
+    if normalized not in {"full_full", "full_shard"}:
+        raise ValueError(
+            "contract must be one of {'full_full', 'full_shard', 'full/full', 'full/shard'}, "
+            f"got {contract!r}"
+        )
+    return normalized
+
+
 def _aggregate_rank_payloads(payloads: list[dict[str, object]]) -> dict[str, object]:
     """Aggregate rank-local payloads into one case summary."""
     plan_means = [
@@ -119,7 +130,7 @@ def main() -> None:
         raise SystemExit("Need >= 2 GPUs")
 
     args = _parse_args(sys.argv[1:])
-    contracts = _split_csv(args.contracts)
+    contracts = [_normalize_contract(item) for item in _split_csv(args.contracts)]
     repo_root = Path(__file__).resolve().parents[2]
 
     cases: list[dict[str, object]] = []

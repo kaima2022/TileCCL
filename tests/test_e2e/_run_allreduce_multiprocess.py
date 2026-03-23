@@ -47,6 +47,7 @@ def _resolve_dtype(dtype_name: str) -> torch.dtype:
 def _timed_collective(
     fn,
     *,
+    prepare_fn=None,
     rank: int,
     barrier_kwargs: dict[str, object],
     warmup: int,
@@ -54,6 +55,9 @@ def _timed_collective(
 ) -> dict[str, float]:
     """Time one collective call using CUDA events and rank barriers."""
     for _ in range(warmup):
+        if prepare_fn is not None:
+            prepare_fn()
+            torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
         fn()
         torch.cuda.synchronize(rank)
@@ -61,6 +65,9 @@ def _timed_collective(
 
     times_ms: list[float] = []
     for _ in range(iters):
+        if prepare_fn is not None:
+            prepare_fn()
+            torch.cuda.synchronize(rank)
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         dist.barrier(**barrier_kwargs)
@@ -132,9 +139,10 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         primitive_timing = None
         primitive_ok = None
         primitive_first_value = None
-        if config.launcher in {"primitive", "all"}:
+        if config.launcher in {"primitive", "primitive_ops", "all"}:
             primitive_timing = _timed_collective(
                 lambda: primitive_allreduce(tensor_primitive, heap),
+                prepare_fn=lambda: _fill_allreduce_input(tensor_primitive, rank=rank),
                 rank=rank,
                 barrier_kwargs=barrier_kwargs,
                 warmup=config.warmup,
@@ -154,6 +162,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
                     world_size,
                     BLOCK_SIZE=config.block_size,
                 ),
+                prepare_fn=lambda: _fill_allreduce_input(tensor_kernel, rank=rank),
                 rank=rank,
                 barrier_kwargs=barrier_kwargs,
                 warmup=config.warmup,
@@ -170,12 +179,13 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_timing = None
         high_level_ok = None
         high_level_first_value = None
-        if config.launcher in {"ops", "all"}:
+        if config.launcher in {"ops", "primitive_ops", "all"}:
             high_level_timing = _timed_collective(
                 lambda: xtile.ops.allreduce(
                     tensor_ops,
                     ctx=ctx,
                 ),
+                prepare_fn=lambda: _fill_allreduce_input(tensor_ops, rank=rank),
                 rank=rank,
                 barrier_kwargs=barrier_kwargs,
                 warmup=config.warmup,
@@ -183,10 +193,10 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             )
 
         expected = torch.full_like(tensor_primitive, float(sum(range(1, world_size + 1))))
-        if config.launcher in {"primitive", "all"}:
+        if config.launcher in {"primitive", "primitive_ops", "all"}:
             primitive_ok = bool(torch.allclose(tensor_primitive, expected, atol=1e-4))
             primitive_first_value = float(tensor_primitive[0].item())
-        if config.launcher in {"ops", "all"}:
+        if config.launcher in {"ops", "primitive_ops", "all"}:
             high_level_ok = bool(torch.allclose(tensor_ops, expected, atol=1e-4))
             high_level_first_value = float(tensor_ops[0].item())
         if config.launcher in {"kernel", "all"}:
@@ -247,8 +257,8 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--launcher",
-        choices=["primitive", "ops", "kernel", "all"],
-        default="all",
+        choices=["primitive", "ops", "primitive_ops", "kernel", "all"],
+        default="primitive_ops",
         help="Which launcher(s) to validate.",
     )
     return parser.parse_args()

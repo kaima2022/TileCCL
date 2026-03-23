@@ -516,6 +516,23 @@ memory/symmetric_heap → backends/{hip,cuda}
 - [x] multiprocess 主路径复测：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py` → `2 passed in 32.33s`
 - [x] opt-in collective 主路径复测：`XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 pytest -q tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py` → `4 passed in 58.02s`
 
+### Phase 44 交付物（2026-03-22）
+- [x] 高层 `allreduce` contract：新增 `xtile.ops.AllReducePlan` / `build_allreduce_plan(...)` / `xtile.ops.allreduce(...)`
+- [x] `allreduce` composed path 收口：public primitive 改为 `reduce_scatter + allgather` 主链，并补齐 multiprocess phase barrier 与 allgather-completion barrier
+- [x] single-process 顺序调用协同：新增 staged finalize，支持单进程多 GPU 下按 rank 顺序调用 `allreduce(...)`
+- [x] current public surface 收口：`world_size=2 + ctypes_ipc` 上 `allgather / allreduce / reduce_scatter / gemm_allscatter / gemm_allgather / gemm_reducescatter` 现已作为 `supported` surface 对外表达；不再要求 experimental env gate
+- [x] host/support/ops 回归：`pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_collectives_host.py tests/test_ops.py` → `67 passed in 8.63s`
+- [x] multiprocess public-surface 回归：`pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py tests/test_gemm_allscatter_multiprocess.py tests/test_gemm_allscatter_auto_patterns_multiprocess.py tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py tests/test_allreduce_multiprocess.py` → `15 passed in 227.86s`
+- [x] 结构化 collective/GEMM artifact 全量复测：
+  - `docs/generated/allgather_multiprocess_matrix.json` → `6/6` passed
+  - `docs/generated/reduce_scatter_multiprocess_matrix.json` → `6/6` passed
+  - `docs/generated/allreduce_multiprocess_matrix.json` → `6/6` passed
+  - `docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json` → `12/12` passed
+  - `docs/generated/gemm_reducescatter_multiprocess_matrix.json` → `6/6` passed
+  - `docs/generated/gemm_allscatter_multiprocess_matrix.json` → `12/12` passed
+  - `docs/generated/gemm_allscatter_multiprocess_auto_patterns.json` → `8/8` passed
+- [x] benchmark contract spelling 收口：`bench_gemm_allscatter_multiprocess*.py` 现接受 `full/full` / `full/shard` 与 `full_full` / `full_shard` 两种写法，避免消费层 contract 名不统一导致假失败
+
 ### 已知问题（详见 docs/experiment_log.md）
 | 编号 | 问题 | 状态 |
 |------|------|------|
@@ -535,7 +552,7 @@ memory/symmetric_heap → backends/{hip,cuda}
 | P8-001 | pattern `execute()` 曾依赖 `B.shape[1]` 隐式猜 full/shard 语义 | ✅ 已修复（显式 execution contract） |
 | P8-002 | plot_figures 可能被 quick benchmark 最新结果污染 | ✅ 已修复（结构化 metadata + canonical result gate） |
 | P8-003 | pattern benchmark shard path 曾把 `N` 语义隐式缩两次，导致 overlap 结论失真 | ✅ 已修复（显式 `full_N + shard/full layout` contract） |
-| P9-001 | `reduce_scatter(...)` 的 single_process reference 与 2-GPU multiprocess/device correctness 已闭环，但 multiprocess public/performance contract 仍未正式放开 | ⚠️ 当前真实支持面已精确收窄为 `ctypes_ipc`；`pytorch_ipc` / `peer_access_pointer_exchange` 尚未通过 device-collective 矩阵，因此默认 gate 仍关闭，仅保留 transport-aware experimental opt-in |
+| P9-001 | device collectives 的 public support 现已正式放开到当前验证边界，但仍严格只覆盖 `world_size=2 + ctypes_ipc` | ⚠️ `reduce_scatter(...)` / `allreduce(...)` / 相关高层 op 的当前 public surface 已闭环；`pytorch_ipc` / `peer_access_pointer_exchange`、`world_size > 2`、更大 shape、stress 与 performance threshold 仍未闭环 |
 | P13-001 | multiprocess/device 传输面目前只在 `ctypes_ipc` 上通过真实矩阵，其他 transport 仍未修复 | ⚠️ auto contract 已正式收窄为 `ctypes_ipc only`；下一优先级是修 `pytorch_ipc` / `peer_access_pointer_exchange` 的最小 Triton remote-access 正确性，再决定是否重新放开 |
 | P10-001 | `gemm_allscatter.shard/full` 不应作为 allscatter wrapper 继续补；该需求已独立收口到 `gemm_allgather.shard/full` public contract | ⚠️ contract 已落地，但 `gemm_allgather` 的 broader multiprocess/performance/world-size validation 仍未闭环 |
 | P15-001 | multiprocess `gemm_allscatter` 已完成 2-GPU `ctypes_ipc` public baseline correctness，并补齐 representative auto-selected coverage（4 个 pattern、`full/full + full/shard`），但 broader larger-shape / world-size / stress / performance contract 仍未闭环 | ⚠️ 继续保持 `partial`；下一优先级转为更大 shape、长时压力和 world-size 扩展验证 |

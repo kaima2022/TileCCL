@@ -2,7 +2,7 @@
   "benchmark": "gemm_reducescatter_multiprocess_matrix",
   "cases": [
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 1 --iters 3 --launcher all",
       "dtype": "float16",
       "rank_payloads": [
         {
@@ -16,9 +16,9 @@
           "high_level_ok": true,
           "high_level_sample": -22.046875,
           "high_level_timing_ms": {
-            "max_ms": 0.7185279726982117,
-            "mean_ms": 0.7185279726982117,
-            "min_ms": 0.7185279726982117
+            "max_ms": 0.21199999749660492,
+            "mean_ms": 0.18227200210094452,
+            "min_ms": 0.16140800714492798
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -27,9 +27,9 @@
           "plan_ok": true,
           "plan_sample": -22.046875,
           "plan_timing_ms": {
-            "max_ms": 9423.505859375,
-            "mean_ms": 9423.505859375,
-            "min_ms": 9423.505859375
+            "max_ms": 0.6663680076599121,
+            "mean_ms": 0.3325333346923192,
+            "min_ms": 0.1510079950094223
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -45,9 +45,9 @@
           "high_level_ok": true,
           "high_level_sample": 2.125,
           "high_level_timing_ms": {
-            "max_ms": 0.9715200066566467,
-            "mean_ms": 0.9715200066566467,
-            "min_ms": 0.9715200066566467
+            "max_ms": 0.23187200725078583,
+            "mean_ms": 0.20588800311088562,
+            "min_ms": 0.1871040016412735
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -56,9 +56,9 @@
           "plan_ok": true,
           "plan_sample": 2.125,
           "plan_timing_ms": {
-            "max_ms": 9810.3544921875,
-            "mean_ms": 9810.3544921875,
-            "min_ms": 9810.3544921875
+            "max_ms": 0.6363199949264526,
+            "mean_ms": 0.31646933158238727,
+            "min_ms": 0.14662399888038635
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -68,20 +68,20 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": -22.046875, \"plan_timing_ms\": {\"mean_ms\": 9423.505859375, \"min_ms\": 9423.505859375, \"max_ms\": 9423.505859375}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": -22.046875, \"high_level_timing_ms\": {\"mean_ms\": 0.7185279726982117, \"min_ms\": 0.7185279726982117, \"max_ms\": 0.7185279726982117}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 9810.3544921875, \"min_ms\": 9810.3544921875, \"max_ms\": 9810.3544921875}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.9715200066566467, \"min_ms\": 0.9715200066566467, \"max_ms\": 0.9715200066566467}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": -22.046875, \"plan_timing_ms\": {\"mean_ms\": 0.3325333346923192, \"min_ms\": 0.1510079950094223, \"max_ms\": 0.6663680076599121}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": -22.046875, \"high_level_timing_ms\": {\"mean_ms\": 0.18227200210094452, \"min_ms\": 0.16140800714492798, \"max_ms\": 0.21199999749660492}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 0.31646933158238727, \"min_ms\": 0.14662399888038635, \"max_ms\": 0.6363199949264526}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.20588800311088562, \"min_ms\": 0.1871040016412735, \"max_ms\": 0.23187200725078583}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.8450239896774292,
+        "high_level_mean_ms_across_ranks": 0.19408000260591507,
         "max_high_level_abs_diff": 0.0625,
         "max_plan_abs_diff": 0.0625,
-        "max_rank_skew_ms": 0.25299203395843506,
+        "max_rank_skew_ms": 0.0236160010099411,
         "mode": "multiprocess",
         "plan_implementation": "device",
-        "plan_mean_ms_across_ranks": 9616.93017578125,
+        "plan_mean_ms_across_ranks": 0.32450133313735324,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all --force-transport ctypes_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
       "dtype": "float16",
       "rank_payloads": [
         {
@@ -95,9 +95,9 @@
           "high_level_ok": true,
           "high_level_sample": -22.046875,
           "high_level_timing_ms": {
-            "max_ms": 0.4759039878845215,
-            "mean_ms": 0.4759039878845215,
-            "min_ms": 0.4759039878845215
+            "max_ms": 0.19526399672031403,
+            "mean_ms": 0.17307732999324799,
+            "min_ms": 0.1586879938840866
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -106,9 +106,9 @@
           "plan_ok": true,
           "plan_sample": -22.046875,
           "plan_timing_ms": {
-            "max_ms": 498.6316223144531,
-            "mean_ms": 498.6316223144531,
-            "min_ms": 498.6316223144531
+            "max_ms": 0.37852799892425537,
+            "mean_ms": 0.22552533447742462,
+            "min_ms": 0.1377599984407425
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -124,9 +124,9 @@
           "high_level_ok": true,
           "high_level_sample": 2.125,
           "high_level_timing_ms": {
-            "max_ms": 0.4633600115776062,
-            "mean_ms": 0.4633600115776062,
-            "min_ms": 0.4633600115776062
+            "max_ms": 0.19276799261569977,
+            "mean_ms": 0.17098666727542877,
+            "min_ms": 0.1589760035276413
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -135,9 +135,9 @@
           "plan_ok": true,
           "plan_sample": 2.125,
           "plan_timing_ms": {
-            "max_ms": 498.1969909667969,
-            "mean_ms": 498.1969909667969,
-            "min_ms": 498.1969909667969
+            "max_ms": 0.36691200733184814,
+            "mean_ms": 0.21752533813317618,
+            "min_ms": 0.12700800597667694
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -147,38 +147,20 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": -22.046875, \"plan_timing_ms\": {\"mean_ms\": 498.6316223144531, \"min_ms\": 498.6316223144531, \"max_ms\": 498.6316223144531}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": -22.046875, \"high_level_timing_ms\": {\"mean_ms\": 0.4759039878845215, \"min_ms\": 0.4759039878845215, \"max_ms\": 0.4759039878845215}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 498.1969909667969, \"min_ms\": 498.1969909667969, \"max_ms\": 498.1969909667969}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.4633600115776062, \"min_ms\": 0.4633600115776062, \"max_ms\": 0.4633600115776062}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": -22.046875, \"plan_timing_ms\": {\"mean_ms\": 0.22552533447742462, \"min_ms\": 0.1377599984407425, \"max_ms\": 0.37852799892425537}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": -22.046875, \"high_level_timing_ms\": {\"mean_ms\": 0.17307732999324799, \"min_ms\": 0.1586879938840866, \"max_ms\": 0.19526399672031403}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0625, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 0.21752533813317618, \"min_ms\": 0.12700800597667694, \"max_ms\": 0.36691200733184814}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0625, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.17098666727542877, \"min_ms\": 0.1589760035276413, \"max_ms\": 0.19276799261569977}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.46963199973106384,
+        "high_level_mean_ms_across_ranks": 0.17203199863433838,
         "max_high_level_abs_diff": 0.0625,
         "max_plan_abs_diff": 0.0625,
-        "max_rank_skew_ms": 0.012543976306915283,
+        "max_rank_skew_ms": 0.002090662717819214,
         "mode": "multiprocess",
         "plan_implementation": "device",
-        "plan_mean_ms_across_ranks": 498.414306640625,
+        "plan_mean_ms_across_ranks": 0.2215253363053004,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all --force-transport pytorch_ipc",
-      "dtype": "float16",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "[W322 10:50:05.807395079 CudaIPCTypes.cpp:16] Producer process has been terminated before all shared CUDA tensors released. See Note [Sharing CUDA tensors]\nW0322 10:50:06.685000 2825900 torch/multiprocessing/spawn.py:169] Terminating process 2826149 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 458, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 444, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 278, in _worker\n    plan = xtile.ops.build_gemm_reducescatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 651, in build_gemm_reducescatter_plan\n    resolved_implementation = _resolve_reduce_scatter_implementation(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1253, in _resolve_reduce_scatter_implementation\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='pytorch_ipc'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --warmup 0 --iters 1 --launcher all --force-transport peer_access_pointer_exchange",
-      "dtype": "float16",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0322 10:50:19.536000 2827042 torch/multiprocessing/spawn.py:169] Terminating process 2827119 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 458, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 444, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 278, in _worker\n    plan = xtile.ops.build_gemm_reducescatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 651, in build_gemm_reducescatter_plan\n    resolved_implementation = _resolve_reduce_scatter_implementation(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1253, in _resolve_reduce_scatter_implementation\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='peer_access_pointer_exchange'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 1 --iters 3 --launcher all",
       "dtype": "bfloat16",
       "rank_payloads": [
         {
@@ -192,9 +174,9 @@
           "high_level_ok": true,
           "high_level_sample": -22.0,
           "high_level_timing_ms": {
-            "max_ms": 0.6817600131034851,
-            "mean_ms": 0.6817600131034851,
-            "min_ms": 0.6817600131034851
+            "max_ms": 0.21728000044822693,
+            "mean_ms": 0.17074133455753326,
+            "min_ms": 0.141184002161026
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -203,9 +185,9 @@
           "plan_ok": true,
           "plan_sample": -22.0,
           "plan_timing_ms": {
-            "max_ms": 6509.86767578125,
-            "mean_ms": 6509.86767578125,
-            "min_ms": 6509.86767578125
+            "max_ms": 0.5688639879226685,
+            "mean_ms": 0.28828799227873486,
+            "min_ms": 0.1324159950017929
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -221,9 +203,9 @@
           "high_level_ok": true,
           "high_level_sample": 2.125,
           "high_level_timing_ms": {
-            "max_ms": 0.6755200028419495,
-            "mean_ms": 0.6755200028419495,
-            "min_ms": 0.6755200028419495
+            "max_ms": 0.19219200313091278,
+            "mean_ms": 0.16985600193341574,
+            "min_ms": 0.14851200580596924
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -232,9 +214,9 @@
           "plan_ok": true,
           "plan_sample": 2.125,
           "plan_timing_ms": {
-            "max_ms": 6779.5341796875,
-            "mean_ms": 6779.5341796875,
-            "min_ms": 6779.5341796875
+            "max_ms": 0.5470399856567383,
+            "mean_ms": 0.2790293296178182,
+            "min_ms": 0.12972800433635712
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -244,20 +226,20 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": -22.0, \"plan_timing_ms\": {\"mean_ms\": 6509.86767578125, \"min_ms\": 6509.86767578125, \"max_ms\": 6509.86767578125}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": -22.0, \"high_level_timing_ms\": {\"mean_ms\": 0.6817600131034851, \"min_ms\": 0.6817600131034851, \"max_ms\": 0.6817600131034851}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 6779.5341796875, \"min_ms\": 6779.5341796875, \"max_ms\": 6779.5341796875}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.6755200028419495, \"min_ms\": 0.6755200028419495, \"max_ms\": 0.6755200028419495}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": -22.0, \"plan_timing_ms\": {\"mean_ms\": 0.28828799227873486, \"min_ms\": 0.1324159950017929, \"max_ms\": 0.5688639879226685}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": -22.0, \"high_level_timing_ms\": {\"mean_ms\": 0.17074133455753326, \"min_ms\": 0.141184002161026, \"max_ms\": 0.21728000044822693}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 0.2790293296178182, \"min_ms\": 0.12972800433635712, \"max_ms\": 0.5470399856567383}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.16985600193341574, \"min_ms\": 0.14851200580596924, \"max_ms\": 0.19219200313091278}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.6786400079727173,
+        "high_level_mean_ms_across_ranks": 0.17029866824547452,
         "max_high_level_abs_diff": 0.5,
         "max_plan_abs_diff": 0.5,
-        "max_rank_skew_ms": 0.0062400102615356445,
+        "max_rank_skew_ms": 0.0008853326241175241,
         "mode": "multiprocess",
         "plan_implementation": "device",
-        "plan_mean_ms_across_ranks": 6644.700927734375,
+        "plan_mean_ms_across_ranks": 0.2836586609482765,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all --force-transport ctypes_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
       "dtype": "bfloat16",
       "rank_payloads": [
         {
@@ -271,9 +253,9 @@
           "high_level_ok": true,
           "high_level_sample": -22.0,
           "high_level_timing_ms": {
-            "max_ms": 0.5573760271072388,
-            "mean_ms": 0.5573760271072388,
-            "min_ms": 0.5573760271072388
+            "max_ms": 0.19494399428367615,
+            "mean_ms": 0.17060266435146332,
+            "min_ms": 0.15174399316310883
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -282,9 +264,9 @@
           "plan_ok": true,
           "plan_sample": -22.0,
           "plan_timing_ms": {
-            "max_ms": 790.1107177734375,
-            "mean_ms": 790.1107177734375,
-            "min_ms": 790.1107177734375
+            "max_ms": 0.3760960102081299,
+            "mean_ms": 0.23018667101860046,
+            "min_ms": 0.1385280042886734
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -300,9 +282,9 @@
           "high_level_ok": true,
           "high_level_sample": 2.125,
           "high_level_timing_ms": {
-            "max_ms": 0.5439680218696594,
-            "mean_ms": 0.5439680218696594,
-            "min_ms": 0.5439680218696594
+            "max_ms": 0.23132799565792084,
+            "mean_ms": 0.20178132752577463,
+            "min_ms": 0.18502399325370789
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -311,9 +293,9 @@
           "plan_ok": true,
           "plan_sample": 2.125,
           "plan_timing_ms": {
-            "max_ms": 790.9403686523438,
-            "mean_ms": 790.9403686523438,
-            "min_ms": 790.9403686523438
+            "max_ms": 0.4492799937725067,
+            "mean_ms": 0.2604160010814667,
+            "min_ms": 0.14633600413799286
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -323,38 +305,20 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": -22.0, \"plan_timing_ms\": {\"mean_ms\": 790.1107177734375, \"min_ms\": 790.1107177734375, \"max_ms\": 790.1107177734375}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": -22.0, \"high_level_timing_ms\": {\"mean_ms\": 0.5573760271072388, \"min_ms\": 0.5573760271072388, \"max_ms\": 0.5573760271072388}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 790.9403686523438, \"min_ms\": 790.9403686523438, \"max_ms\": 790.9403686523438}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.5439680218696594, \"min_ms\": 0.5439680218696594, \"max_ms\": 0.5439680218696594}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": -22.0, \"plan_timing_ms\": {\"mean_ms\": 0.23018667101860046, \"min_ms\": 0.1385280042886734, \"max_ms\": 0.3760960102081299}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": -22.0, \"high_level_timing_ms\": {\"mean_ms\": 0.17060266435146332, \"min_ms\": 0.15174399316310883, \"max_ms\": 0.19494399428367615}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.5, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 0.2604160010814667, \"min_ms\": 0.14633600413799286, \"max_ms\": 0.4492799937725067}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.5, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.20178132752577463, \"min_ms\": 0.18502399325370789, \"max_ms\": 0.23132799565792084}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.5506720244884491,
+        "high_level_mean_ms_across_ranks": 0.18619199593861896,
         "max_high_level_abs_diff": 0.5,
         "max_plan_abs_diff": 0.5,
-        "max_rank_skew_ms": 0.013408005237579346,
+        "max_rank_skew_ms": 0.03117866317431131,
         "mode": "multiprocess",
         "plan_implementation": "device",
-        "plan_mean_ms_across_ranks": 790.5255432128906,
+        "plan_mean_ms_across_ranks": 0.24530133605003357,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all --force-transport pytorch_ipc",
-      "dtype": "bfloat16",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "[W322 10:51:05.527680002 CudaIPCTypes.cpp:16] Producer process has been terminated before all shared CUDA tensors released. See Note [Sharing CUDA tensors]\nW0322 10:51:06.507000 2830666 torch/multiprocessing/spawn.py:169] Terminating process 2830915 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 458, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 444, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 278, in _worker\n    plan = xtile.ops.build_gemm_reducescatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 651, in build_gemm_reducescatter_plan\n    resolved_implementation = _resolve_reduce_scatter_implementation(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1253, in _resolve_reduce_scatter_implementation\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='pytorch_ipc'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --warmup 0 --iters 1 --launcher all --force-transport peer_access_pointer_exchange",
-      "dtype": "bfloat16",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0322 10:51:19.056000 2831623 torch/multiprocessing/spawn.py:169] Terminating process 2831871 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 458, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 444, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 278, in _worker\n    plan = xtile.ops.build_gemm_reducescatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 651, in build_gemm_reducescatter_plan\n    resolved_implementation = _resolve_reduce_scatter_implementation(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1253, in _resolve_reduce_scatter_implementation\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='peer_access_pointer_exchange'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 1 --iters 3 --launcher all",
       "dtype": "float32",
       "rank_payloads": [
         {
@@ -366,24 +330,24 @@
           "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": -22.0625,
+          "high_level_sample": 2.125,
           "high_level_timing_ms": {
-            "max_ms": 0.5221760272979736,
-            "mean_ms": 0.5221760272979736,
-            "min_ms": 0.5221760272979736
+            "max_ms": 0.285504013299942,
+            "mean_ms": 0.26764801144599915,
+            "min_ms": 0.2568640112876892
           },
           "launcher": "all",
           "mode": "multiprocess",
           "plan_implementation": "device",
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
-          "plan_sample": -22.0625,
+          "plan_sample": 2.125,
           "plan_timing_ms": {
-            "max_ms": 462.31109619140625,
-            "mean_ms": 462.31109619140625,
-            "min_ms": 462.31109619140625
+            "max_ms": 0.4774720072746277,
+            "mean_ms": 0.31484800080458325,
+            "min_ms": 0.18595199286937714
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         },
         {
@@ -395,24 +359,24 @@
           "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 2.125,
+          "high_level_sample": -22.0625,
           "high_level_timing_ms": {
-            "max_ms": 0.5121279954910278,
-            "mean_ms": 0.5121279954910278,
-            "min_ms": 0.5121279954910278
+            "max_ms": 0.21481600403785706,
+            "mean_ms": 0.19113599757353464,
+            "min_ms": 0.17628799378871918
           },
           "launcher": "all",
           "mode": "multiprocess",
           "plan_implementation": "device",
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
-          "plan_sample": 2.125,
+          "plan_sample": -22.0625,
           "plan_timing_ms": {
-            "max_ms": 466.5301818847656,
-            "mean_ms": 466.5301818847656,
-            "min_ms": 466.5301818847656
+            "max_ms": 0.4105280041694641,
+            "mean_ms": 0.2547093331813812,
+            "min_ms": 0.16527999937534332
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -420,20 +384,20 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -22.0625, \"plan_timing_ms\": {\"mean_ms\": 462.31109619140625, \"min_ms\": 462.31109619140625, \"max_ms\": 462.31109619140625}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -22.0625, \"high_level_timing_ms\": {\"mean_ms\": 0.5221760272979736, \"min_ms\": 0.5221760272979736, \"max_ms\": 0.5221760272979736}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 466.5301818847656, \"min_ms\": 466.5301818847656, \"max_ms\": 466.5301818847656}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.5121279954910278, \"min_ms\": 0.5121279954910278, \"max_ms\": 0.5121279954910278}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 0.31484800080458325, \"min_ms\": 0.18595199286937714, \"max_ms\": 0.4774720072746277}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.26764801144599915, \"min_ms\": 0.2568640112876892, \"max_ms\": 0.285504013299942}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -22.0625, \"plan_timing_ms\": {\"mean_ms\": 0.2547093331813812, \"min_ms\": 0.16527999937534332, \"max_ms\": 0.4105280041694641}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -22.0625, \"high_level_timing_ms\": {\"mean_ms\": 0.19113599757353464, \"min_ms\": 0.17628799378871918, \"max_ms\": 0.21481600403785706}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.5171520113945007,
+        "high_level_mean_ms_across_ranks": 0.22939200450976688,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.0100480318069458,
+        "max_rank_skew_ms": 0.07651201387246451,
         "mode": "multiprocess",
         "plan_implementation": "device",
-        "plan_mean_ms_across_ranks": 464.42063903808594,
+        "plan_mean_ms_across_ranks": 0.28477866699298227,
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all --force-transport ctypes_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
       "dtype": "float32",
       "rank_payloads": [
         {
@@ -445,24 +409,24 @@
           "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 2.125,
+          "high_level_sample": -22.0625,
           "high_level_timing_ms": {
-            "max_ms": 1.873088002204895,
-            "mean_ms": 1.873088002204895,
-            "min_ms": 1.873088002204895
+            "max_ms": 0.27747198939323425,
+            "mean_ms": 0.2448746661345164,
+            "min_ms": 0.2171200066804886
           },
           "launcher": "all",
           "mode": "multiprocess",
           "plan_implementation": "device",
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
-          "plan_sample": 2.125,
+          "plan_sample": -22.0625,
           "plan_timing_ms": {
-            "max_ms": 518.3112182617188,
-            "mean_ms": 518.3112182617188,
-            "min_ms": 518.3112182617188
+            "max_ms": 0.3937920033931732,
+            "mean_ms": 0.24363733331362405,
+            "min_ms": 0.1547199934720993
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         },
         {
@@ -474,24 +438,24 @@
           "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": -22.0625,
+          "high_level_sample": 2.125,
           "high_level_timing_ms": {
-            "max_ms": 0.9927679896354675,
-            "mean_ms": 0.9927679896354675,
-            "min_ms": 0.9927679896354675
+            "max_ms": 0.27423998713493347,
+            "mean_ms": 0.23890133202075958,
+            "min_ms": 0.21513600647449493
           },
           "launcher": "all",
           "mode": "multiprocess",
           "plan_implementation": "device",
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
-          "plan_sample": -22.0625,
+          "plan_sample": 2.125,
           "plan_timing_ms": {
-            "max_ms": 551.7843017578125,
-            "mean_ms": 551.7843017578125,
-            "min_ms": 551.7843017578125
+            "max_ms": 0.38473600149154663,
+            "mean_ms": 0.2421653320391973,
+            "min_ms": 0.1528960019350052
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -499,52 +463,34 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 518.3112182617188, \"min_ms\": 518.3112182617188, \"max_ms\": 518.3112182617188}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 1.873088002204895, \"min_ms\": 1.873088002204895, \"max_ms\": 1.873088002204895}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -22.0625, \"plan_timing_ms\": {\"mean_ms\": 551.7843017578125, \"min_ms\": 551.7843017578125, \"max_ms\": 551.7843017578125}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -22.0625, \"high_level_timing_ms\": {\"mean_ms\": 0.9927679896354675, \"min_ms\": 0.9927679896354675, \"max_ms\": 0.9927679896354675}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -22.0625, \"plan_timing_ms\": {\"mean_ms\": 0.24363733331362405, \"min_ms\": 0.1547199934720993, \"max_ms\": 0.3937920033931732}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -22.0625, \"high_level_timing_ms\": {\"mean_ms\": 0.2448746661345164, \"min_ms\": 0.2171200066804886, \"max_ms\": 0.27747198939323425}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"launcher\": \"all\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_implementation\": \"device\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 2.125, \"plan_timing_ms\": {\"mean_ms\": 0.2421653320391973, \"min_ms\": 0.1528960019350052, \"max_ms\": 0.38473600149154663}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 2.125, \"high_level_timing_ms\": {\"mean_ms\": 0.23890133202075958, \"min_ms\": 0.21513600647449493, \"max_ms\": 0.27423998713493347}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 1.4329279959201813,
+        "high_level_mean_ms_across_ranks": 0.24188799907763797,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.8803200125694275,
+        "max_rank_skew_ms": 0.005973334113756806,
         "mode": "multiprocess",
         "plan_implementation": "device",
-        "plan_mean_ms_across_ranks": 535.0477600097656,
+        "plan_mean_ms_across_ranks": 0.24290133267641068,
         "transport_strategy": "ctypes_ipc"
       }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all --force-transport pytorch_ipc",
-      "dtype": "float32",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0322 10:52:01.059000 2834928 torch/multiprocessing/spawn.py:169] Terminating process 2835195 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 458, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 444, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 278, in _worker\n    plan = xtile.ops.build_gemm_reducescatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 651, in build_gemm_reducescatter_plan\n    resolved_implementation = _resolve_reduce_scatter_implementation(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1253, in _resolve_reduce_scatter_implementation\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='pytorch_ipc'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_reducescatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --warmup 0 --iters 1 --launcher all --force-transport peer_access_pointer_exchange",
-      "dtype": "float32",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0322 10:52:14.307000 2835899 torch/multiprocessing/spawn.py:169] Terminating process 2836162 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 458, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 444, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_reducescatter_multiprocess.py\", line 278, in _worker\n    plan = xtile.ops.build_gemm_reducescatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 651, in build_gemm_reducescatter_plan\n    resolved_implementation = _resolve_reduce_scatter_implementation(\n  File \"/home/makai/XTile/xtile/ops.py\", line 1253, in _resolve_reduce_scatter_implementation\n    raise ValueError(\nValueError: Multiprocess device collectives remain transport-sensitive even under the experimental gate. Real 2-GPU matrix runs currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe for device reduce_scatter. Current transport_strategy='peer_access_pointer_exchange'. Set XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES=1 only for controlled bring-up/debug.\n\n",
-      "stdout": ""
     }
   ],
-  "command": "tests/benchmarks/bench_gemm_reducescatter_multiprocess.py --M 128 --N 256 --K 128 --warmup 0 --iters 1 --timeout-sec 120 --output-json docs/generated/gemm_reducescatter_multiprocess_matrix.json",
+  "command": "/home/makai/XTile/tests/benchmarks/bench_gemm_reducescatter_multiprocess.py --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --M 128 --N 256 --K 128 --warmup 1 --iters 3 --timeout-sec 240 --output-json docs/generated/gemm_reducescatter_multiprocess_matrix.json",
   "environment": {
     "K": 128,
     "M": 128,
     "N": 256,
     "gpu_name": "NVIDIA H100 PCIe",
-    "iters": 1,
+    "iters": 3,
     "visible_gpus": 2,
-    "warmup": 0
+    "warmup": 1
   },
-  "generated_at_utc": "2026-03-22T10:52:15.262477+00:00",
+  "generated_at_utc": "2026-03-23T00:37:59.781794+00:00",
   "schema_version": 1,
   "summary": {
-    "case_count": 12,
-    "failed_cases": 6,
+    "case_count": 6,
+    "failed_cases": 0,
     "passed_cases": 6
   }
 }

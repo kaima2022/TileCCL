@@ -52,4 +52,4 @@ def test_allreduce_multiprocess_default_transport(
         assert payload["transport_strategy"] == "ctypes_ipc"
         assert payload["primitive_ok"] is True
         assert payload["high_level_ok"] is True
-        assert payload["kernel_ok"] is True
+        assert payload["kernel_ok"] is None

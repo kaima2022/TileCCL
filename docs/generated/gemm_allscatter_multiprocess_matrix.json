@@ -2,66 +2,68 @@
   "benchmark": "gemm_allscatter_multiprocess_matrix",
   "cases": [
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --contract full_full --pattern bulk_sync --warmup 1 --iters 3 --launcher all",
       "contract": "full_full",
       "dtype": "float16",
       "rank_payloads": [
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_full",
           "dtype": "float16",
           "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.03125,
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.09375,
+          "high_level_sample": 13.8828125,
           "high_level_timing_ms": {
-            "max_ms": 0.19062399864196777,
-            "mean_ms": 0.1731456011533737,
-            "min_ms": 0.16409599781036377
+            "max_ms": 0.221343994140625,
+            "mean_ms": 0.20260266462961832,
+            "min_ms": 0.1828480064868927
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
+          "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.09375,
+          "plan_sample": 13.8828125,
           "plan_timing_ms": {
-            "max_ms": 0.16572800278663635,
-            "mean_ms": 0.14986880123615265,
-            "min_ms": 0.13971200585365295
+            "max_ms": 0.25916799902915955,
+            "mean_ms": 0.19423999885718027,
+            "min_ms": 0.15612800419330597
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
         },
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_full",
           "dtype": "float16",
           "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.03125,
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.09375,
+          "high_level_sample": 13.8828125,
           "high_level_timing_ms": {
-            "max_ms": 0.20047999918460846,
-            "mean_ms": 0.1808320015668869,
-            "min_ms": 0.16803200542926788
+            "max_ms": 0.2101760059595108,
+            "mean_ms": 0.20520533621311188,
+            "min_ms": 0.2001280039548874
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
+          "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.09375,
+          "plan_sample": 13.8828125,
           "plan_timing_ms": {
-            "max_ms": 0.17481599748134613,
-            "mean_ms": 0.15409919917583464,
-            "min_ms": 0.13955199718475342
+            "max_ms": 0.24368000030517578,
+            "mean_ms": 0.1879040002822876,
+            "min_ms": 0.1557759940624237
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -71,224 +73,39 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.14986880123615265, \"min_ms\": 0.13971200585365295, \"max_ms\": 0.16572800278663635}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.1731456011533737, \"min_ms\": 0.16409599781036377, \"max_ms\": 0.19062399864196777}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.15409919917583464, \"min_ms\": 0.13955199718475342, \"max_ms\": 0.17481599748134613}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.1808320015668869, \"min_ms\": 0.16803200542926788, \"max_ms\": 0.20047999918460846}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.8828125, \"plan_timing_ms\": {\"mean_ms\": 0.19423999885718027, \"min_ms\": 0.15612800419330597, \"max_ms\": 0.25916799902915955}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.8828125, \"high_level_timing_ms\": {\"mean_ms\": 0.20260266462961832, \"min_ms\": 0.1828480064868927, \"max_ms\": 0.221343994140625}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.8828125, \"plan_timing_ms\": {\"mean_ms\": 0.1879040002822876, \"min_ms\": 0.1557759940624237, \"max_ms\": 0.24368000030517578}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.8828125, \"high_level_timing_ms\": {\"mean_ms\": 0.20520533621311188, \"min_ms\": 0.2001280039548874, \"max_ms\": 0.2101760059595108}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.1769888013601303,
-        "max_high_level_abs_diff": 0.03125,
-        "max_plan_abs_diff": 0.03125,
-        "max_rank_skew_ms": 0.007686400413513178,
-        "mode": "multiprocess",
-        "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.15198400020599365,
-        "plan_pattern_name": "bulk_sync",
-        "transport_strategy": "ctypes_ipc"
-      }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport ctypes_ipc",
-      "contract": "full_full",
-      "dtype": "float16",
-      "rank_payloads": [
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "float16",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.03125,
-          "high_level_ok": true,
-          "high_level_sample": 20.09375,
-          "high_level_timing_ms": {
-            "max_ms": 0.23100799322128296,
-            "mean_ms": 0.2099519968032837,
-            "min_ms": 0.1998399943113327
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.09375,
-          "plan_timing_ms": {
-            "max_ms": 0.16767999529838562,
-            "mean_ms": 0.14864639937877655,
-            "min_ms": 0.13948799669742584
-          },
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc"
-        },
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "float16",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.03125,
-          "high_level_ok": true,
-          "high_level_sample": 20.09375,
-          "high_level_timing_ms": {
-            "max_ms": 0.2391359955072403,
-            "mean_ms": 0.21909120082855224,
-            "min_ms": 0.2017280012369156
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.09375,
-          "plan_timing_ms": {
-            "max_ms": 0.16156800091266632,
-            "mean_ms": 0.14707200229167938,
-            "min_ms": 0.1406400054693222
-          },
-          "rank": 1,
-          "transport_strategy": "ctypes_ipc"
-        }
-      ],
-      "requested_transport": "ctypes_ipc",
-      "returncode": 0,
-      "status": "passed",
-      "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.14864639937877655, \"min_ms\": 0.13948799669742584, \"max_ms\": 0.16767999529838562}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.2099519968032837, \"min_ms\": 0.1998399943113327, \"max_ms\": 0.23100799322128296}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.14707200229167938, \"min_ms\": 0.1406400054693222, \"max_ms\": 0.16156800091266632}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.21909120082855224, \"min_ms\": 0.2017280012369156, \"max_ms\": 0.2391359955072403}}\n",
-      "summary": {
-        "high_level_mean_ms_across_ranks": 0.21452159881591798,
-        "max_high_level_abs_diff": 0.03125,
-        "max_plan_abs_diff": 0.03125,
-        "max_rank_skew_ms": 0.00913920402526855,
-        "mode": "multiprocess",
-        "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.14785920083522797,
-        "plan_pattern_name": "bulk_sync",
-        "transport_strategy": "ctypes_ipc"
-      }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport pytorch_ipc",
-      "contract": "full_full",
-      "dtype": "float16",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "[W321 23:41:05.584858424 CudaIPCTypes.cpp:16] Producer process has been terminated before all shared CUDA tensors released. See Note [Sharing CUDA tensors]\nW0321 23:41:06.574000 664012 torch/multiprocessing/spawn.py:169] Terminating process 664261 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport peer_access_pointer_exchange",
-      "contract": "full_full",
-      "dtype": "float16",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:41:19.947000 664959 torch/multiprocessing/spawn.py:169] Terminating process 665220 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all",
-      "contract": "full_full",
-      "dtype": "bfloat16",
-      "rank_payloads": [
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "bfloat16",
-          "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.0,
-          "high_level_ok": true,
-          "high_level_sample": 20.125,
-          "high_level_timing_ms": {
-            "max_ms": 0.23507200181484222,
-            "mean_ms": 0.21089920103549958,
-            "min_ms": 0.19897599518299103
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.0,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.125,
-          "plan_timing_ms": {
-            "max_ms": 0.16118399798870087,
-            "mean_ms": 0.14776960015296936,
-            "min_ms": 0.1401280015707016
-          },
-          "rank": 1,
-          "transport_strategy": "ctypes_ipc"
-        },
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "bfloat16",
-          "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.0,
-          "high_level_ok": true,
-          "high_level_sample": 20.125,
-          "high_level_timing_ms": {
-            "max_ms": 0.2502079904079437,
-            "mean_ms": 0.22848639786243438,
-            "min_ms": 0.21187199652194977
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.0,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.125,
-          "plan_timing_ms": {
-            "max_ms": 0.16179199516773224,
-            "mean_ms": 0.14649600088596343,
-            "min_ms": 0.13891200721263885
-          },
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc"
-        }
-      ],
-      "requested_transport": "auto",
-      "returncode": 0,
-      "status": "passed",
-      "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 20.125, \"plan_timing_ms\": {\"mean_ms\": 0.14776960015296936, \"min_ms\": 0.1401280015707016, \"max_ms\": 0.16118399798870087}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 20.125, \"high_level_timing_ms\": {\"mean_ms\": 0.21089920103549958, \"min_ms\": 0.19897599518299103, \"max_ms\": 0.23507200181484222}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 20.125, \"plan_timing_ms\": {\"mean_ms\": 0.14649600088596343, \"min_ms\": 0.13891200721263885, \"max_ms\": 0.16179199516773224}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 20.125, \"high_level_timing_ms\": {\"mean_ms\": 0.22848639786243438, \"min_ms\": 0.21187199652194977, \"max_ms\": 0.2502079904079437}}\n",
-      "summary": {
-        "high_level_mean_ms_across_ranks": 0.21969279944896697,
+        "high_level_mean_ms_across_ranks": 0.20390400042136508,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.017587196826934798,
+        "max_rank_skew_ms": 0.00260267158349356,
         "mode": "multiprocess",
         "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.1471328005194664,
+        "plan_mean_ms_across_ranks": 0.19107199956973392,
         "plan_pattern_name": "bulk_sync",
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport ctypes_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --contract full_full --pattern bulk_sync --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
       "contract": "full_full",
-      "dtype": "bfloat16",
+      "dtype": "float16",
       "rank_payloads": [
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_full",
-          "dtype": "bfloat16",
+          "dtype": "float16",
           "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.125,
+          "high_level_sample": 13.8828125,
           "high_level_timing_ms": {
-            "max_ms": 0.18646399676799774,
-            "mean_ms": 0.1738431990146637,
-            "min_ms": 0.16383999586105347
+            "max_ms": 0.21507200598716736,
+            "mean_ms": 0.1978133370478948,
+            "min_ms": 0.18518400192260742
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -296,29 +113,30 @@
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.125,
+          "plan_sample": 13.8828125,
           "plan_timing_ms": {
-            "max_ms": 0.16259199380874634,
-            "mean_ms": 0.1505983978509903,
-            "min_ms": 0.14480000734329224
+            "max_ms": 0.2580159902572632,
+            "mean_ms": 0.1930666665236155,
+            "min_ms": 0.15593600273132324
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         },
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_full",
-          "dtype": "bfloat16",
+          "dtype": "float16",
           "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.125,
+          "high_level_sample": 13.8828125,
           "high_level_timing_ms": {
-            "max_ms": 0.2579840123653412,
-            "mean_ms": 0.242195200920105,
-            "min_ms": 0.22271999716758728
+            "max_ms": 0.21558399498462677,
+            "mean_ms": 0.20157866179943085,
+            "min_ms": 0.19235199689865112
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -326,13 +144,13 @@
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.125,
+          "plan_sample": 13.8828125,
           "plan_timing_ms": {
-            "max_ms": 0.17033599317073822,
-            "mean_ms": 0.15092479586601257,
-            "min_ms": 0.14134399592876434
+            "max_ms": 0.2604160010814667,
+            "mean_ms": 0.1949333349863688,
+            "min_ms": 0.15852800011634827
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -340,430 +158,39 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 20.125, \"plan_timing_ms\": {\"mean_ms\": 0.1505983978509903, \"min_ms\": 0.14480000734329224, \"max_ms\": 0.16259199380874634}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 20.125, \"high_level_timing_ms\": {\"mean_ms\": 0.1738431990146637, \"min_ms\": 0.16383999586105347, \"max_ms\": 0.18646399676799774}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 20.125, \"plan_timing_ms\": {\"mean_ms\": 0.15092479586601257, \"min_ms\": 0.14134399592876434, \"max_ms\": 0.17033599317073822}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 20.125, \"high_level_timing_ms\": {\"mean_ms\": 0.242195200920105, \"min_ms\": 0.22271999716758728, \"max_ms\": 0.2579840123653412}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.8828125, \"plan_timing_ms\": {\"mean_ms\": 0.1930666665236155, \"min_ms\": 0.15593600273132324, \"max_ms\": 0.2580159902572632}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.8828125, \"high_level_timing_ms\": {\"mean_ms\": 0.1978133370478948, \"min_ms\": 0.18518400192260742, \"max_ms\": 0.21507200598716736}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.8828125, \"plan_timing_ms\": {\"mean_ms\": 0.1949333349863688, \"min_ms\": 0.15852800011634827, \"max_ms\": 0.2604160010814667}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.8828125, \"high_level_timing_ms\": {\"mean_ms\": 0.20157866179943085, \"min_ms\": 0.19235199689865112, \"max_ms\": 0.21558399498462677}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.20801919996738433,
+        "high_level_mean_ms_across_ranks": 0.19969599942366284,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.0683520019054413,
+        "max_rank_skew_ms": 0.003765324751536042,
         "mode": "multiprocess",
         "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.15076159685850143,
+        "plan_mean_ms_across_ranks": 0.19400000075499216,
         "plan_pattern_name": "bulk_sync",
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport pytorch_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --contract full_full --pattern bulk_sync --warmup 1 --iters 3 --launcher all",
       "contract": "full_full",
-      "dtype": "bfloat16",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:42:04.780000 668294 torch/multiprocessing/spawn.py:169] Terminating process 668397 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport peer_access_pointer_exchange",
-      "contract": "full_full",
-      "dtype": "bfloat16",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:42:17.480000 669254 torch/multiprocessing/spawn.py:169] Terminating process 669332 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all",
-      "contract": "full_full",
-      "dtype": "float32",
-      "rank_payloads": [
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "float32",
-          "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.044677734375,
-          "high_level_ok": true,
-          "high_level_sample": 20.094654083251953,
-          "high_level_timing_ms": {
-            "max_ms": 0.2163199931383133,
-            "mean_ms": 0.1968511998653412,
-            "min_ms": 0.18774400651454926
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.094654083251953,
-          "plan_timing_ms": {
-            "max_ms": 0.18799999356269836,
-            "mean_ms": 0.1702271968126297,
-            "min_ms": 0.16223999857902527
-          },
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc"
-        },
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "float32",
-          "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.044677734375,
-          "high_level_ok": true,
-          "high_level_sample": 20.094654083251953,
-          "high_level_timing_ms": {
-            "max_ms": 0.24860799312591553,
-            "mean_ms": 0.2317503958940506,
-            "min_ms": 0.21750399470329285
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.094654083251953,
-          "plan_timing_ms": {
-            "max_ms": 0.17971199750900269,
-            "mean_ms": 0.16989439725875854,
-            "min_ms": 0.15987199544906616
-          },
-          "rank": 1,
-          "transport_strategy": "ctypes_ipc"
-        }
-      ],
-      "requested_transport": "auto",
-      "returncode": 0,
-      "status": "passed",
-      "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 20.094654083251953, \"plan_timing_ms\": {\"mean_ms\": 0.1702271968126297, \"min_ms\": 0.16223999857902527, \"max_ms\": 0.18799999356269836}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 20.094654083251953, \"high_level_timing_ms\": {\"mean_ms\": 0.1968511998653412, \"min_ms\": 0.18774400651454926, \"max_ms\": 0.2163199931383133}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 20.094654083251953, \"plan_timing_ms\": {\"mean_ms\": 0.16989439725875854, \"min_ms\": 0.15987199544906616, \"max_ms\": 0.17971199750900269}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 20.094654083251953, \"high_level_timing_ms\": {\"mean_ms\": 0.2317503958940506, \"min_ms\": 0.21750399470329285, \"max_ms\": 0.24860799312591553}}\n",
-      "summary": {
-        "high_level_mean_ms_across_ranks": 0.21430079787969591,
-        "max_high_level_abs_diff": 0.044677734375,
-        "max_plan_abs_diff": 0.044677734375,
-        "max_rank_skew_ms": 0.03489919602870942,
-        "mode": "multiprocess",
-        "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.17006079703569413,
-        "plan_pattern_name": "bulk_sync",
-        "transport_strategy": "ctypes_ipc"
-      }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport ctypes_ipc",
-      "contract": "full_full",
-      "dtype": "float32",
-      "rank_payloads": [
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "float32",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.044677734375,
-          "high_level_ok": true,
-          "high_level_sample": 20.094654083251953,
-          "high_level_timing_ms": {
-            "max_ms": 0.20921599864959717,
-            "mean_ms": 0.19447680115699767,
-            "min_ms": 0.1828799992799759
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.094654083251953,
-          "plan_timing_ms": {
-            "max_ms": 0.18172800540924072,
-            "mean_ms": 0.16405760049819945,
-            "min_ms": 0.1547199934720993
-          },
-          "rank": 1,
-          "transport_strategy": "ctypes_ipc"
-        },
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_full",
-          "dtype": "float32",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.044677734375,
-          "high_level_ok": true,
-          "high_level_sample": 20.094654083251953,
-          "high_level_timing_ms": {
-            "max_ms": 0.3535360097885132,
-            "mean_ms": 0.3290752053260803,
-            "min_ms": 0.29625600576400757
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.094654083251953,
-          "plan_timing_ms": {
-            "max_ms": 0.21875199675559998,
-            "mean_ms": 0.1753983974456787,
-            "min_ms": 0.16092799603939056
-          },
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc"
-        }
-      ],
-      "requested_transport": "ctypes_ipc",
-      "returncode": 0,
-      "status": "passed",
-      "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 20.094654083251953, \"plan_timing_ms\": {\"mean_ms\": 0.16405760049819945, \"min_ms\": 0.1547199934720993, \"max_ms\": 0.18172800540924072}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 20.094654083251953, \"high_level_timing_ms\": {\"mean_ms\": 0.19447680115699767, \"min_ms\": 0.1828799992799759, \"max_ms\": 0.20921599864959717}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 20.094654083251953, \"plan_timing_ms\": {\"mean_ms\": 0.1753983974456787, \"min_ms\": 0.16092799603939056, \"max_ms\": 0.21875199675559998}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 20.094654083251953, \"high_level_timing_ms\": {\"mean_ms\": 0.3290752053260803, \"min_ms\": 0.29625600576400757, \"max_ms\": 0.3535360097885132}}\n",
-      "summary": {
-        "high_level_mean_ms_across_ranks": 0.261776003241539,
-        "max_high_level_abs_diff": 0.044677734375,
-        "max_plan_abs_diff": 0.044677734375,
-        "max_rank_skew_ms": 0.13459840416908264,
-        "mode": "multiprocess",
-        "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.16972799897193908,
-        "plan_pattern_name": "bulk_sync",
-        "transport_strategy": "ctypes_ipc"
-      }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport pytorch_ipc",
-      "contract": "full_full",
-      "dtype": "float32",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:42:59.869000 672148 torch/multiprocessing/spawn.py:169] Terminating process 672398 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_full --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport peer_access_pointer_exchange",
-      "contract": "full_full",
-      "dtype": "float32",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:43:12.715000 673317 torch/multiprocessing/spawn.py:169] Terminating process 673412 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all",
-      "contract": "full_shard",
-      "dtype": "float16",
-      "rank_payloads": [
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
-          "dtype": "float16",
-          "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.03125,
-          "high_level_ok": true,
-          "high_level_sample": 20.09375,
-          "high_level_timing_ms": {
-            "max_ms": 0.24278399348258972,
-            "mean_ms": 0.21034879982471466,
-            "min_ms": 0.19011199474334717
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.09375,
-          "plan_timing_ms": {
-            "max_ms": 0.2648000121116638,
-            "mean_ms": 0.19726720452308655,
-            "min_ms": 0.16723200678825378
-          },
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc"
-        },
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
-          "dtype": "float16",
-          "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.03125,
-          "high_level_ok": true,
-          "high_level_sample": 41.4375,
-          "high_level_timing_ms": {
-            "max_ms": 0.25625601410865784,
-            "mean_ms": 0.22204800248146056,
-            "min_ms": 0.2027519941329956
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 41.4375,
-          "plan_timing_ms": {
-            "max_ms": 0.26796799898147583,
-            "mean_ms": 0.20846720039844513,
-            "min_ms": 0.17423999309539795
-          },
-          "rank": 1,
-          "transport_strategy": "ctypes_ipc"
-        }
-      ],
-      "requested_transport": "auto",
-      "returncode": 0,
-      "status": "passed",
-      "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.19726720452308655, \"min_ms\": 0.16723200678825378, \"max_ms\": 0.2648000121116638}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.21034879982471466, \"min_ms\": 0.19011199474334717, \"max_ms\": 0.24278399348258972}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 41.4375, \"plan_timing_ms\": {\"mean_ms\": 0.20846720039844513, \"min_ms\": 0.17423999309539795, \"max_ms\": 0.26796799898147583}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 41.4375, \"high_level_timing_ms\": {\"mean_ms\": 0.22204800248146056, \"min_ms\": 0.2027519941329956, \"max_ms\": 0.25625601410865784}}\n",
-      "summary": {
-        "high_level_mean_ms_across_ranks": 0.2161984011530876,
-        "max_high_level_abs_diff": 0.03125,
-        "max_plan_abs_diff": 0.03125,
-        "max_rank_skew_ms": 0.0116992026567459,
-        "mode": "multiprocess",
-        "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.20286720246076584,
-        "plan_pattern_name": "bulk_sync",
-        "transport_strategy": "ctypes_ipc"
-      }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport ctypes_ipc",
-      "contract": "full_shard",
-      "dtype": "float16",
-      "rank_payloads": [
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
-          "dtype": "float16",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.03125,
-          "high_level_ok": true,
-          "high_level_sample": 41.4375,
-          "high_level_timing_ms": {
-            "max_ms": 0.2197439968585968,
-            "mean_ms": 0.2035968005657196,
-            "min_ms": 0.19353599846363068
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 41.4375,
-          "plan_timing_ms": {
-            "max_ms": 0.36403200030326843,
-            "mean_ms": 0.35267199873924254,
-            "min_ms": 0.3373439908027649
-          },
-          "rank": 1,
-          "transport_strategy": "ctypes_ipc"
-        },
-        {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
-          "dtype": "float16",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.03125,
-          "high_level_ok": true,
-          "high_level_sample": 20.09375,
-          "high_level_timing_ms": {
-            "max_ms": 0.22191999852657318,
-            "mean_ms": 0.20490239858627318,
-            "min_ms": 0.19696000218391418
-          },
-          "launcher": "all",
-          "mode": "multiprocess",
-          "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.03125,
-          "plan_ok": true,
-          "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.09375,
-          "plan_timing_ms": {
-            "max_ms": 0.3643200099468231,
-            "mean_ms": 0.35178239941596984,
-            "min_ms": 0.3373759984970093
-          },
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc"
-        }
-      ],
-      "requested_transport": "ctypes_ipc",
-      "returncode": 0,
-      "status": "passed",
-      "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 41.4375, \"plan_timing_ms\": {\"mean_ms\": 0.35267199873924254, \"min_ms\": 0.3373439908027649, \"max_ms\": 0.36403200030326843}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 41.4375, \"high_level_timing_ms\": {\"mean_ms\": 0.2035968005657196, \"min_ms\": 0.19353599846363068, \"max_ms\": 0.2197439968585968}}\n{\"rank\": 0, \"dtype\": \"float16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.03125, \"plan_sample\": 20.09375, \"plan_timing_ms\": {\"mean_ms\": 0.35178239941596984, \"min_ms\": 0.3373759984970093, \"max_ms\": 0.3643200099468231}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.03125, \"high_level_sample\": 20.09375, \"high_level_timing_ms\": {\"mean_ms\": 0.20490239858627318, \"min_ms\": 0.19696000218391418, \"max_ms\": 0.22191999852657318}}\n",
-      "summary": {
-        "high_level_mean_ms_across_ranks": 0.2042495995759964,
-        "max_high_level_abs_diff": 0.03125,
-        "max_plan_abs_diff": 0.03125,
-        "max_rank_skew_ms": 0.0013055980205535778,
-        "mode": "multiprocess",
-        "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.3522271990776062,
-        "plan_pattern_name": "bulk_sync",
-        "transport_strategy": "ctypes_ipc"
-      }
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport pytorch_ipc",
-      "contract": "full_shard",
-      "dtype": "float16",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:43:53.295000 676209 torch/multiprocessing/spawn.py:169] Terminating process 676327 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport peer_access_pointer_exchange",
-      "contract": "full_shard",
-      "dtype": "float16",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:44:07.291000 677168 torch/multiprocessing/spawn.py:169] Terminating process 677399 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all",
-      "contract": "full_shard",
       "dtype": "bfloat16",
       "rank_payloads": [
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
           "dtype": "bfloat16",
           "forced_transport": "auto",
+          "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.125,
+          "high_level_sample": 13.9375,
           "high_level_timing_ms": {
-            "max_ms": 0.24134400486946106,
-            "mean_ms": 0.20982399880886077,
-            "min_ms": 0.1910720020532608
+            "max_ms": 0.21881599724292755,
+            "mean_ms": 0.20354133347670236,
+            "min_ms": 0.1884479969739914
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -771,29 +198,30 @@
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.125,
+          "plan_sample": 13.9375,
           "plan_timing_ms": {
-            "max_ms": 0.20057600736618042,
-            "mean_ms": 0.17768319845199584,
-            "min_ms": 0.16735999286174774
+            "max_ms": 0.35760000348091125,
+            "mean_ms": 0.23009066780408224,
+            "min_ms": 0.15852800011634827
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         },
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
           "dtype": "bfloat16",
           "forced_transport": "auto",
+          "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 41.5,
+          "high_level_sample": 13.9375,
           "high_level_timing_ms": {
-            "max_ms": 0.2300799936056137,
-            "mean_ms": 0.20722559690475464,
-            "min_ms": 0.19724799692630768
+            "max_ms": 0.24105599522590637,
+            "mean_ms": 0.2119253327449163,
+            "min_ms": 0.19305600225925446
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -801,13 +229,13 @@
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 41.5,
+          "plan_sample": 13.9375,
           "plan_timing_ms": {
-            "max_ms": 0.2104640007019043,
-            "mean_ms": 0.1855232000350952,
-            "min_ms": 0.16390399634838104
+            "max_ms": 0.33590400218963623,
+            "mean_ms": 0.21997866531213126,
+            "min_ms": 0.15385599434375763
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -815,38 +243,39 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 20.125, \"plan_timing_ms\": {\"mean_ms\": 0.17768319845199584, \"min_ms\": 0.16735999286174774, \"max_ms\": 0.20057600736618042}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 20.125, \"high_level_timing_ms\": {\"mean_ms\": 0.20982399880886077, \"min_ms\": 0.1910720020532608, \"max_ms\": 0.24134400486946106}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 41.5, \"plan_timing_ms\": {\"mean_ms\": 0.1855232000350952, \"min_ms\": 0.16390399634838104, \"max_ms\": 0.2104640007019043}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 41.5, \"high_level_timing_ms\": {\"mean_ms\": 0.20722559690475464, \"min_ms\": 0.19724799692630768, \"max_ms\": 0.2300799936056137}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.9375, \"plan_timing_ms\": {\"mean_ms\": 0.23009066780408224, \"min_ms\": 0.15852800011634827, \"max_ms\": 0.35760000348091125}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.9375, \"high_level_timing_ms\": {\"mean_ms\": 0.20354133347670236, \"min_ms\": 0.1884479969739914, \"max_ms\": 0.21881599724292755}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.9375, \"plan_timing_ms\": {\"mean_ms\": 0.21997866531213126, \"min_ms\": 0.15385599434375763, \"max_ms\": 0.33590400218963623}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.9375, \"high_level_timing_ms\": {\"mean_ms\": 0.2119253327449163, \"min_ms\": 0.19305600225925446, \"max_ms\": 0.24105599522590637}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.20852479785680772,
+        "high_level_mean_ms_across_ranks": 0.20773333311080933,
         "max_high_level_abs_diff": 0.0,
         "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.0025984019041061235,
+        "max_rank_skew_ms": 0.008383999268213926,
         "mode": "multiprocess",
         "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.1816031992435455,
+        "plan_mean_ms_across_ranks": 0.22503466655810675,
         "plan_pattern_name": "bulk_sync",
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport ctypes_ipc",
-      "contract": "full_shard",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --contract full_full --pattern bulk_sync --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
+      "contract": "full_full",
       "dtype": "bfloat16",
       "rank_payloads": [
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
           "dtype": "bfloat16",
           "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
           "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.125,
+          "high_level_sample": 13.9375,
           "high_level_timing_ms": {
-            "max_ms": 0.21820800006389618,
-            "mean_ms": 0.19729919731616974,
-            "min_ms": 0.1868479996919632
+            "max_ms": 0.20694400370121002,
+            "mean_ms": 0.19752533733844757,
+            "min_ms": 0.18915200233459473
           },
           "launcher": "all",
           "mode": "multiprocess",
@@ -854,41 +283,212 @@
           "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.125,
+          "plan_sample": 13.9375,
           "plan_timing_ms": {
-            "max_ms": 0.1950719952583313,
-            "mean_ms": 0.17339519858360292,
-            "min_ms": 0.1648000031709671
+            "max_ms": 0.24662399291992188,
+            "mean_ms": 0.19207466145356497,
+            "min_ms": 0.15689599514007568
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
+          "dtype": "bfloat16",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": 13.9375,
+          "high_level_timing_ms": {
+            "max_ms": 0.21481600403785706,
+            "mean_ms": 0.2027733325958252,
+            "min_ms": 0.19420799612998962
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.9375,
+          "plan_timing_ms": {
+            "max_ms": 0.26467201113700867,
+            "mean_ms": 0.20088533560434976,
+            "min_ms": 0.16787199676036835
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.9375, \"plan_timing_ms\": {\"mean_ms\": 0.19207466145356497, \"min_ms\": 0.15689599514007568, \"max_ms\": 0.24662399291992188}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.9375, \"high_level_timing_ms\": {\"mean_ms\": 0.19752533733844757, \"min_ms\": 0.18915200233459473, \"max_ms\": 0.20694400370121002}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.9375, \"plan_timing_ms\": {\"mean_ms\": 0.20088533560434976, \"min_ms\": 0.16787199676036835, \"max_ms\": 0.26467201113700867}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.9375, \"high_level_timing_ms\": {\"mean_ms\": 0.2027733325958252, \"min_ms\": 0.19420799612998962, \"max_ms\": 0.21481600403785706}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.20014933496713638,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 0.0052479952573776245,
+        "mode": "multiprocess",
+        "pattern": "bulk_sync",
+        "plan_mean_ms_across_ranks": 0.19647999852895737,
+        "plan_pattern_name": "bulk_sync",
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --contract full_full --pattern bulk_sync --warmup 1 --iters 3 --launcher all",
+      "contract": "full_full",
+      "dtype": "float32",
+      "rank_payloads": [
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
+          "dtype": "float32",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": 13.882662773132324,
+          "high_level_timing_ms": {
+            "max_ms": 0.23347200453281403,
+            "mean_ms": 0.22024533649285635,
+            "min_ms": 0.20947200059890747
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.882662773132324,
+          "plan_timing_ms": {
+            "max_ms": 0.3521279990673065,
+            "mean_ms": 0.2447786678870519,
+            "min_ms": 0.18227200210094452
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
         },
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
-          "contract": "full_shard",
-          "dtype": "bfloat16",
-          "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.0,
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
+          "dtype": "float32",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
           "high_level_ok": true,
-          "high_level_sample": 41.5,
+          "high_level_sample": 13.882662773132324,
           "high_level_timing_ms": {
-            "max_ms": 0.23846399784088135,
-            "mean_ms": 0.20670719742774962,
-            "min_ms": 0.18614399433135986
+            "max_ms": 0.2454719990491867,
+            "mean_ms": 0.22822399934132895,
+            "min_ms": 0.21545599400997162
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.0,
+          "plan_max_abs_diff": 0.02318572998046875,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 41.5,
+          "plan_sample": 13.882662773132324,
           "plan_timing_ms": {
-            "max_ms": 0.19654400646686554,
-            "mean_ms": 0.1697472006082535,
-            "min_ms": 0.15171200037002563
+            "max_ms": 0.32943999767303467,
+            "mean_ms": 0.23893332978089651,
+            "min_ms": 0.1879359930753708
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": 13.882662773132324, \"plan_timing_ms\": {\"mean_ms\": 0.2447786678870519, \"min_ms\": 0.18227200210094452, \"max_ms\": 0.3521279990673065}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": 13.882662773132324, \"high_level_timing_ms\": {\"mean_ms\": 0.22024533649285635, \"min_ms\": 0.20947200059890747, \"max_ms\": 0.23347200453281403}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": 13.882662773132324, \"plan_timing_ms\": {\"mean_ms\": 0.23893332978089651, \"min_ms\": 0.1879359930753708, \"max_ms\": 0.32943999767303467}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": 13.882662773132324, \"high_level_timing_ms\": {\"mean_ms\": 0.22822399934132895, \"min_ms\": 0.21545599400997162, \"max_ms\": 0.2454719990491867}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.22423466791709265,
+        "max_high_level_abs_diff": 0.02318572998046875,
+        "max_plan_abs_diff": 0.02318572998046875,
+        "max_rank_skew_ms": 0.007978662848472595,
+        "mode": "multiprocess",
+        "pattern": "bulk_sync",
+        "plan_mean_ms_across_ranks": 0.2418559988339742,
+        "plan_pattern_name": "bulk_sync",
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --contract full_full --pattern bulk_sync --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
+      "contract": "full_full",
+      "dtype": "float32",
+      "rank_payloads": [
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
+          "dtype": "float32",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": 13.882662773132324,
+          "high_level_timing_ms": {
+            "max_ms": 0.24214400351047516,
+            "mean_ms": 0.22832000255584717,
+            "min_ms": 0.21615999937057495
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.882662773132324,
+          "plan_timing_ms": {
+            "max_ms": 0.27804800868034363,
+            "mean_ms": 0.22042666872342428,
+            "min_ms": 0.18643200397491455
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_full",
+          "dtype": "float32",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": 13.882662773132324,
+          "high_level_timing_ms": {
+            "max_ms": 0.23824000358581543,
+            "mean_ms": 0.2268906682729721,
+            "min_ms": 0.22038400173187256
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.882662773132324,
+          "plan_timing_ms": {
+            "max_ms": 0.2768639922142029,
+            "mean_ms": 0.2214613308509191,
+            "min_ms": 0.1855359971523285
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
@@ -898,100 +498,252 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 20.125, \"plan_timing_ms\": {\"mean_ms\": 0.17339519858360292, \"min_ms\": 0.1648000031709671, \"max_ms\": 0.1950719952583313}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 20.125, \"high_level_timing_ms\": {\"mean_ms\": 0.19729919731616974, \"min_ms\": 0.1868479996919632, \"max_ms\": 0.21820800006389618}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 41.5, \"plan_timing_ms\": {\"mean_ms\": 0.1697472006082535, \"min_ms\": 0.15171200037002563, \"max_ms\": 0.19654400646686554}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 41.5, \"high_level_timing_ms\": {\"mean_ms\": 0.20670719742774962, \"min_ms\": 0.18614399433135986, \"max_ms\": 0.23846399784088135}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": 13.882662773132324, \"plan_timing_ms\": {\"mean_ms\": 0.22042666872342428, \"min_ms\": 0.18643200397491455, \"max_ms\": 0.27804800868034363}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": 13.882662773132324, \"high_level_timing_ms\": {\"mean_ms\": 0.22832000255584717, \"min_ms\": 0.21615999937057495, \"max_ms\": 0.24214400351047516}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_full\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": 13.882662773132324, \"plan_timing_ms\": {\"mean_ms\": 0.2214613308509191, \"min_ms\": 0.1855359971523285, \"max_ms\": 0.2768639922142029}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": 13.882662773132324, \"high_level_timing_ms\": {\"mean_ms\": 0.2268906682729721, \"min_ms\": 0.22038400173187256, \"max_ms\": 0.23824000358581543}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.20200319737195968,
-        "max_high_level_abs_diff": 0.0,
-        "max_plan_abs_diff": 0.0,
-        "max_rank_skew_ms": 0.009408000111579884,
+        "high_level_mean_ms_across_ranks": 0.22760533541440964,
+        "max_high_level_abs_diff": 0.02318572998046875,
+        "max_plan_abs_diff": 0.02318572998046875,
+        "max_rank_skew_ms": 0.001429334282875061,
         "mode": "multiprocess",
         "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.1715711995959282,
+        "plan_mean_ms_across_ranks": 0.2209439997871717,
         "plan_pattern_name": "bulk_sync",
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport pytorch_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --contract full_shard --pattern bulk_sync --warmup 1 --iters 3 --launcher all",
       "contract": "full_shard",
-      "dtype": "bfloat16",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "[W321 23:44:48.286906905 CudaIPCTypes.cpp:16] Producer process has been terminated before all shared CUDA tensors released. See Note [Sharing CUDA tensors]\nW0321 23:44:49.227000 680423 torch/multiprocessing/spawn.py:169] Terminating process 680518 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 0 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype bfloat16 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport peer_access_pointer_exchange",
-      "contract": "full_shard",
-      "dtype": "bfloat16",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:45:01.299000 681380 torch/multiprocessing/spawn.py:169] Terminating process 681460 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
-      "stdout": ""
-    },
-    {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all",
-      "contract": "full_shard",
-      "dtype": "float32",
+      "dtype": "float16",
       "rank_payloads": [
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_shard",
-          "dtype": "float32",
+          "dtype": "float16",
           "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.044677734375,
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 41.45173645019531,
+          "high_level_sample": 13.8828125,
           "high_level_timing_ms": {
-            "max_ms": 0.25017601251602173,
-            "mean_ms": 0.22508800625801087,
-            "min_ms": 0.2093760073184967
+            "max_ms": 0.26051199436187744,
+            "mean_ms": 0.22845866779486337,
+            "min_ms": 0.20441600680351257
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
+          "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 41.45173645019531,
+          "plan_sample": 13.8828125,
           "plan_timing_ms": {
-            "max_ms": 0.23523199558258057,
-            "mean_ms": 0.2012287974357605,
-            "min_ms": 0.18223999440670013
+            "max_ms": 0.30246400833129883,
+            "mean_ms": 0.22273067136605582,
+            "min_ms": 0.1732800006866455
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": -10.265625,
+          "high_level_timing_ms": {
+            "max_ms": 0.26556798815727234,
+            "mean_ms": 0.22843732933203378,
+            "min_ms": 0.2035199999809265
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": -10.265625,
+          "plan_timing_ms": {
+            "max_ms": 0.30611199140548706,
+            "mean_ms": 0.22737066447734833,
+            "min_ms": 0.17903999984264374
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.8828125, \"plan_timing_ms\": {\"mean_ms\": 0.22273067136605582, \"min_ms\": 0.1732800006866455, \"max_ms\": 0.30246400833129883}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.8828125, \"high_level_timing_ms\": {\"mean_ms\": 0.22845866779486337, \"min_ms\": 0.20441600680351257, \"max_ms\": 0.26051199436187744}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -10.265625, \"plan_timing_ms\": {\"mean_ms\": 0.22737066447734833, \"min_ms\": 0.17903999984264374, \"max_ms\": 0.30611199140548706}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -10.265625, \"high_level_timing_ms\": {\"mean_ms\": 0.22843732933203378, \"min_ms\": 0.2035199999809265, \"max_ms\": 0.26556798815727234}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.22844799856344858,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 2.1338462829589844e-05,
+        "mode": "multiprocess",
+        "pattern": "bulk_sync",
+        "plan_mean_ms_across_ranks": 0.22505066792170209,
+        "plan_pattern_name": "bulk_sync",
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float16 --contract full_shard --pattern bulk_sync --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
+      "contract": "full_shard",
+      "dtype": "float16",
+      "rank_payloads": [
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": 13.8828125,
+          "high_level_timing_ms": {
+            "max_ms": 0.2518399953842163,
+            "mean_ms": 0.23118933041890463,
+            "min_ms": 0.2194879949092865
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.8828125,
+          "plan_timing_ms": {
+            "max_ms": 0.2919360101222992,
+            "mean_ms": 0.2282026708126068,
+            "min_ms": 0.19359999895095825
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float16",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": -10.265625,
+          "high_level_timing_ms": {
+            "max_ms": 0.2521919906139374,
+            "mean_ms": 0.2283306618531545,
+            "min_ms": 0.20345599949359894
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": -10.265625,
+          "plan_timing_ms": {
+            "max_ms": 0.34467199444770813,
+            "mean_ms": 0.250271995862325,
+            "min_ms": 0.19923199713230133
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.8828125, \"plan_timing_ms\": {\"mean_ms\": 0.2282026708126068, \"min_ms\": 0.19359999895095825, \"max_ms\": 0.2919360101222992}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.8828125, \"high_level_timing_ms\": {\"mean_ms\": 0.23118933041890463, \"min_ms\": 0.2194879949092865, \"max_ms\": 0.2518399953842163}}\n{\"rank\": 1, \"dtype\": \"float16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -10.265625, \"plan_timing_ms\": {\"mean_ms\": 0.250271995862325, \"min_ms\": 0.19923199713230133, \"max_ms\": 0.34467199444770813}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -10.265625, \"high_level_timing_ms\": {\"mean_ms\": 0.2283306618531545, \"min_ms\": 0.20345599949359894, \"max_ms\": 0.2521919906139374}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.22975999613602957,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 0.002858668565750122,
+        "mode": "multiprocess",
+        "pattern": "bulk_sync",
+        "plan_mean_ms_across_ranks": 0.2392373333374659,
+        "plan_pattern_name": "bulk_sync",
+        "transport_strategy": "ctypes_ipc"
+      }
+    },
+    {
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --contract full_shard --pattern bulk_sync --warmup 1 --iters 3 --launcher all",
+      "contract": "full_shard",
+      "dtype": "bfloat16",
+      "rank_payloads": [
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "bfloat16",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
+          "high_level_ok": true,
+          "high_level_sample": -10.25,
+          "high_level_timing_ms": {
+            "max_ms": 0.24422399699687958,
+            "mean_ms": 0.22086400290330252,
+            "min_ms": 0.20713600516319275
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.0,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": -10.25,
+          "plan_timing_ms": {
+            "max_ms": 0.32838401198387146,
+            "mean_ms": 0.2417280077934265,
+            "min_ms": 0.18649600446224213
           },
           "rank": 1,
           "transport_strategy": "ctypes_ipc"
         },
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_shard",
-          "dtype": "float32",
+          "dtype": "bfloat16",
           "forced_transport": "auto",
-          "high_level_max_abs_diff": 0.044677734375,
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.094654083251953,
+          "high_level_sample": 13.9375,
           "high_level_timing_ms": {
-            "max_ms": 0.2483839988708496,
-            "mean_ms": 0.22397439777851105,
-            "min_ms": 0.2099519968032837
+            "max_ms": 0.24796800315380096,
+            "mean_ms": 0.22846933702627817,
+            "min_ms": 0.2165440022945404
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
+          "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.094654083251953,
+          "plan_sample": 13.9375,
           "plan_timing_ms": {
-            "max_ms": 0.22492800652980804,
-            "mean_ms": 0.2009535998106003,
-            "min_ms": 0.18492799997329712
+            "max_ms": 0.29235199093818665,
+            "mean_ms": 0.22295466562112173,
+            "min_ms": 0.1791040003299713
           },
           "rank": 0,
           "transport_strategy": "ctypes_ipc"
@@ -1001,82 +753,84 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 41.45173645019531, \"plan_timing_ms\": {\"mean_ms\": 0.2012287974357605, \"min_ms\": 0.18223999440670013, \"max_ms\": 0.23523199558258057}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 41.45173645019531, \"high_level_timing_ms\": {\"mean_ms\": 0.22508800625801087, \"min_ms\": 0.2093760073184967, \"max_ms\": 0.25017601251602173}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 20.094654083251953, \"plan_timing_ms\": {\"mean_ms\": 0.2009535998106003, \"min_ms\": 0.18492799997329712, \"max_ms\": 0.22492800652980804}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 20.094654083251953, \"high_level_timing_ms\": {\"mean_ms\": 0.22397439777851105, \"min_ms\": 0.2099519968032837, \"max_ms\": 0.2483839988708496}}\n",
+      "stdout": "{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -10.25, \"plan_timing_ms\": {\"mean_ms\": 0.2417280077934265, \"min_ms\": 0.18649600446224213, \"max_ms\": 0.32838401198387146}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -10.25, \"high_level_timing_ms\": {\"mean_ms\": 0.22086400290330252, \"min_ms\": 0.20713600516319275, \"max_ms\": 0.24422399699687958}}\n{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.9375, \"plan_timing_ms\": {\"mean_ms\": 0.22295466562112173, \"min_ms\": 0.1791040003299713, \"max_ms\": 0.29235199093818665}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.9375, \"high_level_timing_ms\": {\"mean_ms\": 0.22846933702627817, \"min_ms\": 0.2165440022945404, \"max_ms\": 0.24796800315380096}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.22453120201826096,
-        "max_high_level_abs_diff": 0.044677734375,
-        "max_plan_abs_diff": 0.044677734375,
-        "max_rank_skew_ms": 0.001113608479499817,
+        "high_level_mean_ms_across_ranks": 0.22466666996479034,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 0.007605334122975649,
         "mode": "multiprocess",
         "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.2010911986231804,
+        "plan_mean_ms_across_ranks": 0.23234133670727414,
         "plan_pattern_name": "bulk_sync",
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport ctypes_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype bfloat16 --contract full_shard --pattern bulk_sync --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
       "contract": "full_shard",
-      "dtype": "float32",
+      "dtype": "bfloat16",
       "rank_payloads": [
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_shard",
-          "dtype": "float32",
+          "dtype": "bfloat16",
           "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.044677734375,
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 41.45173645019531,
+          "high_level_sample": 13.9375,
           "high_level_timing_ms": {
-            "max_ms": 0.23465600609779358,
-            "mean_ms": 0.22029440402984618,
-            "min_ms": 0.20854400098323822
+            "max_ms": 0.4663040041923523,
+            "mean_ms": 0.4434986611207326,
+            "min_ms": 0.42956799268722534
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
+          "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 41.45173645019531,
+          "plan_sample": 13.9375,
           "plan_timing_ms": {
-            "max_ms": 0.22870400547981262,
-            "mean_ms": 0.19918080270290375,
-            "min_ms": 0.17849600315093994
+            "max_ms": 0.42950400710105896,
+            "mean_ms": 0.38753066460291546,
+            "min_ms": 0.34988799691200256
           },
-          "rank": 1,
+          "rank": 0,
           "transport_strategy": "ctypes_ipc"
         },
         {
-          "K": 256,
-          "M": 256,
-          "N": 512,
+          "K": 128,
+          "M": 128,
+          "N": 256,
           "contract": "full_shard",
-          "dtype": "float32",
+          "dtype": "bfloat16",
           "forced_transport": "ctypes_ipc",
-          "high_level_max_abs_diff": 0.044677734375,
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.0,
           "high_level_ok": true,
-          "high_level_sample": 20.094654083251953,
+          "high_level_sample": -10.25,
           "high_level_timing_ms": {
-            "max_ms": 0.23231999576091766,
-            "mean_ms": 0.21958400011062623,
-            "min_ms": 0.20905600488185883
+            "max_ms": 0.4661119878292084,
+            "mean_ms": 0.4455466667811076,
+            "min_ms": 0.4296000003814697
           },
           "launcher": "all",
           "mode": "multiprocess",
           "pattern": "bulk_sync",
-          "plan_max_abs_diff": 0.044677734375,
+          "plan_max_abs_diff": 0.0,
           "plan_ok": true,
           "plan_pattern_name": "bulk_sync",
-          "plan_sample": 20.094654083251953,
+          "plan_sample": -10.25,
           "plan_timing_ms": {
-            "max_ms": 0.21715199947357178,
-            "mean_ms": 0.19724159836769103,
-            "min_ms": 0.18384000658988953
+            "max_ms": 0.45110398530960083,
+            "mean_ms": 0.39374932646751404,
+            "min_ms": 0.350271999835968
           },
-          "rank": 0,
+          "rank": 1,
           "transport_strategy": "ctypes_ipc"
         }
       ],
@@ -1084,56 +838,206 @@
       "returncode": 0,
       "status": "passed",
       "stderr": "",
-      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 41.45173645019531, \"plan_timing_ms\": {\"mean_ms\": 0.19918080270290375, \"min_ms\": 0.17849600315093994, \"max_ms\": 0.22870400547981262}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 41.45173645019531, \"high_level_timing_ms\": {\"mean_ms\": 0.22029440402984618, \"min_ms\": 0.20854400098323822, \"max_ms\": 0.23465600609779358}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 256, \"N\": 512, \"K\": 256, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.044677734375, \"plan_sample\": 20.094654083251953, \"plan_timing_ms\": {\"mean_ms\": 0.19724159836769103, \"min_ms\": 0.18384000658988953, \"max_ms\": 0.21715199947357178}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.044677734375, \"high_level_sample\": 20.094654083251953, \"high_level_timing_ms\": {\"mean_ms\": 0.21958400011062623, \"min_ms\": 0.20905600488185883, \"max_ms\": 0.23231999576091766}}\n",
+      "stdout": "{\"rank\": 0, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": 13.9375, \"plan_timing_ms\": {\"mean_ms\": 0.38753066460291546, \"min_ms\": 0.34988799691200256, \"max_ms\": 0.42950400710105896}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": 13.9375, \"high_level_timing_ms\": {\"mean_ms\": 0.4434986611207326, \"min_ms\": 0.42956799268722534, \"max_ms\": 0.4663040041923523}}\n{\"rank\": 1, \"dtype\": \"bfloat16\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.0, \"plan_sample\": -10.25, \"plan_timing_ms\": {\"mean_ms\": 0.39374932646751404, \"min_ms\": 0.350271999835968, \"max_ms\": 0.45110398530960083}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.0, \"high_level_sample\": -10.25, \"high_level_timing_ms\": {\"mean_ms\": 0.4455466667811076, \"min_ms\": 0.4296000003814697, \"max_ms\": 0.4661119878292084}}\n",
       "summary": {
-        "high_level_mean_ms_across_ranks": 0.2199392020702362,
-        "max_high_level_abs_diff": 0.044677734375,
-        "max_plan_abs_diff": 0.044677734375,
-        "max_rank_skew_ms": 0.0007104039192199485,
+        "high_level_mean_ms_across_ranks": 0.4445226639509201,
+        "max_high_level_abs_diff": 0.0,
+        "max_plan_abs_diff": 0.0,
+        "max_rank_skew_ms": 0.0020480056603749963,
         "mode": "multiprocess",
         "pattern": "bulk_sync",
-        "plan_mean_ms_across_ranks": 0.1982112005352974,
+        "plan_mean_ms_across_ranks": 0.3906399955352148,
         "plan_pattern_name": "bulk_sync",
         "transport_strategy": "ctypes_ipc"
       }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport pytorch_ipc",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --contract full_shard --pattern bulk_sync --warmup 1 --iters 3 --launcher all",
       "contract": "full_shard",
       "dtype": "float32",
-      "requested_transport": "pytorch_ipc",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "Traceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='pytorch_ipc'.\n\n",
-      "stdout": ""
+      "rank_payloads": [
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float32",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": -10.273436546325684,
+          "high_level_timing_ms": {
+            "max_ms": 0.25990399718284607,
+            "mean_ms": 0.2497493326663971,
+            "min_ms": 0.24249599874019623
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": -10.273436546325684,
+          "plan_timing_ms": {
+            "max_ms": 0.3251839876174927,
+            "mean_ms": 0.2528426597515742,
+            "min_ms": 0.20499199628829956
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float32",
+          "forced_transport": "auto",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": 13.882662773132324,
+          "high_level_timing_ms": {
+            "max_ms": 0.266400009393692,
+            "mean_ms": 0.2472000022729238,
+            "min_ms": 0.23628799617290497
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.882662773132324,
+          "plan_timing_ms": {
+            "max_ms": 0.3322240114212036,
+            "mean_ms": 0.25537067155043286,
+            "min_ms": 0.20812800526618958
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "requested_transport": "auto",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": -10.273436546325684, \"plan_timing_ms\": {\"mean_ms\": 0.2528426597515742, \"min_ms\": 0.20499199628829956, \"max_ms\": 0.3251839876174927}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": -10.273436546325684, \"high_level_timing_ms\": {\"mean_ms\": 0.2497493326663971, \"min_ms\": 0.24249599874019623, \"max_ms\": 0.25990399718284607}}\n{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"auto\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": 13.882662773132324, \"plan_timing_ms\": {\"mean_ms\": 0.25537067155043286, \"min_ms\": 0.20812800526618958, \"max_ms\": 0.3322240114212036}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": 13.882662773132324, \"high_level_timing_ms\": {\"mean_ms\": 0.2472000022729238, \"min_ms\": 0.23628799617290497, \"max_ms\": 0.266400009393692}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.24847466746966046,
+        "max_high_level_abs_diff": 0.02318572998046875,
+        "max_plan_abs_diff": 0.02318572998046875,
+        "max_rank_skew_ms": 0.002549330393473298,
+        "mode": "multiprocess",
+        "pattern": "bulk_sync",
+        "plan_mean_ms_across_ranks": 0.25410666565100354,
+        "plan_pattern_name": "bulk_sync",
+        "transport_strategy": "ctypes_ipc"
+      }
     },
     {
-      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 256 --N 512 --K 256 --dtype float32 --contract full_shard --pattern bulk_sync --warmup 2 --iters 5 --launcher all --force-transport peer_access_pointer_exchange",
+      "command": "/usr/bin/python -u -m tests.test_e2e._run_gemm_allscatter_multiprocess --M 128 --N 256 --K 128 --dtype float32 --contract full_shard --pattern bulk_sync --warmup 1 --iters 3 --launcher all --force-transport ctypes_ipc",
       "contract": "full_shard",
       "dtype": "float32",
-      "requested_transport": "peer_access_pointer_exchange",
-      "returncode": 1,
-      "status": "failed",
-      "stderr": "W0321 23:45:57.361000 685404 torch/multiprocessing/spawn.py:169] Terminating process 685668 via signal SIGTERM\nTraceback (most recent call last):\n  File \"/usr/lib/python3.10/runpy.py\", line 196, in _run_module_as_main\n    return _run_code(code, main_globals, None,\n  File \"/usr/lib/python3.10/runpy.py\", line 86, in _run_code\n    exec(code, run_globals)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 419, in <module>\n    main()\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 405, in main\n    mp.start_processes(\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 296, in start_processes\n    while not context.join():\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 215, in join\n    raise ProcessRaisedException(msg, error_index, failed_process.pid)\ntorch.multiprocessing.spawn.ProcessRaisedException: \n\n-- Process 1 terminated with the following error:\nTraceback (most recent call last):\n  File \"/home/makai/.local/lib/python3.10/site-packages/torch/multiprocessing/spawn.py\", line 90, in _wrap\n    fn(i, *args)\n  File \"/home/makai/XTile/tests/test_e2e/_run_gemm_allscatter_multiprocess.py\", line 229, in _worker\n    plan = xtile.ops.build_gemm_allscatter_plan(\n  File \"/home/makai/XTile/xtile/ops.py\", line 350, in build_gemm_allscatter_plan\n    _require_gemm_allscatter_runtime(resolved_ctx)\n  File \"/home/makai/XTile/xtile/ops.py\", line 959, in _require_gemm_allscatter_runtime\n    _require_device_remote_access_runtime(\n  File \"/home/makai/XTile/xtile/ops.py\", line 949, in _require_device_remote_access_runtime\n    raise ValueError(\nValueError: xtile.ops.gemm_allscatter(...) relies on Triton device-side remote dereference. Real 2-GPU minimal remote-load/store diagnostics currently validate only transport_strategy='ctypes_ipc'; other transports are not yet safe. Current transport_strategy='peer_access_pointer_exchange'.\n\n",
-      "stdout": ""
+      "rank_payloads": [
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float32",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": 13.882662773132324,
+          "high_level_timing_ms": {
+            "max_ms": 0.270112007856369,
+            "mean_ms": 0.24979200462500253,
+            "min_ms": 0.2388480007648468
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": 13.882662773132324,
+          "plan_timing_ms": {
+            "max_ms": 0.3102400004863739,
+            "mean_ms": 0.24248533447583517,
+            "min_ms": 0.2032639980316162
+          },
+          "rank": 0,
+          "transport_strategy": "ctypes_ipc"
+        },
+        {
+          "K": 128,
+          "M": 128,
+          "N": 256,
+          "contract": "full_shard",
+          "dtype": "float32",
+          "forced_transport": "ctypes_ipc",
+          "heap_size_mb": 128,
+          "high_level_max_abs_diff": 0.02318572998046875,
+          "high_level_ok": true,
+          "high_level_sample": -10.273436546325684,
+          "high_level_timing_ms": {
+            "max_ms": 0.2659200131893158,
+            "mean_ms": 0.2488106737534205,
+            "min_ms": 0.2391040027141571
+          },
+          "launcher": "all",
+          "mode": "multiprocess",
+          "pattern": "bulk_sync",
+          "plan_max_abs_diff": 0.02318572998046875,
+          "plan_ok": true,
+          "plan_pattern_name": "bulk_sync",
+          "plan_sample": -10.273436546325684,
+          "plan_timing_ms": {
+            "max_ms": 0.3333440124988556,
+            "mean_ms": 0.25464533766110736,
+            "min_ms": 0.206496000289917
+          },
+          "rank": 1,
+          "transport_strategy": "ctypes_ipc"
+        }
+      ],
+      "requested_transport": "ctypes_ipc",
+      "returncode": 0,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "{\"rank\": 0, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": 13.882662773132324, \"plan_timing_ms\": {\"mean_ms\": 0.24248533447583517, \"min_ms\": 0.2032639980316162, \"max_ms\": 0.3102400004863739}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": 13.882662773132324, \"high_level_timing_ms\": {\"mean_ms\": 0.24979200462500253, \"min_ms\": 0.2388480007648468, \"max_ms\": 0.270112007856369}}\n{\"rank\": 1, \"dtype\": \"float32\", \"M\": 128, \"N\": 256, \"K\": 128, \"contract\": \"full_shard\", \"launcher\": \"all\", \"pattern\": \"bulk_sync\", \"forced_transport\": \"ctypes_ipc\", \"transport_strategy\": \"ctypes_ipc\", \"mode\": \"multiprocess\", \"heap_size_mb\": 128, \"plan_pattern_name\": \"bulk_sync\", \"plan_ok\": true, \"plan_max_abs_diff\": 0.02318572998046875, \"plan_sample\": -10.273436546325684, \"plan_timing_ms\": {\"mean_ms\": 0.25464533766110736, \"min_ms\": 0.206496000289917, \"max_ms\": 0.3333440124988556}, \"high_level_ok\": true, \"high_level_max_abs_diff\": 0.02318572998046875, \"high_level_sample\": -10.273436546325684, \"high_level_timing_ms\": {\"mean_ms\": 0.2488106737534205, \"min_ms\": 0.2391040027141571, \"max_ms\": 0.2659200131893158}}\n",
+      "summary": {
+        "high_level_mean_ms_across_ranks": 0.24930133918921152,
+        "max_high_level_abs_diff": 0.02318572998046875,
+        "max_plan_abs_diff": 0.02318572998046875,
+        "max_rank_skew_ms": 0.0009813308715820312,
+        "mode": "multiprocess",
+        "pattern": "bulk_sync",
+        "plan_mean_ms_across_ranks": 0.24856533606847125,
+        "plan_pattern_name": "bulk_sync",
+        "transport_strategy": "ctypes_ipc"
+      }
     }
   ],
-  "command": "tests/benchmarks/bench_gemm_allscatter_multiprocess.py --warmup 2 --iters 5 --timeout-sec 120 --output-json docs/generated/gemm_allscatter_multiprocess_matrix.json",
+  "command": "/home/makai/XTile/tests/benchmarks/bench_gemm_allscatter_multiprocess.py --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --contracts full/full,full/shard --M 128 --N 256 --K 128 --warmup 1 --iters 3 --timeout-sec 240 --output-json docs/generated/gemm_allscatter_multiprocess_matrix.json",
   "environment": {
-    "K": 256,
-    "M": 256,
-    "N": 512,
+    "K": 128,
+    "M": 128,
+    "N": 256,
     "gpu_name": "NVIDIA H100 PCIe",
-    "iters": 5,
+    "iters": 3,
     "pattern": "bulk_sync",
     "visible_gpus": 2,
-    "warmup": 2
+    "warmup": 1
   },
-  "generated_at_utc": "2026-03-21T23:45:58.151985+00:00",
+  "generated_at_utc": "2026-03-23T00:42:44.969105+00:00",
   "schema_version": 1,
   "summary": {
-    "case_count": 24,
-    "failed_cases": 12,
+    "case_count": 12,
+    "failed_cases": 0,
     "passed_cases": 12
   }
 }

@@ -35,6 +35,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--iters", type=int, default=10, help="Timed iterations per case.")
     parser.add_argument("--block-size", type=int, default=128, help="Logical per-rank chunk size.")
     parser.add_argument(
+        "--launcher",
+        choices=["primitive", "ops", "primitive_ops", "kernel", "all"],
+        default="primitive_ops",
+        help="Which launcher set to validate.",
+    )
+    parser.add_argument(
         "--timeout-sec",
         type=int,
         default=180,
@@ -67,13 +73,16 @@ def _aggregate_rank_payloads(payloads: list[dict[str, object]]) -> dict[str, obj
     kernel_means = [
         float(item["kernel_timing_ms"]["mean_ms"])  # type: ignore[index]
         for item in payloads
+        if item["kernel_timing_ms"] is not None
     ]
     return {
         "transport_strategy": payloads[0]["transport_strategy"],
         "mode": payloads[0]["mode"],
         "primitive_mean_ms_across_ranks": statistics.mean(primitive_means),
         "high_level_mean_ms_across_ranks": statistics.mean(high_level_means),
-        "kernel_mean_ms_across_ranks": statistics.mean(kernel_means),
+        "kernel_mean_ms_across_ranks": (
+            statistics.mean(kernel_means) if kernel_means else None
+        ),
         "max_rank_skew_ms": abs(max(high_level_means) - min(high_level_means)),
     }
 
@@ -105,7 +114,7 @@ def main() -> None:
                 "--block-size",
                 str(args.block_size),
                 "--launcher",
-                "all",
+                args.launcher,
             ]
             if transport != "auto":
                 cmd.extend(["--force-transport", transport])
@@ -159,12 +168,16 @@ def main() -> None:
 
             summary = payload.get("summary")
             if payload["status"] == "passed" and isinstance(summary, dict):
+                kernel_fragment = ""
+                kernel_mean = summary["kernel_mean_ms_across_ranks"]
+                if isinstance(kernel_mean, (int, float)):
+                    kernel_fragment = f" kernel={kernel_mean:.3f} ms"
                 print(
                     f"[PASS] dtype={dtype_name:8s} requested={transport:28s} "
                     f"actual={summary['transport_strategy']:28s} "
                     f"primitive={summary['primitive_mean_ms_across_ranks']:.3f} ms "
-                    f"high_level={summary['high_level_mean_ms_across_ranks']:.3f} ms "
-                    f"kernel={summary['kernel_mean_ms_across_ranks']:.3f} ms",
+                    f"high_level={summary['high_level_mean_ms_across_ranks']:.3f} ms"
+                    f"{kernel_fragment}",
                     flush=True,
                 )
             else:

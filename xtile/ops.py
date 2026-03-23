@@ -47,6 +47,10 @@ _PENDING_GEMM_ALLGATHER_SINGLE_PROCESS: dict[
     tuple[object, ...],
     dict[int, tuple["GemmAllGatherPlan", Any, Any, Any]],
 ] = {}
+_PENDING_ALLREDUCE_SINGLE_PROCESS: dict[
+    tuple[object, ...],
+    dict[int, tuple["AllReducePlan", Any]],
+] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -425,6 +429,14 @@ class AllReducePlan:
         """Execute the pre-resolved allreduce plan in place."""
         if validate:
             self.validate_tensor(tensor)
+        if (
+            self.ctx.world_size > 1
+            and self.ctx.require_heap().mode == "single_process"
+        ):
+            return _execute_allreduce_single_process(
+                self,
+                tensor=tensor,
+            )
         from xtile.primitives.collectives import allreduce as collective_allreduce
 
         collective_allreduce(tensor, self.ctx.require_heap(), op=self.op)
@@ -1489,6 +1501,89 @@ def _single_process_gemm_allgather_key(
         plan.contract.full_N,
         plan.contract.shard_cols,
         str(output.dtype),
+        plan.storage_kind,
+    )
+
+
+def _execute_allreduce_single_process(
+    plan: AllReducePlan,
+    *,
+    tensor: Any,
+) -> Any:
+    """Finalize allreduce once every local rank has staged its tensor."""
+    from xtile.primitives.collectives import (
+        _allreduce_workspaces,
+        allgather as collective_allgather,
+        reduce_scatter as collective_reduce_scatter,
+    )
+
+    key = _single_process_allreduce_key(plan, tensor)
+    pending = _PENDING_ALLREDUCE_SINGLE_PROCESS.setdefault(key, {})
+    pending[plan.ctx.rank] = (plan, tensor)
+    if len(pending) < plan.ctx.world_size:
+        return tensor
+
+    try:
+        workspaces: dict[int, tuple[Any, Any]] = {}
+        for rank in range(plan.ctx.world_size):
+            rank_plan, rank_tensor = pending[rank]
+            workspaces[rank] = _allreduce_workspaces(
+                rank_tensor,
+                heap=rank_plan.ctx.require_heap(),
+            )
+
+        for rank in range(plan.ctx.world_size):
+            rank_plan, rank_tensor = pending[rank]
+            rank_shard, _ = workspaces[rank]
+            collective_reduce_scatter(
+                rank_tensor,
+                rank_shard,
+                rank_plan.ctx.require_heap(),
+                op=rank_plan.op,
+                implementation="reference",
+            )
+
+        for rank in range(plan.ctx.world_size):
+            pending[rank][0].ctx.backend.synchronize()
+
+        for rank in range(plan.ctx.world_size):
+            rank_plan, _ = pending[rank]
+            rank_shard, rank_gathered = workspaces[rank]
+            collective_allgather(
+                rank_shard,
+                rank_gathered,
+                rank_plan.ctx.require_heap(),
+            )
+
+        for rank in range(plan.ctx.world_size):
+            pending[rank][0].ctx.backend.synchronize()
+
+        for rank in range(plan.ctx.world_size):
+            _, rank_tensor = pending[rank]
+            _, rank_gathered = workspaces[rank]
+            rank_tensor.copy_(rank_gathered.reshape(rank_tensor.shape))
+
+        for rank in range(plan.ctx.world_size):
+            pending[rank][0].ctx.backend.synchronize()
+    finally:
+        _PENDING_ALLREDUCE_SINGLE_PROCESS.pop(key, None)
+    return tensor
+
+
+def _single_process_allreduce_key(
+    plan: AllReducePlan,
+    tensor: Any,
+) -> tuple[object, ...]:
+    """Return a process-local coordination key for staged allreduce runs."""
+    heap = plan.ctx.require_heap()
+    heap_bases = tuple(int(base) for base in plan.ctx.heap_bases.tolist())
+    return (
+        "allreduce",
+        heap_bases,
+        heap.get_offset(int(tensor.data_ptr())),
+        tuple(int(dim) for dim in tensor.shape),
+        str(tensor.dtype),
+        plan.op,
         plan.storage_kind,
     )
 

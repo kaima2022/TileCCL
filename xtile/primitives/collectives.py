@@ -38,10 +38,6 @@ from xtile.utils.feature_gates import (
 # Maximum supported world_size for collective operations.
 # Determined by tl.static_range upper bound (Triton unrolls statically).
 MAX_COLLECTIVE_WORLD_SIZE = 33
-_PENDING_ALLREDUCE_SINGLE_PROCESS: dict[
-    tuple[object, ...],
-    dict[int, tuple[torch.Tensor, torch.Tensor]],
-] = {}
 _ALLREDUCE_WORKSPACE_CACHE: dict[
     tuple[object, ...],
     tuple[torch.Tensor, torch.Tensor],
@@ -569,6 +565,10 @@ def allreduce(
     if not tensor.is_contiguous():
         raise ValueError("allreduce currently requires tensor to be contiguous")
     _require_tensor_on_heap(tensor, heap=heap, name="tensor")
+    _require_device_remote_access_transport(
+        heap,
+        operation="xtile.primitives.allreduce(...)",
+    )
 
     shard, gathered = _allreduce_workspaces(tensor, heap=heap)
     reduce_scatter(
@@ -578,7 +578,9 @@ def allreduce(
         op=op,
         implementation="auto",
     )
+    heap.barrier()
     allgather(shard, gathered, heap)
+    heap.barrier()
     tensor.copy_(gathered.reshape(tensor.shape))
 
 

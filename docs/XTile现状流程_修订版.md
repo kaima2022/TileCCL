@@ -113,7 +113,7 @@ plan.execute(A, B, C)
 | 自动检测后端 `backend="auto"` | `xtile.init()` 默认就是 `backend="auto"` | 这一项已集成 |
 | `xtile.init()` 返回的 ctx 可直接执行 pattern | `xtile.init(..., heap=...)` / `heap_size=...` / `init_local(...)` 都可直接返回可运行 pattern 的真实 ctx | runtime ctx 主路径已统一 |
 | benchmark / tests / CLI 与 runtime 入口一致 | 已统一到 `XTileContext` | 这一项已打通 |
-| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.gemm_allgather(...)` / `xtile.ops.allgather(...)` / `xtile.ops.reduce_scatter(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入，并统一走显式 `plan` 主链 | `gemm_allgather(...)` 已作为独立 public host contract 落地；`gemm_reducescatter(...)` 已补齐稳定 host contract，但 multiprocess 仍继承 `reduce_scatter(device)` 的 experimental gate；`allreduce` 高层 contract 仍待补齐 |
+| 高层 op API | `xtile.ops.gemm_allscatter(...)` / `xtile.ops.gemm_allgather(...)` / `xtile.ops.allgather(...)` / `xtile.ops.allreduce(...)` / `xtile.ops.reduce_scatter(...)` / `xtile.ops.gemm_reducescatter(...)` 已接入，并统一走显式 `plan` 主链 | 在当前 public multiprocess surface（`world_size=2 + ctypes_ipc`）上，`allgather / allreduce / reduce_scatter / gemm_allscatter / gemm_allgather / gemm_reducescatter` 已完成同级别 host contract、回归和结构化 benchmark 验收；当前差距已转为更大 world size、更多 transport、stress 与性能门禁 |
 | full-shape correctness path 与 benchmark shard path | 两者都存在，但都已开始通过显式 contract + plan builder 收敛 | 仍需把更多调用点统一迁到高层 op API，并继续弱化直接 `pattern.execute(...)` 的 public 角色 |
 
 ---
@@ -720,11 +720,12 @@ def gemm_reducescatter(
 
 当前更准确的表述是：
 
-- `gemm_allscatter(...)`：单进程主路径已成立；multiprocess 目前对 `ctypes_ipc` 有直接证据，但整体仍保守记为 `partial`。
-- `gemm_allgather(...)`：单进程主路径已成立；multiprocess `ctypes_ipc` 已有 2-GPU baseline correctness 矩阵，但 broader validation 未闭环。
-- `allgather(...)`：单进程主路径已成立；multiprocess `ctypes_ipc` 有直接证据，但整体仍保守记为 `partial`。
-- `reduce_scatter(...)`：单进程 reference 主路径已成立；multiprocess device 路径有 gate，仍属 experimental 范畴。
-- `gemm_reducescatter(...)`：第一版稳定 host-side contract 已成立；single-process 闭环，multiprocess `ctypes_ipc` 有 2-GPU baseline correctness 证据，但 broader validation 未闭环。
+- `gemm_allscatter(...)`：单进程主路径已成立；`world_size=2 + ctypes_ipc` 的 multiprocess public baseline correctness 与结构化 benchmark 已闭环。
+- `gemm_allgather(...)`：单进程主路径已成立；`world_size=2 + ctypes_ipc` 已完成 `2 shapes × 3 dtypes × 2 transport selections = 12/12` 真机矩阵。
+- `allgather(...)`：单进程主路径已成立；`world_size=2 + ctypes_ipc` 的 primitive / kernel / high-level API 结构化矩阵已闭环。
+- `allreduce(...)`：高层 `AllReducePlan` / `build_allreduce_plan(...)` / `xtile.ops.allreduce(...)` 已落地；single-process 顺序调用与 multiprocess `ctypes_ipc` 两阶段 composed path 均已补齐验证。
+- `reduce_scatter(...)`：单进程 reference 与 multiprocess device 路径都已在当前 public surface 上完成真实验收；更大 world size / 更多 transport 仍未闭环。
+- `gemm_reducescatter(...)`：稳定 host-side contract 已成立；`world_size=2 + ctypes_ipc` 的 dtype × transport 结构化矩阵与高层 API 验收已闭环。
 
 #### 3. runtime support / capability matrix 第一版已经完成
 
@@ -950,9 +951,10 @@ benchmark / JSON / plot / 文档导出在当前范围内已经建立起第一版
 
 - `gemm_allscatter.shard/full` 仍然应保持 unsupported；
   - 这不是“少一个 wrapper”，而是因为当前 `gemm_allscatter_sharded(...)` 暴露的是 peer-scatter ownership contract，不是 stable local-shard basis。
-- `allreduce` 还没有同级别高层 public contract。
 - `pattern.execute(...)` 虽然已经不再是推荐 public 主入口，但在仓库里仍然偏显眼，后续还要继续退到 expert/internal surface。
-- `gemm_allgather(...)` 虽然已经形成独立公共契约，但 multiprocess 还只完成了 `ctypes_ipc` 的 2-GPU baseline correctness，离 fully supported 还有距离。
+- 当前 multiprocess public support 明确只覆盖 `world_size=2 + ctypes_ipc`；
+  - 这不是文案保守，而是当前真实验证边界。
+- `gemm_allgather(...)`、`gemm_reducescatter(...)`、`allreduce(...)` 虽然已经完成当前 public surface 的 contract / benchmark / 回归闭环，但更大 world size、更多 shape、更多 transport 与长时间 stress 仍未完成。
 
 #### 3. multiprocess 支持面还没有闭环
 
@@ -976,11 +978,26 @@ benchmark / JSON / plot / 文档导出在当前范围内已经建立起第一版
 
 #### 4. tile collective 的生产级验证还没有完成
 
-当前不能把 collective 写得过满。更准确的状态是：
+当前不能把 collective 写得过满，但也不能再把已经闭环的部分写成“未完成”。更准确的状态是：
 
-- `allgather`、`reduce_scatter` 的高层 contract 已经有可用主链。
-- 至少 `allreduce` 相关 benchmark / 生产级验证还没有完全闭环。
-- 当前更适合写成“代码存在，验证不完整”，而不是“collective 子系统已经完成”。
+- `allgather`、`allreduce`、`reduce_scatter` 的高层 contract 都已经有真实可跑的 public 主链。
+- `world_size=2 + ctypes_ipc` 这一当前 public surface 上，collective correctness 与结构化 benchmark 已经闭环：
+  - `pytest -q tests/test_feature_gates.py tests/test_support.py tests/test_benchmark_results.py tests/test_cli_support.py tests/test_collectives_host.py tests/test_ops.py` → `67 passed`
+  - `pytest -q tests/test_allgather_multiprocess.py tests/test_gemm_allgather_multiprocess.py tests/test_gemm_allscatter_multiprocess.py tests/test_gemm_allscatter_auto_patterns_multiprocess.py tests/test_reduce_scatter_multiprocess.py tests/test_gemm_reducescatter_multiprocess.py tests/test_allreduce_multiprocess.py` → `15 passed`
+  - `docs/generated/allgather_multiprocess_matrix.json` → `6/6` cases passed
+  - `docs/generated/reduce_scatter_multiprocess_matrix.json` → `6/6` cases passed
+  - `docs/generated/allreduce_multiprocess_matrix.json` → `6/6` cases passed
+  - `docs/generated/gemm_allgather_multiprocess_ctypes_shapes.json` → `12/12` cases passed
+  - `docs/generated/gemm_reducescatter_multiprocess_matrix.json` → `6/6` cases passed
+  - `docs/generated/gemm_allscatter_multiprocess_matrix.json` → `12/12` cases passed
+  - `docs/generated/gemm_allscatter_multiprocess_auto_patterns.json` → `8/8` cases passed
+- 还没有完成的是 broader public surface，而不是当前 public surface 本身：
+  - `pytorch_ipc`
+  - `peer_access_pointer_exchange`
+  - `world_size > 2`
+  - 更大 shape
+  - 长时间 stress
+  - performance contract
 
 #### 5. 性能闭环还没有完成
 
@@ -1054,14 +1071,14 @@ benchmark / JSON / plot / 文档导出在当前范围内已经建立起第一版
    - 扩到 `world_size > 2`。
    - 补更大 shape、stress 和 performance 验收。
 
-3. **P3：补齐剩余高层 op contract，并继续弱化 direct pattern surface**
-   - 补 `allreduce` 高层 public contract。
+3. **P3：继续收紧 public surface，并弱化 direct pattern surface**
    - 继续把更多 public 调用点收敛到 `build plan -> execute plan` 主链。
    - 让 `pattern.execute(...)` 更明确地退到 expert/internal surface。
+   - 统一 public contract 命名与 benchmark contract spelling，避免 `full/full` / `full_full` 这类消费层分叉再次出现。
 
 4. **P4：继续收紧 collective 与性能闭环**
-   - 处理 collective benchmark 中未闭环的问题。
    - 把 P2P 与大尺寸 GEMM 拉向既定目标。
+   - 在已闭环的当前 public surface 之上，增加 performance regression threshold。
 
 5. **P5：最后再做跨节点和跨平台扩展**
    - UCX / GDR
