@@ -8,8 +8,10 @@ from xtile.utils.feature_gates import (
     FORCE_MULTIPROCESS_TRANSPORT_ENV,
     forced_multiprocess_transport,
     multiprocess_device_collectives_detail,
+    multiprocess_device_collectives_runtime_supported,
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
 
@@ -53,10 +55,12 @@ def test_forced_multiprocess_transport_rejects_unknown_value(
 def test_multiprocess_device_collectives_detail_mentions_controlled_debug() -> None:
     """The gate detail should describe the current conservative policy."""
     detail = multiprocess_device_collectives_detail(
-        transport_strategy="ctypes_ipc"
+        transport_strategy="ctypes_ipc",
+        world_size=4,
     )
     assert "disabled by default" in detail
     assert "ctypes_ipc" in detail
+    assert "world_size=4" in detail
     assert "controlled" in detail
 
 
@@ -84,12 +88,46 @@ def test_multiprocess_device_remote_access_transport_supported_is_specific() -> 
     )
 
 
+def test_multiprocess_device_collectives_runtime_supported_is_world_size_specific() -> None:
+    """Validated multiprocess collectives should stay scoped to the tested runtime."""
+    assert multiprocess_device_collectives_runtime_supported(
+        transport_strategy="ctypes_ipc",
+        world_size=2,
+    ) is True
+    assert multiprocess_device_collectives_runtime_supported(
+        transport_strategy="ctypes_ipc",
+        world_size=4,
+    ) is False
+    assert multiprocess_device_collectives_runtime_supported(
+        transport_strategy="pytorch_ipc",
+        world_size=2,
+    ) is False
+
+
+def test_multiprocess_device_remote_access_runtime_supported_is_world_size_specific() -> None:
+    """Validated remote access should stay scoped to the tested runtime."""
+    assert multiprocess_device_remote_access_runtime_supported(
+        transport_strategy="ctypes_ipc",
+        world_size=2,
+    ) is True
+    assert multiprocess_device_remote_access_runtime_supported(
+        transport_strategy="ctypes_ipc",
+        world_size=4,
+    ) is False
+    assert multiprocess_device_remote_access_runtime_supported(
+        transport_strategy="pytorch_ipc",
+        world_size=2,
+    ) is False
+
+
 def test_multiprocess_device_remote_access_detail_mentions_operation() -> None:
     """The detail should explain why an unsupported transport is being rejected."""
     detail = multiprocess_device_remote_access_detail(
         transport_strategy="pytorch_ipc",
         operation="xtile.ops.allgather(...)",
+        world_size=2,
     )
     assert "xtile.ops.allgather" in detail
     assert "ctypes_ipc" in detail
     assert "pytorch_ipc" in detail
+    assert "world_size=2" in detail

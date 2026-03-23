@@ -43,6 +43,7 @@ def test_handle_support_json_output(skip_no_gpu, device_info, capsys) -> None:
     assert payload["context"]["has_heap"] is True
     assert payload["ops"]["gemm_allscatter"]["state"] == "supported"
     assert payload["ops"]["gemm_allgather"]["state"] == "supported"
+    assert payload["ops"]["allreduce"]["state"] == "supported"
     assert payload["ops"]["reduce_scatter"]["state"] == "supported"
     assert payload["execution_paths"]["reduce_scatter.reference"]["state"] == "supported"
     assert payload["execution_paths"]["reduce_scatter.device"]["state"] == "unsupported"

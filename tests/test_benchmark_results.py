@@ -35,6 +35,7 @@ def test_runtime_support_snapshot_from_context(skip_no_gpu, device_info) -> None
     assert payload["context"]["has_heap"] is False
     assert payload["ops"]["gemm_allscatter"]["state"] == "partial"
     assert payload["ops"]["gemm_allgather"]["state"] == "partial"
+    assert payload["ops"]["allreduce"]["state"] == "partial"
     assert payload["ops"]["gemm_reducescatter"]["state"] == "partial"
 
 
@@ -58,8 +59,10 @@ def test_describe_runtime_support_snapshot_with_heap(
         assert payload["context"]["has_heap"] is True
         assert payload["context"]["heap_mode"] == "single_process"
         assert payload["context"]["transport_strategy"] == "peer_access"
+        assert payload["ops"]["allreduce"]["state"] == "supported"
         assert payload["ops"]["reduce_scatter"]["state"] == "supported"
         assert payload["collectives"]["collectives.reduce_scatter_launcher"]["state"] == "supported"
+        assert payload["collectives"]["collectives.allreduce_launcher"]["state"] == "supported"
     finally:
         for heap in heaps:
             heap.cleanup()

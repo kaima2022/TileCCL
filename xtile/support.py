@@ -14,8 +14,10 @@ import xtile
 from xtile.utils.feature_gates import (
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
+    multiprocess_device_collectives_runtime_supported,
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
 
@@ -105,6 +107,7 @@ def describe_runtime_support(
     has_heap = heap is not None
     heap_mode = heap.mode if has_heap else None
     transport_strategy = heap.transport_strategy if has_heap else None
+    world_size = resolved_ctx.world_size
     (
         reduce_scatter_state,
         reduce_scatter_detail,
@@ -113,32 +116,44 @@ def describe_runtime_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
     gemm_allscatter_status = _describe_gemm_allscatter_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
     gemm_allgather_status = _describe_gemm_allgather_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
     gemm_reducescatter_status = _describe_gemm_reducescatter_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
     allgather_status = _describe_allgather_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
+    )
+    allreduce_status = _describe_allreduce_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+        world_size=world_size,
     )
 
     ops = {
         "gemm_allscatter": gemm_allscatter_status,
         "gemm_allgather": gemm_allgather_status,
         "allgather": allgather_status,
+        "allreduce": allreduce_status,
         "reduce_scatter": SupportStatus(
             reduce_scatter_state,
             reduce_scatter_detail,
@@ -175,14 +190,16 @@ def describe_runtime_support(
             "C(M,N/world_size) rank-local shard. Runtime availability inherits the "
             "validated reduce_scatter path for the current heap mode/transport.",
         ),
+        "allreduce.in_place": SupportStatus(
+            allreduce_status.state,
+            "Stable public in-place host contract: tensor.numel must be divisible by "
+            "world_size, and the tensor must reside in the attached symmetric heap.",
+        ),
     }
 
     collectives = {
         "collectives.allgather_launcher": allgather_status,
-        "collectives.allreduce_launcher": SupportStatus(
-            "partial",
-            "Host launcher exists, but benchmark/prod validation is not fully closed.",
-        ),
+        "collectives.allreduce_launcher": allreduce_status,
         "collectives.reduce_scatter_launcher": SupportStatus(
             reduce_scatter_state,
             reduce_scatter_detail,
@@ -200,6 +217,7 @@ def describe_runtime_support(
             has_heap=has_heap,
             heap_mode=heap_mode,
             transport_strategy=transport_strategy,
+            world_size=world_size,
         ),
         "symmetric_heap_allocator_first_import_map": SupportStatus(
             "partial" if has_heap else "unsupported",
@@ -300,6 +318,7 @@ def _describe_reduce_scatter_support(
     has_heap: bool,
     heap_mode: str | None,
     transport_strategy: str | None,
+    world_size: int,
 ) -> tuple[SupportState, str, dict[str, SupportStatus]]:
     """Describe reduce_scatter support at both API and path granularity."""
     if not has_heap:
@@ -332,7 +351,27 @@ def _describe_reduce_scatter_support(
 
     gate_detail = multiprocess_device_collectives_detail(
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
+    if multiprocess_device_collectives_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return (
+            "supported",
+            "Multiprocess device reduce_scatter is validated on the current public "
+            "surface: world_size=2 with transport_strategy='ctypes_ipc'.",
+            {
+                "reduce_scatter.reference": SupportStatus(
+                    "unsupported",
+                    "Reference path is only defined for single-process peer-buffer access.",
+                ),
+                "reduce_scatter.device": SupportStatus(
+                    "supported",
+                    "Validated on the current public multiprocess surface: world_size=2, transport_strategy='ctypes_ipc'.",
+                ),
+            },
+        )
     if not multiprocess_device_collectives_enabled():
         return (
             "unsupported",
@@ -369,9 +408,8 @@ def _describe_reduce_scatter_support(
 
     return (
         "partial",
-        "Multiprocess device-path launcher is explicitly enabled via experimental "
-        "feature gate. Current 2-GPU correctness diagnostics pass, but it is not "
-        "yet promoted to a stable public/performance contract.",
+        "Multiprocess device-path launcher is running outside the validated public "
+        "surface under an explicit diagnostic gate.",
         {
             "reduce_scatter.reference": SupportStatus(
                 "unsupported",
@@ -379,7 +417,7 @@ def _describe_reduce_scatter_support(
             ),
             "reduce_scatter.device": SupportStatus(
                 "partial",
-                "Experimental opt-in path for multiprocess heaps; current 2-GPU correctness passes, but broader performance/stress validation is still pending.",
+                "Diagnostic-only path outside the validated public surface.",
             ),
         },
     )
@@ -390,6 +428,7 @@ def _describe_heap_device_remote_access(
     has_heap: bool,
     heap_mode: str | None,
     transport_strategy: str | None,
+    world_size: int,
 ) -> SupportStatus:
     """Describe whether the current heap transport is device-dereferenceable by Triton."""
     if not has_heap:
@@ -402,18 +441,28 @@ def _describe_heap_device_remote_access(
             "supported",
             "Single-process peer-access heaps are directly device-dereferenceable.",
         )
-    if multiprocess_device_remote_access_transport_supported(transport_strategy):
+    if multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
         return SupportStatus(
             "supported",
-            "Real 2-GPU minimal Triton remote-load/store diagnostics pass for "
-            f"transport_strategy={transport_strategy!r}.",
+            "Real 2-GPU minimal Triton remote-load/store diagnostics pass on the "
+            "current public multiprocess surface.",
+        )
+    if multiprocess_device_remote_access_transport_supported(transport_strategy):
+        return SupportStatus(
+            "unsupported",
+            "The transport itself is known, but the current world_size is outside the "
+            "validated public surface for Triton device-side remote dereference. "
+            f"Current transport_strategy={transport_strategy!r}, world_size={world_size}.",
         )
     return SupportStatus(
         "unsupported",
         "Current multiprocess transport is not validated for Triton device-side "
-        "remote dereference. Real diagnostics currently support only "
-        "transport_strategy='ctypes_ipc'. "
-        f"Current transport_strategy={transport_strategy!r}.",
+        "remote dereference. Real diagnostics currently public-support only "
+        "world_size=2 with transport_strategy='ctypes_ipc'. "
+        f"Current transport_strategy={transport_strategy!r}, world_size={world_size}.",
     )
 
 
@@ -422,6 +471,7 @@ def _describe_gemm_allscatter_support(
     has_heap: bool,
     heap_mode: str | None,
     transport_strategy: str | None,
+    world_size: int,
 ) -> SupportStatus:
     """Describe high-level GEMM + all-scatter support conservatively."""
     if not has_heap:
@@ -434,21 +484,23 @@ def _describe_gemm_allscatter_support(
             "supported",
             "High-level plan API is validated on single-process peer-access heaps.",
         )
-    if not multiprocess_device_remote_access_transport_supported(transport_strategy):
+    if not multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
         return SupportStatus(
             "unsupported",
             multiprocess_device_remote_access_detail(
                 transport_strategy=transport_strategy,
                 operation="xtile.ops.gemm_allscatter(...)",
+                world_size=world_size,
             ),
         )
     return SupportStatus(
-        "partial",
-        "Current representative 2-GPU correctness diagnostics pass for the public "
-        "full/full and full/shard contracts on transport_strategy='ctypes_ipc', "
-        "including auto-selected coverage for bulk_sync, fused_sequential, "
-        "producer_consumer, and wg_specialized. Broader larger-shape, stress, "
-        "performance, and world-size validation is still pending.",
+        "supported",
+        "Current 2-GPU ctypes_ipc correctness matrix passes for the public "
+        "full/full and full/shard contracts, including representative "
+        "auto-selected pattern coverage.",
     )
 
 
@@ -457,12 +509,14 @@ def _describe_gemm_allgather_support(
     has_heap: bool,
     heap_mode: str | None,
     transport_strategy: str | None,
+    world_size: int,
 ) -> SupportStatus:
     """Describe high-level GEMM + allgather support conservatively."""
     allgather_status = _describe_allgather_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
     if not has_heap:
         return SupportStatus(
@@ -482,13 +536,13 @@ def _describe_gemm_allgather_support(
             multiprocess_device_remote_access_detail(
                 transport_strategy=transport_strategy,
                 operation="xtile.ops.gemm_allgather(...)",
+                world_size=world_size,
             ),
         )
     return SupportStatus(
-        "partial",
-        "Host GEMM + allgather contract is implemented. Current 2-GPU "
-        "correctness diagnostics pass for transport_strategy='ctypes_ipc', "
-        "but broader performance/stress/world-size validation is still pending.",
+        "supported",
+        "Host GEMM + allgather contract is validated on the current public "
+        "multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
     )
 
 
@@ -497,12 +551,14 @@ def _describe_gemm_reducescatter_support(
     has_heap: bool,
     heap_mode: str | None,
     transport_strategy: str | None,
+    world_size: int,
 ) -> SupportStatus:
     """Describe high-level GEMM + reduce-scatter support conservatively."""
     reduce_scatter_state, _, _ = _describe_reduce_scatter_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        world_size=world_size,
     )
     if not has_heap:
         return SupportStatus(
@@ -521,14 +577,13 @@ def _describe_gemm_reducescatter_support(
             "unsupported",
             multiprocess_device_collectives_detail(
                 transport_strategy=transport_strategy,
+                world_size=world_size,
             ),
         )
     return SupportStatus(
-        "partial",
-        "Host GEMM + packed reduce_scatter contract is implemented. Current "
-        "multiprocess execution inherits the experimental device reduce_scatter "
-        "gate: 2-GPU correctness passes for transport_strategy='ctypes_ipc', "
-        "but broader performance/stress/world-size validation is still pending.",
+        "supported",
+        "Host GEMM + packed reduce_scatter contract is validated on the current "
+        "public multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
     )
 
 
@@ -537,6 +592,7 @@ def _describe_allgather_support(
     has_heap: bool,
     heap_mode: str | None,
     transport_strategy: str | None,
+    world_size: int,
 ) -> SupportStatus:
     """Describe allgather support conservatively."""
     if not has_heap:
@@ -549,16 +605,57 @@ def _describe_allgather_support(
             "supported",
             "Host launcher + high-level op are validated on single-process peer-access heaps.",
         )
-    if not multiprocess_device_remote_access_transport_supported(transport_strategy):
+    if not multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
         return SupportStatus(
             "unsupported",
             multiprocess_device_remote_access_detail(
                 transport_strategy=transport_strategy,
                 operation="xtile.ops.allgather(...)",
+                world_size=world_size,
             ),
         )
     return SupportStatus(
-        "partial",
-        "Current 2-GPU correctness matrix passes for transport_strategy="
-        "'ctypes_ipc', but broader world-size/performance validation is still pending.",
+        "supported",
+        "Current public multiprocess surface is validated for allgather: "
+        "world_size=2 with transport_strategy='ctypes_ipc'.",
+    )
+
+
+def _describe_allreduce_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe allreduce support conservatively but precisely."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "High-level plan API exists, but execution requires an attached symmetric heap.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "supported",
+            "Host launcher + high-level op are validated on single-process peer-access heaps.",
+        )
+    if not multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "unsupported",
+            multiprocess_device_remote_access_detail(
+                transport_strategy=transport_strategy,
+                operation="xtile.ops.allreduce(...)",
+                world_size=world_size,
+            ),
+        )
+    return SupportStatus(
+        "supported",
+        "Current public multiprocess surface is validated for allreduce: "
+        "world_size=2 with transport_strategy='ctypes_ipc'.",
     )

@@ -23,8 +23,10 @@ from xtile.utils.feature_gates import (
     forced_multiprocess_transport,
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
+    multiprocess_device_collectives_runtime_supported,
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
 
@@ -47,8 +49,10 @@ __all__ = [
     "forced_multiprocess_transport",
     "multiprocess_device_collectives_enabled",
     "multiprocess_device_collectives_detail",
+    "multiprocess_device_collectives_runtime_supported",
     "multiprocess_device_collectives_transport_supported",
     "multiprocess_device_remote_access_detail",
+    "multiprocess_device_remote_access_runtime_supported",
     "multiprocess_device_remote_access_transport_supported",
     "write_json",
     "read_json",

@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 
 import pytest
-
-from xtile.utils.feature_gates import MULTIPROCESS_DEVICE_COLLECTIVES_ENV
 
 
 @pytest.mark.multigpu
@@ -19,12 +16,6 @@ def test_gemm_reducescatter_multiprocess_default_transport(
     dtype_name: str,
 ) -> None:
     """The default multiprocess gemm_reducescatter path should be correct on the current runtime."""
-    if os.getenv(MULTIPROCESS_DEVICE_COLLECTIVES_ENV, "").strip() != "1":
-        pytest.skip(
-            "Real multiprocess device-path diagnostics are opt-in only. "
-            f"Set {MULTIPROCESS_DEVICE_COLLECTIVES_ENV}=1 to run this unsafe test."
-        )
-
     result = subprocess.run(
         [
             sys.executable,

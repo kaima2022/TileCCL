@@ -28,14 +28,24 @@ from xtile.memory.translation import translate_ptr
 from xtile.utils.feature_gates import (
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
+    multiprocess_device_collectives_runtime_supported,
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
 
 # Maximum supported world_size for collective operations.
 # Determined by tl.static_range upper bound (Triton unrolls statically).
 MAX_COLLECTIVE_WORLD_SIZE = 33
+_PENDING_ALLREDUCE_SINGLE_PROCESS: dict[
+    tuple[object, ...],
+    dict[int, tuple[torch.Tensor, torch.Tensor]],
+] = {}
+_ALLREDUCE_WORKSPACE_CACHE: dict[
+    tuple[object, ...],
+    tuple[torch.Tensor, torch.Tensor],
+] = {}
 
 
 # =====================================================================
@@ -541,6 +551,8 @@ def allreduce(
     divisible by ``world_size``.  *tensor* must reside in *heap*'s
     symmetric memory.
     """
+    if op != "sum":
+        raise ValueError(f"Only op='sum' is currently supported, got {op!r}")
     world_size = heap.world_size
     if world_size > MAX_COLLECTIVE_WORLD_SIZE:
         raise ValueError(
@@ -554,22 +566,20 @@ def allreduce(
             f"Tensor size ({numel}) must be divisible by "
             f"world_size ({world_size}) for ring allreduce."
         )
-    _require_device_remote_access_transport(
-        heap,
-        operation="xtile.primitives.allreduce(...)",
-    )
+    if not tensor.is_contiguous():
+        raise ValueError("allreduce currently requires tensor to be contiguous")
+    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
 
-    block_size = numel // world_size
-    heap_bases = heap.get_heap_bases()
-
-    # Launch with a single program (the collective is cooperative).
-    _allreduce_kernel[(1,)](
+    shard, gathered = _allreduce_workspaces(tensor, heap=heap)
+    reduce_scatter(
         tensor,
-        heap_bases,
-        heap.rank,
-        world_size,
-        BLOCK_SIZE=block_size,
+        shard,
+        heap,
+        op=op,
+        implementation="auto",
     )
+    allgather(shard, gathered, heap)
+    tensor.copy_(gathered.reshape(tensor.shape))
 
 
 def allgather(
@@ -714,39 +724,54 @@ def reduce_scatter(
         if heap.mode == "single_process":
             resolved_impl = "reference"
         else:
-            if not multiprocess_device_collectives_enabled():
+            if multiprocess_device_collectives_runtime_supported(
+                transport_strategy=heap.transport_strategy,
+                world_size=heap.world_size,
+            ):
+                resolved_impl = "device"
+            elif not multiprocess_device_collectives_enabled():
                 raise ValueError(
                     multiprocess_device_collectives_detail(
                         transport_strategy=heap.transport_strategy,
+                        world_size=heap.world_size,
                     )
                 )
-            if not multiprocess_device_collectives_transport_supported(
+            elif not multiprocess_device_collectives_transport_supported(
                 heap.transport_strategy
             ):
                 raise ValueError(
                     multiprocess_device_collectives_detail(
                         transport_strategy=heap.transport_strategy,
+                        world_size=heap.world_size,
                     )
                 )
-            resolved_impl = "device"
+            else:
+                resolved_impl = "device"
     elif resolved_impl == "device" and heap.mode == "single_process":
         raise ValueError(
             "implementation='device' is not validated for single-process symmetric heaps. "
             "Use implementation='reference' (or 'auto') until the device path is proven correct."
         )
     elif resolved_impl == "device":
-        if not multiprocess_device_collectives_enabled():
+        if multiprocess_device_collectives_runtime_supported(
+            transport_strategy=heap.transport_strategy,
+            world_size=heap.world_size,
+        ):
+            pass
+        elif not multiprocess_device_collectives_enabled():
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
+                    world_size=heap.world_size,
                 )
             )
-        if not multiprocess_device_collectives_transport_supported(
+        elif not multiprocess_device_collectives_transport_supported(
             heap.transport_strategy
         ):
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
+                    world_size=heap.world_size,
                 )
             )
 
@@ -786,14 +811,16 @@ def _require_device_remote_access_transport(
     """Fail fast when the heap transport is not safe for Triton remote access."""
     if heap.mode != "multiprocess":
         return
-    if multiprocess_device_remote_access_transport_supported(
-        heap.transport_strategy
+    if multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=heap.transport_strategy,
+        world_size=heap.world_size,
     ):
         return
     raise ValueError(
         multiprocess_device_remote_access_detail(
             transport_strategy=heap.transport_strategy,
             operation=operation,
+            world_size=heap.world_size,
         )
     )
 
@@ -834,3 +861,36 @@ def _reference_reduce_scatter_single_process(
 
     assert reduced is not None  # world_size >= 1
     output.reshape(-1).copy_(reduced)
+
+
+def _allreduce_workspace_key(
+    tensor: torch.Tensor,
+    *,
+    heap: "xtile.memory.SymmetricHeap",
+) -> tuple[object, ...]:
+    """Return a process-local key for cached allreduce workspaces."""
+    heap_bases = tuple(int(base) for base in heap.get_heap_bases().tolist())
+    return (
+        "allreduce",
+        heap_bases,
+        heap.rank,
+        heap.get_offset(int(tensor.data_ptr())),
+        tuple(int(dim) for dim in tensor.shape),
+        str(tensor.dtype),
+    )
+
+
+def _allreduce_workspaces(
+    tensor: torch.Tensor,
+    heap: "xtile.memory.SymmetricHeap",
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return cached shard/gather workspaces for composed allreduce."""
+    key = _allreduce_workspace_key(tensor, heap=heap)
+    workspace = _ALLREDUCE_WORKSPACE_CACHE.get(key)
+    shard_size = tensor.numel() // heap.world_size
+    if workspace is None:
+        shard = heap.allocate_tensor((shard_size,), tensor.dtype)
+        gathered = heap.allocate_tensor(tuple(int(dim) for dim in tensor.shape), tensor.dtype)
+        workspace = (shard, gathered)
+        _ALLREDUCE_WORKSPACE_CACHE[key] = workspace
+    return workspace

@@ -45,6 +45,45 @@ def test_allgather_launcher_rejects_unvalidated_multiprocess_transport(
 
 
 @pytest.mark.multigpu
+def test_allreduce_launcher_validates_divisibility(skip_no_multigpu, device_info) -> None:
+    """The host allreduce launcher should reject tensors not divisible by world_size."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+    from xtile.primitives import allreduce
+
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=2)
+    try:
+        tensor = heaps[0].allocate_tensor((15,), torch.float32)
+        tensor.zero_()
+
+        with pytest.raises(ValueError, match="must be divisible by"):
+            allreduce(tensor, heaps[0])
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_allreduce_launcher_rejects_unvalidated_multiprocess_transport(
+    skip_no_gpu,
+) -> None:
+    """Host allreduce should fail fast on transports outside the validated surface."""
+    from xtile.primitives import allreduce
+
+    class _DummyHeap:
+        mode = "multiprocess"
+        world_size = 2
+        transport_strategy = "pytorch_ipc"
+        rank = 0
+
+        def owns_tensor(self, tensor):
+            return True
+
+    tensor = torch.zeros(16, device="cuda:0", dtype=torch.float32)
+
+    with pytest.raises(ValueError, match="remote dereference"):
+        allreduce(tensor, _DummyHeap())
+
+
+@pytest.mark.multigpu
 def test_reduce_scatter_launcher_multigpu_value_check(skip_no_multigpu, device_info) -> None:
     """The single-process reference path should produce the reduced chunk."""
     from xtile.memory.symmetric_heap import SymmetricHeap

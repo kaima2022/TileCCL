@@ -1,4 +1,4 @@
-"""Real multiprocess validation for reduce_scatter(device)."""
+"""Real multiprocess validation for allreduce."""
 
 from __future__ import annotations
 
@@ -11,16 +11,16 @@ import pytest
 
 @pytest.mark.multigpu
 @pytest.mark.parametrize("dtype_name", ["float16", "bfloat16", "float32"])
-def test_reduce_scatter_device_path_multiprocess(
+def test_allreduce_multiprocess_default_transport(
     skip_no_multigpu,
     dtype_name: str,
 ) -> None:
-    """The multiprocess device path should be correct on the current runtime."""
+    """The default multiprocess allreduce path should be correct on the current runtime."""
     result = subprocess.run(
         [
             sys.executable,
             "-m",
-            "tests.test_e2e._run_reduce_scatter_multiprocess",
+            "tests.test_e2e._run_allreduce_multiprocess",
             "--dtype",
             dtype_name,
             "--warmup",
@@ -35,7 +35,7 @@ def test_reduce_scatter_device_path_multiprocess(
 
     if result.returncode != 0:
         raise AssertionError(
-            "Multiprocess reduce_scatter(device) validation failed.\n"
+            "Multiprocess allreduce validation failed.\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
@@ -52,3 +52,4 @@ def test_reduce_scatter_device_path_multiprocess(
         assert payload["transport_strategy"] == "ctypes_ipc"
         assert payload["primitive_ok"] is True
         assert payload["high_level_ok"] is True
+        assert payload["kernel_ok"] is True

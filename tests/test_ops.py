@@ -598,6 +598,96 @@ def test_build_allgather_plan_exposes_stable_metadata(skip_no_multigpu, device_i
             heap.cleanup()
 
 
+def test_build_allreduce_plan_requires_heap(
+    skip_no_gpu,
+    device_info,
+) -> None:
+    """The current allreduce runtime should fail early without a heap."""
+    ctx = xtile.init(
+        backend=device_info.backend,
+        rank=0,
+        world_size=1,
+        force_backend=True,
+    )
+    tensor = torch.zeros(32, device=ctx.device, dtype=torch.float32)
+
+    with pytest.raises(RuntimeError, match="No SymmetricHeap is attached"):
+        xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+
+
+def test_build_allreduce_plan_exposes_stable_metadata(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """AllReducePlan should capture the validated in-place collective contract."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        ctx = xtile.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        tensor = ctx.zeros(32, dtype=torch.float32)
+
+        plan = xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+        payload = plan.to_dict()
+
+        assert plan.block_size == 32
+        assert payload["op"] == "allreduce"
+        assert payload["block_size"] == 32
+        assert payload["tensor_shape"] == [32]
+        assert payload["reduction"] == "sum"
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+@pytest.mark.multigpu
+def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> None:
+    """The high-level allreduce API should reduce in-place across local ranks."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    total_elements = 128
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
+    try:
+        contexts = [
+            xtile.init(
+                backend=device_info.backend,
+                rank=rank,
+                world_size=world_size,
+                heap=heaps[rank],
+                force_backend=True,
+            )
+            for rank in range(world_size)
+        ]
+
+        tensors = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            tensor = heaps[rank].allocate_tensor((total_elements,), torch.float32)
+            tensor.fill_(float(rank + 1))
+            tensors.append(tensor)
+
+        for rank in range(world_size):
+            xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])
+
+        for rank in range(world_size):
+            torch.cuda.synchronize(rank)
+            assert torch.allclose(
+                tensors[rank],
+                torch.full_like(tensors[rank], 3.0),
+                atol=1e-4,
+            )
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
 def test_context_as_symmetric_materializes_external_tensor(
     skip_no_multigpu,
     device_info,
@@ -648,6 +738,29 @@ def test_build_allgather_plan_rejects_unvalidated_multiprocess_transport(
 
     with pytest.raises(ValueError, match="remote dereference"):
         xtile.ops.build_allgather_plan(src, output, ctx=ctx)
+
+
+def test_build_allreduce_plan_rejects_unvalidated_multiprocess_transport(
+    skip_no_gpu,
+    device_info,
+) -> None:
+    """High-level allreduce should fail fast before entering an unsafe transport."""
+
+    class _DummyHeap:
+        mode = "multiprocess"
+        transport_strategy = "pytorch_ipc"
+
+    ctx = xtile.init(
+        backend=device_info.backend,
+        rank=0,
+        world_size=2,
+        force_backend=True,
+    )
+    ctx.heap = _DummyHeap()  # type: ignore[assignment]
+    tensor = torch.zeros(16, device=ctx.device, dtype=torch.float32)
+
+    with pytest.raises(ValueError, match="remote dereference"):
+        xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
 
 
 def test_build_gemm_allscatter_plan_rejects_unvalidated_multiprocess_transport(
@@ -781,12 +894,12 @@ def test_resolve_reduce_scatter_implementation_rejects_multiprocess_by_default(
 
     class _DummyHeap:
         mode = "multiprocess"
-        transport_strategy = "pytorch_ipc"
+        transport_strategy = "ctypes_ipc"
 
     ctx = xtile.init(
         backend=device_info.backend,
         rank=0,
-        world_size=2,
+        world_size=4,
         force_backend=True,
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
@@ -808,12 +921,12 @@ def test_resolve_reduce_scatter_implementation_rejects_multiprocess_by_default(
         )
 
 
-def test_resolve_reduce_scatter_implementation_allows_explicit_multiprocess_opt_in(
+def test_resolve_reduce_scatter_implementation_accepts_validated_surface_without_opt_in(
     skip_no_gpu,
     device_info,
     monkeypatch,
 ) -> None:
-    """The experimental opt-in should be required explicitly for multiprocess device path."""
+    """The validated 2-GPU ctypes_ipc surface should resolve without an env gate."""
 
     class _DummyHeap:
         mode = "multiprocess"
@@ -823,6 +936,38 @@ def test_resolve_reduce_scatter_implementation_allows_explicit_multiprocess_opt_
         backend=device_info.backend,
         rank=0,
         world_size=2,
+        force_backend=True,
+    )
+    ctx.heap = _DummyHeap()  # type: ignore[assignment]
+    monkeypatch.delenv(
+        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        raising=False,
+    )
+
+    assert (
+        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+            ctx,
+            implementation="auto",
+        )
+        == "device"
+    )
+
+
+def test_resolve_reduce_scatter_implementation_allows_explicit_multiprocess_opt_in(
+    skip_no_gpu,
+    device_info,
+    monkeypatch,
+) -> None:
+    """The explicit opt-in should still unlock broader diagnostic runs."""
+
+    class _DummyHeap:
+        mode = "multiprocess"
+        transport_strategy = "ctypes_ipc"
+
+    ctx = xtile.init(
+        backend=device_info.backend,
+        rank=0,
+        world_size=4,
         force_backend=True,
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]

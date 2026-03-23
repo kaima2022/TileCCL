@@ -18,8 +18,10 @@ from xtile.patterns.contracts import PatternExecutionSpec, resolve_pattern_execu
 from xtile.utils.feature_gates import (
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
+    multiprocess_device_collectives_runtime_supported,
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
 
@@ -395,6 +397,53 @@ class AllGatherPlan:
             "input_shape": list(self.input_shape),
             "output_shape": list(self.output_shape),
             "block_size": self.block_size,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AllReducePlan:
+    """Executable plan for the high-level in-place allreduce collective."""
+
+    ctx: xtile.XTileContext
+    tensor_shape: tuple[int, ...]
+    block_size: int
+    op: str = "sum"
+    storage_kind: str = "symmetric"
+
+    def validate_tensor(self, tensor: Any) -> None:
+        """Validate that the tensor still matches the plan."""
+        _validate_allreduce_contract(
+            tensor,
+            ctx=self.ctx,
+            op=self.op,
+            storage_kind=self.storage_kind,
+            expected_tensor_shape=self.tensor_shape,
+            expected_block_size=self.block_size,
+        )
+
+    def execute(self, tensor: Any, *, validate: bool = True) -> Any:
+        """Execute the pre-resolved allreduce plan in place."""
+        if validate:
+            self.validate_tensor(tensor)
+        from xtile.primitives.collectives import allreduce as collective_allreduce
+
+        collective_allreduce(tensor, self.ctx.require_heap(), op=self.op)
+        return tensor
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the plan for debug and benchmark metadata."""
+        return {
+            "op": "allreduce",
+            "ctx": {
+                "rank": self.ctx.rank,
+                "world_size": self.ctx.world_size,
+                "backend": self.ctx.backend_name,
+                "device": self.ctx.device,
+            },
+            "storage_kind": self.storage_kind,
+            "tensor_shape": list(self.tensor_shape),
+            "block_size": self.block_size,
+            "reduction": self.op,
         }
 
 
@@ -904,6 +953,23 @@ def allgather(
     return plan.execute(src, output, validate=False)
 
 
+def allreduce(
+    tensor: Any,
+    *,
+    ctx: xtile.XTileContext | None = None,
+    op: str = "sum",
+    storage_kind: str = "symmetric",
+) -> Any:
+    """Run the stable high-level in-place allreduce collective."""
+    plan = build_allreduce_plan(
+        tensor,
+        ctx=ctx,
+        op=op,
+        storage_kind=storage_kind,
+    )
+    return plan.execute(tensor, validate=False)
+
+
 def reduce_scatter(
     src: Any,
     output: Any,
@@ -947,6 +1013,34 @@ def build_allgather_plan(
         input_shape=tuple(int(dim) for dim in src.shape),
         output_shape=tuple(int(dim) for dim in output.shape),
         block_size=block_size,
+        storage_kind=storage_kind,
+    )
+
+
+def build_allreduce_plan(
+    tensor: Any,
+    *,
+    ctx: xtile.XTileContext | None = None,
+    op: str = "sum",
+    storage_kind: str = "symmetric",
+) -> AllReducePlan:
+    """Resolve a reusable plan for the high-level in-place allreduce collective."""
+    resolved_ctx = ctx if ctx is not None else xtile.current_context()
+    _require_allreduce_runtime(
+        resolved_ctx,
+        operation="xtile.ops.allreduce(...)",
+    )
+    block_size = _validate_allreduce_contract(
+        tensor,
+        ctx=resolved_ctx,
+        op=op,
+        storage_kind=storage_kind,
+    )
+    return AllReducePlan(
+        ctx=resolved_ctx,
+        tensor_shape=tuple(int(dim) for dim in tensor.shape),
+        block_size=block_size,
+        op=op,
         storage_kind=storage_kind,
     )
 
@@ -1466,6 +1560,49 @@ def _validate_allgather_contract(
     return block_size
 
 
+def _validate_allreduce_contract(
+    tensor: Any,
+    *,
+    ctx: xtile.XTileContext,
+    op: str,
+    storage_kind: str,
+    expected_tensor_shape: tuple[int, ...] | None = None,
+    expected_block_size: int | None = None,
+) -> int:
+    """Validate an allreduce contract and return the logical chunk size."""
+    del storage_kind  # Reserved for future non-symmetric storage backends.
+
+    if op != "sum":
+        raise ValueError(f"allreduce currently supports only op='sum', got {op!r}")
+    if str(tensor.device) != ctx.device:
+        raise ValueError(
+            f"allreduce tensor must reside on the attached heap device {ctx.device}, got {tensor.device}"
+        )
+    if not tensor.is_contiguous():
+        raise ValueError("allreduce currently requires the tensor to be contiguous")
+
+    _require_tensor_on_heap(tensor, ctx=ctx, name="tensor")
+
+    block_size = int(tensor.numel()) // ctx.world_size
+    if int(tensor.numel()) != block_size * ctx.world_size:
+        raise ValueError(
+            "allreduce tensor.numel must be divisible by world_size: "
+            f"{tensor.numel()} % {ctx.world_size} != 0"
+        )
+
+    tensor_shape = tuple(int(dim) for dim in tensor.shape)
+    if expected_tensor_shape is not None and tensor_shape != expected_tensor_shape:
+        raise ValueError(
+            f"allreduce tensor shape no longer matches the plan: {tensor_shape} != {expected_tensor_shape}"
+        )
+    if expected_block_size is not None and block_size != expected_block_size:
+        raise ValueError(
+            f"allreduce logical chunk size no longer matches the plan: {block_size} != {expected_block_size}"
+        )
+
+    return block_size
+
+
 def _validate_reduce_scatter_contract(
     src: Any,
     output: Any,
@@ -1538,10 +1675,16 @@ def _resolve_reduce_scatter_implementation(
     if implementation == "auto":
         if heap.mode == "single_process":
             return "reference"
+        if multiprocess_device_collectives_runtime_supported(
+            transport_strategy=heap.transport_strategy,
+            world_size=ctx.world_size,
+        ):
+            return "device"
         if not multiprocess_device_collectives_enabled():
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
+                    world_size=ctx.world_size,
                 )
             )
         if not multiprocess_device_collectives_transport_supported(
@@ -1550,6 +1693,7 @@ def _resolve_reduce_scatter_implementation(
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
+                    world_size=ctx.world_size,
                 )
             )
         return "device"
@@ -1563,10 +1707,16 @@ def _resolve_reduce_scatter_implementation(
             "Use implementation='reference' (or 'auto') until the device path is proven correct."
         )
     if implementation == "device" and heap.mode != "single_process":
+        if multiprocess_device_collectives_runtime_supported(
+            transport_strategy=heap.transport_strategy,
+            world_size=ctx.world_size,
+        ):
+            return implementation
         if not multiprocess_device_collectives_enabled():
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
+                    world_size=ctx.world_size,
                 )
             )
         if not multiprocess_device_collectives_transport_supported(
@@ -1575,6 +1725,7 @@ def _resolve_reduce_scatter_implementation(
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
+                    world_size=ctx.world_size,
                 )
             )
     return implementation
@@ -1589,14 +1740,16 @@ def _require_device_remote_access_runtime(
     heap = ctx.require_heap()
     if heap.mode != "multiprocess":
         return
-    if multiprocess_device_remote_access_transport_supported(
-        heap.transport_strategy
+    if multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=heap.transport_strategy,
+        world_size=ctx.world_size,
     ):
         return
     raise ValueError(
         multiprocess_device_remote_access_detail(
             transport_strategy=heap.transport_strategy,
             operation=operation,
+            world_size=ctx.world_size,
         )
     )
 
@@ -1606,6 +1759,18 @@ def _require_gemm_allscatter_runtime(ctx: xtile.XTileContext) -> None:
     _require_device_remote_access_runtime(
         ctx,
         operation="xtile.ops.gemm_allscatter(...)",
+    )
+
+
+def _require_allreduce_runtime(
+    ctx: xtile.XTileContext,
+    *,
+    operation: str,
+) -> None:
+    """Validate the runtime prerequisites for high-level allreduce execution."""
+    _require_device_remote_access_runtime(
+        ctx,
+        operation=operation,
     )
 
 
