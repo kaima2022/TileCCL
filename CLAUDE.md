@@ -1,6 +1,24 @@
-# XTile LLM Context
+# XTile 
 
 本文件是给 LLM 的仓库入口说明，只保留当前状态、索引和下一步计划。
+
+## 目标
+
+灵感来自于Iris，但不止局限于AMD生态。要做到通用，可维护，易优化，暴露出来更多优化的接口，包括但不限于将runtime运行时的信息拿来优化内核或通信库。
+
+建立Tile粒度的原生通信库，把作为通信一等公民看待。计算-通信以tile为单位，且尽量不调用NCCL和NVSHMEM等，整个内核对编译器可见。
+
+## 项目位置
+
+"/home/makai/XTile/"
+
+### 参考项目
+
+"/home/makai/tilescale/"
+
+"/home/makai/Triton-distributed/"
+
+"/home/makai/iris/"
 
 ## 维护规则
 
@@ -67,4 +85,3 @@
 1. 先完成内存底座收口：把当前 allocator-first partial 继续推进到 canonical `export/import-map/access` 运行时。
 2. 继续收缩公共语义面：所有默认用户路径都应优先通过 `xtile.ops.*`，减少直接暴露 pattern 细节。
 3. 扩大真实验证面：从 `world_size=2 + ctypes_ipc` 扩到更完整的 multiprocess/world-size/transport 矩阵。
-4. 在底座稳定后，再系统优化 comm-only collectives，缩小与 NCCL 的差距。
