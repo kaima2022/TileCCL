@@ -811,9 +811,9 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 ### 差距归因
 
-#### 1. `allreduce` 当前不是单一路径的高性能 collective，而是厚路径组合
+#### 1. `allreduce` 已经完成单一路径收口，但仍不是成熟高性能 collective
 
-当前 `xtile.primitives.collectives.allreduce(...)` 的真实实现并不是一个成熟的单阶段设备侧 collective，而是：
+当前 `xtile.primitives.collectives.allreduce(...)` 的默认 public path 已经不再是 `reduce_scatter + allgather + copy` 的 host-side 组合，而是显式 resolve execution spec 后直接进入 staged device path：
 
 ```python
 def allreduce(
@@ -821,27 +821,33 @@ def allreduce(
     heap: "xtile.memory.SymmetricHeap",
     op: str = "sum",
 ) -> None:
-    shard, gathered = _allreduce_workspaces(tensor, heap=heap)
-    reduce_scatter(
+    spec = resolve_allreduce_execution(tensor, heap=heap, op=op)
+    workspace = _allreduce_workspace(tensor, heap=heap, spec=spec)
+    _allreduce_staged_kernel[(spec.grid_size,)](
         tensor,
-        shard,
-        heap,
-        op=op,
-        implementation="auto",
+        workspace.staging,
+        workspace.published_epoch,
+        workspace.consumed_count,
+        heap.get_heap_bases(),
+        ...,
     )
-    heap.barrier()
-    allgather(shard, gathered, heap)
-    heap.barrier()
-    tensor.copy_(gathered.reshape(tensor.shape))
 ```
 
-这条路径的问题不是“能不能工作”，而是：
+这条新路径已经解决了之前最厚的三层问题：
 
-- 它把一个本应统一优化的问题拆成了 `reduce_scatter + barrier + allgather + barrier + copy`
-- host-side barrier 和额外 materialization 都在延迟路径上
-- 当前 public `allreduce` 还没有收敛成真正的单一路径设备实现
+- 默认 public `allreduce(...)` 不再依赖 `reduce_scatter + barrier + allgather + barrier + copy`
+- host-side 热路径不再显式插两次 `heap.barrier()`
+- 不再分配完整 `gathered` buffer，也不再在结尾额外 `tensor.copy_(...)`
+- `AllReducePlan` 现在已经显式携带 `implementation / protocol / chunk_elems / num_chunks / workspace_bytes`
 
-所以 `allreduce` 落后最明显，不是偶然，而是架构结果。
+但这还不能等价于“已经达到 NCCL 级 allreduce”，因为当前实现虽然已经是**slot-based 的 staged multi-CTA path**，但仍然偏保守：
+
+- 设备侧协议目前是 `slot_epoch_pipeline`
+- 已经具备 `pipeline_slots / grid_size / num_warps` 这类 launch metadata
+- 当前主要验证面仍然是 `world_size=2 + ctypes_ipc`
+- 还没有 pipelined forwarding、多 channel 并发、message-regime protocol 分层
+
+所以更准确的说法应当是：**方向 1 的“单路径 public allreduce 收口”在当前 public surface 上已经完成，但 `allreduce` 与 NCCL 的性能差距仍然存在，而且原因已经从“host-side 厚组合路径”转移到“协议与并发形态还不够强”。**
 
 #### 2. `reduce_scatter` 当前明确是 correctness-first，而不是 performance-first
 
@@ -926,18 +932,64 @@ def allreduce(
 
 如果目标是逐步缩小和 NCCL 的差距，而不是只把功能继续堆上去，那么优先级应当非常明确。
 
-#### 方向 1：先把 `allreduce` 重写成真正的单一路径 public collective
+#### 方向 1：先把 `allreduce` 重写成真正的单一路径 public collective（当前 public surface 已完成）
 
 这是最高优先级。
 
-当前 `allreduce` 最差，不是参数没调，而是架构本身太厚。第一步应当把它从“host-side 组合路径”收敛成一个真正的设备侧 public fast path：
+这一步在当前 validated public surface 上已经完成：默认 public `allreduce(...)` 已收口成 staged multi-CTA device path，不再走 `reduce_scatter + allgather + copy` 组合主链。
 
-- 减少 host barrier
-- 去掉额外 gather materialization / copy
-- 明确单一路径的 workspace / staging / synchronization 语义
-- 让 public `allreduce(...)` 与内部 fast path 不再长期分裂
+已经落地的部分包括：
 
-如果这一项不做，继续调 `allgather` 或继续补 transport，收益都会被 `allreduce` 的厚路径天花板压住。
+- 去掉 host-side `heap.barrier()` 热路径
+- 去掉完整 `gathered` materialization / 结尾 `copy`
+- 显式引入 `resolve_allreduce_execution(...)` 与 `AllReducePlan` execution metadata
+- 把 public fast path 从 single-CTA 扩成 slot-based multi-CTA pipeline
+- 把 benchmark JSON 里的 allreduce execution metadata 补到 `implementation / protocol / chunk_elems / num_chunks / pipeline_slots / grid_size / num_warps / workspace_bytes`
+- 让 `xtile.ops.allreduce(...)` 和 `xtile.primitives.collectives.allreduce(...)` 统一到同一条 launcher 主链
+
+当前这一方向剩余的工作，不再是“把 composed path 改掉”，而是把这条新主路径继续从保守版推进到高性能版：
+
+- 继续扩大 `world_size > 2` 的真实验证面
+- 补更细的 protocol 分层和更强的 launch geometry
+- 在 structured benchmark 与 regression system 中长期跟踪这条 public path
+
+因此，这一方向最难、也最关键的一步现在已经完成；后面不再是“补完方向 1”，而是“围绕新的单路径主干做性能化和扩大支持面”。下面保留这一路线拆解，作为后续继续推进这条主路径的细化目标。
+
+1. **先固定 public 目标形态**
+   - `xtile.ops.allreduce(...) -> build_allreduce_plan(...) -> plan.execute(...)` 这一层稳定入口可以保持不变。
+   - 这一步现在已经完成：`xtile.primitives.collectives.allreduce(...)` 的默认 public path 已经切到 staged single-path launcher。
+   - 后续要做的不是再换 API 入口，而是继续约束 fallback 角色，避免旧 composed path 重新回到默认 benchmark 口径。
+
+2. **把执行 contract 从“只有 `block_size`”扩成真正的 allreduce plan**
+   - 这一步也已经完成：`AllReducePlan` 现在已经显式保存 `implementation`、`protocol`、`chunk_elems`、`num_chunks`、`pipeline_slots`、`grid_size`、`num_warps`、`workspace_bytes` 等关键 execution metadata。
+   - 下一步要继续补的是更细粒度的信息，例如 staging slot / epoch policy、grid / CTA family、message regime 选择。
+   - 这一步的目的不是把 plan 做复杂，而是让后续性能回归能准确定位“到底是协议、chunking，还是 launch policy 在退化”。
+   - 对应地，旧的 `_allreduce_workspaces(...)` 二元组已经退出默认主路径；现在主路径只保留协议真正需要的 staging / sync 空间。
+
+3. **先落一个最小但真实的 device fast path**
+   - 这一步也已经完成当前 public surface 版本：`op="sum"`、contiguous tensor、symmetric heap、`world_size=2` 的默认 public path 已经落成。
+   - 但即使是这个最小版本，也应当做到三件关键事情：host 热路径不再显式插两次 `heap.barrier()`；不再分配完整 `gathered` buffer 并在结尾再 `tensor.copy_(...)`；workspace 不再重复 materialize 一份 full tensor。
+   - 当前实现已经不是 single-CTA 原型，而是 slot-based 的 staged multi-CTA kernel；关键不在于“绝对只能一发 kernel”，而在于 public API 对外只呈现一个统一 fast path，而不是继续由 host 手工拼 collective。
+   - 当前执行链已经接近下面这种形态：
+
+    ```python
+    def allreduce(tensor, heap, op="sum"):
+        spec = resolve_allreduce_execution(tensor, heap=heap, op=op)
+        _allreduce_fast_path[spec.grid](
+            tensor,
+            spec.workspace,
+            spec.sync_state,
+            heap.get_heap_bases(),
+            ...
+        )
+    ```
+
+4. **把完成标准写成明确门禁**
+   - correctness 侧应当至少覆盖现有 `tests/test_e2e/_run_allreduce_multiprocess.py`、`tests/test_ops.py`、`tests/benchmarks/bench_collective_comm_only.py` 这三类入口，而且新路径要成为默认 public 路径，而不是只在一个实验 benchmark 里单独跑。
+   - benchmark 侧不应只写“有提升”；更准确的阶段目标应当是：新路径先稳定超过当前 composed path，再稳定超过当前 internal `bulk_sync` baseline，然后才谈继续缩小和 NCCL 的差距。
+   - 可观测性也要补上：structured benchmark JSON 最好能记录 `allreduce_impl`、`protocol`、`chunk regime`，否则后面即使性能有波动，也很难区分是 kernel 退化、同步退化，还是 workspace / launch policy 变了。
+
+换句话说，方向 1 不是“再写一个 allreduce kernel”这么简单，而是要把 `allreduce` 从“public API 名字已经存在、但内部仍是组合实现”升级成真正的一等 collective。只有这一层先收口，后面方向 2 对 `reduce_scatter` / `allgather` 的优化，才会稳定沉淀到用户真正调用的主路径上。
 
 #### 方向 2：把 `reduce_scatter` / `allgather` 做成 pipelined、chunked、多 CTA collective
 

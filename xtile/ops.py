@@ -47,10 +47,6 @@ _PENDING_GEMM_ALLGATHER_SINGLE_PROCESS: dict[
     tuple[object, ...],
     dict[int, tuple["GemmAllGatherPlan", Any, Any, Any]],
 ] = {}
-_PENDING_ALLREDUCE_SINGLE_PROCESS: dict[
-    tuple[object, ...],
-    dict[int, tuple["AllReducePlan", Any]],
-] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,6 +409,14 @@ class AllReducePlan:
     block_size: int
     op: str = "sum"
     storage_kind: str = "symmetric"
+    implementation: str = "noop"
+    protocol: str = "local_identity"
+    chunk_elems: int = 0
+    num_chunks: int = 0
+    pipeline_slots: int = 0
+    grid_size: int = 1
+    num_warps: int = 1
+    workspace_bytes: int = 0
 
     def validate_tensor(self, tensor: Any) -> None:
         """Validate that the tensor still matches the plan."""
@@ -429,14 +433,6 @@ class AllReducePlan:
         """Execute the pre-resolved allreduce plan in place."""
         if validate:
             self.validate_tensor(tensor)
-        if (
-            self.ctx.world_size > 1
-            and self.ctx.require_heap().mode == "single_process"
-        ):
-            return _execute_allreduce_single_process(
-                self,
-                tensor=tensor,
-            )
         from xtile.primitives.collectives import allreduce as collective_allreduce
 
         collective_allreduce(tensor, self.ctx.require_heap(), op=self.op)
@@ -456,6 +452,14 @@ class AllReducePlan:
             "tensor_shape": list(self.tensor_shape),
             "block_size": self.block_size,
             "reduction": self.op,
+            "implementation": self.implementation,
+            "protocol": self.protocol,
+            "chunk_elems": self.chunk_elems,
+            "num_chunks": self.num_chunks,
+            "pipeline_slots": self.pipeline_slots,
+            "grid_size": self.grid_size,
+            "num_warps": self.num_warps,
+            "workspace_bytes": self.workspace_bytes,
         }
 
 
@@ -1048,12 +1052,27 @@ def build_allreduce_plan(
         op=op,
         storage_kind=storage_kind,
     )
+    from xtile.primitives.collectives import resolve_allreduce_execution
+
+    execution = resolve_allreduce_execution(
+        tensor,
+        heap=resolved_ctx.require_heap(),
+        op=op,
+    )
     return AllReducePlan(
         ctx=resolved_ctx,
         tensor_shape=tuple(int(dim) for dim in tensor.shape),
         block_size=block_size,
         op=op,
         storage_kind=storage_kind,
+        implementation=execution.implementation,
+        protocol=execution.protocol,
+        chunk_elems=execution.chunk_elems,
+        num_chunks=execution.num_chunks,
+        pipeline_slots=execution.pipeline_slots,
+        grid_size=execution.grid_size,
+        num_warps=execution.num_warps,
+        workspace_bytes=execution.workspace_bytes,
     )
 
 
@@ -1505,89 +1524,6 @@ def _single_process_gemm_allgather_key(
     )
 
 
-def _execute_allreduce_single_process(
-    plan: AllReducePlan,
-    *,
-    tensor: Any,
-) -> Any:
-    """Finalize allreduce once every local rank has staged its tensor."""
-    from xtile.primitives.collectives import (
-        _allreduce_workspaces,
-        allgather as collective_allgather,
-        reduce_scatter as collective_reduce_scatter,
-    )
-
-    key = _single_process_allreduce_key(plan, tensor)
-    pending = _PENDING_ALLREDUCE_SINGLE_PROCESS.setdefault(key, {})
-    pending[plan.ctx.rank] = (plan, tensor)
-    if len(pending) < plan.ctx.world_size:
-        return tensor
-
-    try:
-        workspaces: dict[int, tuple[Any, Any]] = {}
-        for rank in range(plan.ctx.world_size):
-            rank_plan, rank_tensor = pending[rank]
-            workspaces[rank] = _allreduce_workspaces(
-                rank_tensor,
-                heap=rank_plan.ctx.require_heap(),
-            )
-
-        for rank in range(plan.ctx.world_size):
-            rank_plan, rank_tensor = pending[rank]
-            rank_shard, _ = workspaces[rank]
-            collective_reduce_scatter(
-                rank_tensor,
-                rank_shard,
-                rank_plan.ctx.require_heap(),
-                op=rank_plan.op,
-                implementation="reference",
-            )
-
-        for rank in range(plan.ctx.world_size):
-            pending[rank][0].ctx.backend.synchronize()
-
-        for rank in range(plan.ctx.world_size):
-            rank_plan, _ = pending[rank]
-            rank_shard, rank_gathered = workspaces[rank]
-            collective_allgather(
-                rank_shard,
-                rank_gathered,
-                rank_plan.ctx.require_heap(),
-            )
-
-        for rank in range(plan.ctx.world_size):
-            pending[rank][0].ctx.backend.synchronize()
-
-        for rank in range(plan.ctx.world_size):
-            _, rank_tensor = pending[rank]
-            _, rank_gathered = workspaces[rank]
-            rank_tensor.copy_(rank_gathered.reshape(rank_tensor.shape))
-
-        for rank in range(plan.ctx.world_size):
-            pending[rank][0].ctx.backend.synchronize()
-    finally:
-        _PENDING_ALLREDUCE_SINGLE_PROCESS.pop(key, None)
-    return tensor
-
-
-def _single_process_allreduce_key(
-    plan: AllReducePlan,
-    tensor: Any,
-) -> tuple[object, ...]:
-    """Return a process-local coordination key for staged allreduce runs."""
-    heap = plan.ctx.require_heap()
-    heap_bases = tuple(int(base) for base in plan.ctx.heap_bases.tolist())
-    return (
-        "allreduce",
-        heap_bases,
-        heap.get_offset(int(tensor.data_ptr())),
-        tuple(int(dim) for dim in tensor.shape),
-        str(tensor.dtype),
-        plan.op,
-        plan.storage_kind,
-    )
-
-
 def _run_local_gemm(A: Any, B: Any, *, out: Any) -> None:
     """Execute one local GEMM into ``out`` with a conservative fallback."""
     import torch
@@ -1664,7 +1600,7 @@ def _validate_allreduce_contract(
     expected_tensor_shape: tuple[int, ...] | None = None,
     expected_block_size: int | None = None,
 ) -> int:
-    """Validate an allreduce contract and return the logical chunk size."""
+    """Validate an allreduce contract and return the rank-local tensor size."""
     del storage_kind  # Reserved for future non-symmetric storage backends.
 
     if op != "sum":
@@ -1678,12 +1614,7 @@ def _validate_allreduce_contract(
 
     _require_tensor_on_heap(tensor, ctx=ctx, name="tensor")
 
-    block_size = int(tensor.numel()) // ctx.world_size
-    if int(tensor.numel()) != block_size * ctx.world_size:
-        raise ValueError(
-            "allreduce tensor.numel must be divisible by world_size: "
-            f"{tensor.numel()} % {ctx.world_size} != 0"
-        )
+    block_size = int(tensor.numel())
 
     tensor_shape = tuple(int(dim) for dim in tensor.shape)
     if expected_tensor_shape is not None and tensor_shape != expected_tensor_shape:
@@ -1692,7 +1623,7 @@ def _validate_allreduce_contract(
         )
     if expected_block_size is not None and block_size != expected_block_size:
         raise ValueError(
-            f"allreduce logical chunk size no longer matches the plan: {block_size} != {expected_block_size}"
+            f"allreduce tensor.numel no longer matches the plan: {block_size} != {expected_block_size}"
         )
 
     return block_size

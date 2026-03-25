@@ -45,18 +45,34 @@ def test_allgather_launcher_rejects_unvalidated_multiprocess_transport(
 
 
 @pytest.mark.multigpu
-def test_allreduce_launcher_validates_divisibility(skip_no_multigpu, device_info) -> None:
-    """The host allreduce launcher should reject tensors not divisible by world_size."""
+def test_allreduce_launcher_supports_non_divisible_tensor_sizes(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """The public allreduce path should handle odd-sized contiguous tensors."""
     from xtile.memory.symmetric_heap import SymmetricHeap
     from xtile.primitives import allreduce
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=2)
     try:
-        tensor = heaps[0].allocate_tensor((15,), torch.float32)
-        tensor.zero_()
+        tensors = []
+        for rank in range(2):
+            torch.cuda.set_device(rank)
+            tensor = heaps[rank].allocate_tensor((15,), torch.float32)
+            tensor.fill_(float(rank + 1))
+            tensors.append(tensor)
 
-        with pytest.raises(ValueError, match="must be divisible by"):
-            allreduce(tensor, heaps[0])
+        for rank in range(2):
+            torch.cuda.set_device(rank)
+            allreduce(tensors[rank], heaps[rank])
+
+        for rank in range(2):
+            torch.cuda.synchronize(rank)
+            assert torch.allclose(
+                tensors[rank],
+                torch.full_like(tensors[rank], 3.0),
+                atol=1e-4,
+            )
     finally:
         for heap in heaps:
             heap.cleanup()

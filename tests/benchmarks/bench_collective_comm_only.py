@@ -27,6 +27,7 @@ from pathlib import Path
 import statistics
 import sys
 import tempfile
+import time
 import traceback
 from typing import Any
 
@@ -88,8 +89,8 @@ def _parse_args() -> argparse.Namespace:
         default="4096,65536",
         help="Comma-separated rank-local message sizes in bytes.",
     )
-    parser.add_argument("--warmup", type=int, default=1, help="Warmup iterations per case.")
-    parser.add_argument("--iters", type=int, default=2, help="Timed iterations per case.")
+    parser.add_argument("--warmup", type=int, default=3, help="Warmup iterations per case.")
+    parser.add_argument("--iters", type=int, default=5, help="Timed iterations per case.")
     parser.add_argument(
         "--world-size",
         type=int,
@@ -132,11 +133,6 @@ def _parse_message_sizes(raw: str, *, element_size: int, world_size: int) -> tup
             raise ValueError(
                 f"message size {size_bytes} is not divisible by dtype size {element_size}"
             )
-        if size_bytes % world_size != 0:
-            raise ValueError(
-                f"message size {size_bytes} must be divisible by world_size {world_size} "
-                "for tile_allreduce chunk partitioning"
-            )
         sizes.append(size_bytes)
     if not sizes:
         raise ValueError("at least one message size is required")
@@ -146,7 +142,7 @@ def _parse_message_sizes(raw: str, *, element_size: int, world_size: int) -> tup
 def _block_elements(*, collective: str, size_bytes: int, dtype: torch.dtype, world_size: int) -> int:
     element_size = torch.tensor([], dtype=dtype).element_size()
     if collective == "allreduce":
-        return size_bytes // element_size // world_size
+        return size_bytes // element_size
     return size_bytes // element_size
 
 
@@ -207,15 +203,15 @@ def _timed_collective(
     for _ in range(iters):
         prepare_fn()
         torch.cuda.synchronize(rank)
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
         dist.barrier(**barrier_kwargs)
-        start.record()
+        # Measure the public collective as the caller observes it:
+        # launch/rendezvous plus device completion on this rank.
+        start_ns = time.perf_counter_ns()
         fn()
-        end.record()
         torch.cuda.synchronize(rank)
+        end_ns = time.perf_counter_ns()
         dist.barrier(**barrier_kwargs)
-        times_ms.append(float(start.elapsed_time(end)))
+        times_ms.append(float(end_ns - start_ns) / 1_000_000.0)
     return times_ms
 
 
@@ -401,11 +397,13 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     dtype=dtype,
                     world_size=config.world_size,
                 )
+                allreduce_plan = None
 
                 if collective == "allreduce":
-                    total_elements = block_elements * config.world_size
+                    total_elements = block_elements
                     xt_view = xt_allreduce.narrow(0, 0, total_elements)
                     nccl_view = nccl_allreduce.narrow(0, 0, total_elements)
+                    allreduce_plan = xtile.ops.build_allreduce_plan(xt_view, ctx=ctx)
 
                     def prepare_xtile() -> None:
                         _fill_allreduce_input(xt_view, rank=rank)
@@ -570,6 +568,24 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                 else:
                     raise ValueError(f"unsupported collective: {collective}")
 
+                xtile_result: dict[str, Any] = {
+                    "times_ms": {},
+                    "correct": False,
+                }
+                if allreduce_plan is not None:
+                    xtile_result.update(
+                        {
+                            "implementation": allreduce_plan.implementation,
+                            "protocol": allreduce_plan.protocol,
+                            "chunk_elems": allreduce_plan.chunk_elems,
+                            "num_chunks": allreduce_plan.num_chunks,
+                            "pipeline_slots": allreduce_plan.pipeline_slots,
+                            "grid_size": allreduce_plan.grid_size,
+                            "num_warps": allreduce_plan.num_warps,
+                            "workspace_bytes": allreduce_plan.workspace_bytes,
+                        }
+                    )
+
                 xtile_times_ms = _timed_collective(
                     xtile_fn,
                     prepare_fn=prepare_xtile,
@@ -609,6 +625,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         "size_bytes": size_bytes,
                         "block_elements": block_elements,
                         "xtile": {
+                            **xtile_result,
                             "times_ms": xtile_times_ms,
                             "correct": xtile_ok,
                         },
@@ -689,6 +706,20 @@ def _aggregate_rank_results(
         key=lambda key: (_COLLECTIVES.index(key[0]), key[1]),
     ):
         per_rank = grouped[(collective, size_bytes)]
+        xtile_execution_metadata = _shared_rank_metadata(
+            per_rank,
+            side="xtile",
+            keys=(
+                "implementation",
+                "protocol",
+                "chunk_elems",
+                "num_chunks",
+                "pipeline_slots",
+                "grid_size",
+                "num_warps",
+                "workspace_bytes",
+            ),
+        )
         xtile_times_by_rank = [list(entry["xtile"]["times_ms"]) for entry in per_rank]
         nccl_times_by_rank = [list(entry["nccl"]["times_ms"]) for entry in per_rank]
         xtile_aggregate_times = [
@@ -725,6 +756,7 @@ def _aggregate_rank_results(
             "world_size": world_size,
             "xtile": {
                 **xtile_summary,
+                **xtile_execution_metadata,
                 "correct_all_ranks": all(bool(entry["xtile"]["correct"]) for entry in per_rank),
                 "rank_times_ms": xtile_times_by_rank,
                 "aggregate_times_ms": xtile_aggregate_times,
@@ -772,6 +804,28 @@ def _aggregate_rank_results(
             "ratio": best_case["xtile_vs_nccl_bandwidth_ratio"],
         }
     return cases, summary
+
+
+def _shared_rank_metadata(
+    per_rank: list[dict[str, Any]],
+    *,
+    side: str,
+    keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Return rank-invariant metadata for one aggregated benchmark case."""
+    if not per_rank:
+        return {}
+
+    result: dict[str, Any] = {}
+    for key in keys:
+        if key not in per_rank[0][side]:
+            continue
+        values = [entry[side].get(key) for entry in per_rank]
+        if all(value == values[0] for value in values[1:]):
+            result[key] = values[0]
+        else:
+            result[f"{key}_per_rank"] = values
+    return result
 
 
 def main() -> None:
@@ -892,6 +946,7 @@ def main() -> None:
             "iters": int(args.iters),
             "message_sizes_bytes": list(message_sizes_bytes),
             "transport_strategy": transport_strategy,
+            "latency_measurement": "host_wall_end_to_end_with_cuda_completion",
         },
         "bandwidth_definition": {
             "allreduce": "2*(world_size-1)/world_size * rank_local_bytes / latency",

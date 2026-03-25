@@ -20,6 +20,8 @@ Conventions:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 import triton
 import triton.language as tl
@@ -38,9 +40,64 @@ from xtile.utils.feature_gates import (
 # Maximum supported world_size for collective operations.
 # Determined by tl.static_range upper bound (Triton unrolls statically).
 MAX_COLLECTIVE_WORLD_SIZE = 33
+_ALLREDUCE_TARGET_CHUNK_BYTES = 16 * 1024
+_ALLREDUCE_MIN_CHUNK_ELEMS = 256
+_ALLREDUCE_MAX_CHUNK_ELEMS = 4096
+_ALLREDUCE_MAX_PIPELINE_SLOTS = 8
+
+
+@dataclass(frozen=True, slots=True)
+class AllReduceExecutionSpec:
+    """Resolved execution contract for the public allreduce launcher."""
+
+    op: str
+    implementation: str
+    protocol: str
+    tensor_numel: int
+    block_size: int
+    chunk_elems: int
+    num_chunks: int
+    pipeline_slots: int
+    grid_size: int
+    num_warps: int
+    workspace_bytes: int
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the resolved execution contract for logs and benchmarks."""
+        return {
+            "op": self.op,
+            "implementation": self.implementation,
+            "protocol": self.protocol,
+            "tensor_numel": self.tensor_numel,
+            "block_size": self.block_size,
+            "chunk_elems": self.chunk_elems,
+            "num_chunks": self.num_chunks,
+            "pipeline_slots": self.pipeline_slots,
+            "grid_size": self.grid_size,
+            "num_warps": self.num_warps,
+            "workspace_bytes": self.workspace_bytes,
+        }
+
+
+@dataclass(slots=True)
+class _AllReduceWorkspace:
+    """Process-local cached workspace for the staged allreduce fast path."""
+
+    staging: torch.Tensor
+    published_epoch: torch.Tensor
+    consumed_count: torch.Tensor
+    next_epoch: int = 0
+
+    def reserve_epoch_range(self, num_chunks: int) -> int:
+        """Reserve one monotonically increasing epoch range for a call."""
+        start = self.next_epoch + 1
+        self.next_epoch += num_chunks
+        return start
+
+
 _ALLREDUCE_WORKSPACE_CACHE: dict[
     tuple[object, ...],
-    tuple[torch.Tensor, torch.Tensor],
+    _AllReduceWorkspace,
 ] = {}
 
 
@@ -439,6 +496,130 @@ def tile_broadcast(
 
 
 # =====================================================================
+# Public allreduce fast path -- staged peer-read allreduce
+# =====================================================================
+
+
+@triton.jit
+def _allreduce_staged_kernel(
+    tensor_ptr,
+    staging_ptr,
+    published_epoch_ptr,
+    consumed_count_ptr,
+    heap_bases_ptr,
+    rank,
+    world_size,
+    numel,
+    num_chunks,
+    num_slots,
+    base_epoch,
+    BLOCK_SIZE: tl.constexpr,
+    op: tl.constexpr = "sum",
+):
+    """Chunked multi-CTA allreduce with explicit staging and device sync.
+
+    The public allreduce launcher uses this kernel instead of composing
+    ``reduce_scatter + allgather``. Each CTA owns one pipeline slot and
+    processes chunk indices ``pid, pid + num_slots, ...``. For every chunk:
+
+    1. Snapshots one contiguous chunk into a symmetric staging buffer.
+    2. Publishes that snapshot with a monotonically increasing epoch.
+    3. Waits until every peer has published the matching epoch.
+    4. Reads peer staging buffers, reduces locally, and writes only to its
+       own output tensor.
+    5. Uses a consumed-count handshake before reusing the staging slot.
+
+    This avoids host barriers and avoids materializing a full gathered
+    tensor, while keeping the synchronization semantics explicit.
+    """
+    pid = tl.program_id(0)
+    if pid >= num_slots:
+        return
+
+    offsets = tl.arange(0, BLOCK_SIZE)
+    slot = pid
+    chunk_idx = pid
+
+    while chunk_idx < num_chunks:
+        chunk_start = chunk_idx * BLOCK_SIZE
+        idx = chunk_start + offsets
+        mask = idx < numel
+        local_values = tl.load(tensor_ptr + idx, mask=mask, other=0.0)
+
+        staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
+        published_slot_ptr = published_epoch_ptr + slot
+        consumed_slot_ptr = consumed_count_ptr + slot
+
+        tl.store(staging_slot_ptr + offsets, local_values, mask=mask)
+        tl.atomic_xchg(consumed_slot_ptr, 0, sem="release", scope="sys")
+
+        epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
+        tl.atomic_xchg(published_slot_ptr, epoch, sem="release", scope="sys")
+
+        reduced = local_values
+        for peer in tl.static_range(0, 32):
+            if peer >= world_size:
+                pass
+            else:
+                if peer != rank:
+                    remote_published = translate_ptr(
+                        published_slot_ptr,
+                        rank,
+                        peer,
+                        heap_bases_ptr,
+                    )
+                    while tl.atomic_cas(
+                        remote_published,
+                        epoch,
+                        epoch,
+                        sem="acquire",
+                        scope="sys",
+                    ) != epoch:
+                        pass
+
+                    remote_staging = translate_ptr(
+                        staging_slot_ptr,
+                        rank,
+                        peer,
+                        heap_bases_ptr,
+                    )
+                    incoming = tl.load(
+                        remote_staging + offsets,
+                        mask=mask,
+                        other=0.0,
+                        cache_modifier=".cg",
+                    )
+                    reduced = _reduce_op(reduced, incoming, op)
+
+                    remote_consumed = translate_ptr(
+                        consumed_slot_ptr,
+                        rank,
+                        peer,
+                        heap_bases_ptr,
+                    )
+                    tl.atomic_add(
+                        remote_consumed,
+                        1,
+                        sem="release",
+                        scope="sys",
+                    )
+
+        tl.store(tensor_ptr + idx, reduced, mask=mask)
+
+        expected_consumers = world_size - 1
+        while tl.atomic_cas(
+            consumed_slot_ptr,
+            expected_consumers,
+            expected_consumers,
+            sem="acquire",
+            scope="sys",
+        ) != expected_consumers:
+            pass
+
+        chunk_idx += num_slots
+
+
+# =====================================================================
 # Host-side launcher kernels (testing / prototyping only)
 # =====================================================================
 
@@ -565,47 +746,37 @@ def allreduce(
     heap: "xtile.memory.SymmetricHeap",
     op: str = "sum",
 ) -> None:
-    """Host-side launcher for :func:`tile_allreduce` (testing / benchmarking).
+    """Host-side launcher for the public in-place allreduce collective.
 
-    In-place ring allreduce on *tensor*.  The tensor size must be
-    divisible by ``world_size``.  *tensor* must reside in *heap*'s
-    symmetric memory.
+    The public path is a staged multi-CTA device implementation with
+    explicit execution metadata and a compact symmetric workspace. It no
+    longer composes ``reduce_scatter + allgather`` on the hot path.
     """
-    if op != "sum":
-        raise ValueError(f"Only op='sum' is currently supported, got {op!r}")
-    world_size = heap.world_size
-    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
-        raise ValueError(
-            f"world_size={world_size} exceeds maximum supported "
-            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
-            f"tl.static_range bound in collectives.py."
-        )
-    numel = tensor.numel()
-    if numel % world_size != 0:
-        raise ValueError(
-            f"Tensor size ({numel}) must be divisible by "
-            f"world_size ({world_size}) for ring allreduce."
-        )
-    if not tensor.is_contiguous():
-        raise ValueError("allreduce currently requires tensor to be contiguous")
-    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
-    _require_device_remote_access_transport(
-        heap,
-        operation="xtile.primitives.allreduce(...)",
-    )
+    torch.cuda.set_device(tensor.device)
+    spec = resolve_allreduce_execution(tensor, heap=heap, op=op)
+    if spec.implementation == "noop":
+        return
 
-    shard, gathered = _allreduce_workspaces(tensor, heap=heap)
-    reduce_scatter(
+    workspace = _allreduce_workspace(tensor, heap=heap, spec=spec)
+    base_epoch = workspace.reserve_epoch_range(spec.num_chunks)
+    heap_bases = heap.get_heap_bases()
+    _allreduce_staged_kernel[(spec.grid_size,)](
         tensor,
-        shard,
-        heap,
+        workspace.staging,
+        workspace.published_epoch,
+        workspace.consumed_count,
+        heap_bases,
+        heap.rank,
+        heap.world_size,
+        spec.tensor_numel,
+        spec.num_chunks,
+        spec.pipeline_slots,
+        base_epoch,
+        BLOCK_SIZE=spec.chunk_elems,
         op=op,
-        implementation="auto",
+        num_warps=spec.num_warps,
+        num_stages=1,
     )
-    heap.barrier()
-    allgather(shard, gathered, heap)
-    heap.barrier()
-    tensor.copy_(gathered.reshape(tensor.shape))
 
 
 def allgather(
@@ -947,10 +1118,124 @@ def _reference_reduce_scatter_single_process(
     output.reshape(-1).copy_(reduced)
 
 
+def resolve_allreduce_execution(
+    tensor: torch.Tensor,
+    *,
+    heap: "xtile.memory.SymmetricHeap",
+    op: str = "sum",
+) -> AllReduceExecutionSpec:
+    """Resolve the execution contract for the public allreduce launcher."""
+    if op != "sum":
+        raise ValueError(f"Only op='sum' is currently supported, got {op!r}")
+
+    world_size = heap.world_size
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
+    if not tensor.is_contiguous():
+        raise ValueError("allreduce currently requires tensor to be contiguous")
+    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
+    _require_device_remote_access_transport(
+        heap,
+        operation="xtile.primitives.allreduce(...)",
+    )
+
+    numel = int(tensor.numel())
+    if world_size == 1 or numel == 0:
+        return AllReduceExecutionSpec(
+            op=op,
+            implementation="noop",
+            protocol="local_identity",
+            tensor_numel=numel,
+            block_size=numel,
+            chunk_elems=numel,
+            num_chunks=0,
+            pipeline_slots=0,
+            grid_size=1,
+            num_warps=1,
+            workspace_bytes=0,
+        )
+
+    torch.cuda.set_device(tensor.device)
+    chunk_elems = _select_allreduce_chunk_elems(tensor)
+    num_chunks = triton.cdiv(numel, chunk_elems)
+    pipeline_slots = _select_allreduce_pipeline_slots(
+        num_chunks=num_chunks,
+        tensor=tensor,
+    )
+    num_warps = 4 if chunk_elems <= 1024 else 8
+    workspace_bytes = pipeline_slots * (
+        chunk_elems * tensor.element_size() + (2 * 4)
+    )
+    return AllReduceExecutionSpec(
+        op=op,
+        implementation="device_staged_pipeline",
+        protocol="slot_epoch_pipeline",
+        tensor_numel=numel,
+        block_size=numel,
+        chunk_elems=chunk_elems,
+        num_chunks=num_chunks,
+        pipeline_slots=pipeline_slots,
+        grid_size=pipeline_slots,
+        num_warps=num_warps,
+        workspace_bytes=workspace_bytes,
+    )
+
+
+def _round_down_power_of_two(value: int) -> int:
+    """Return the greatest power of two not exceeding *value*."""
+    if value <= 1:
+        return 1
+    return 1 << (value.bit_length() - 1)
+
+
+def _select_allreduce_chunk_elems(tensor: torch.Tensor) -> int:
+    """Choose a conservative chunk size for the staged allreduce protocol."""
+    numel = int(tensor.numel())
+    if numel <= 0:
+        return 1
+
+    target = max(
+        _ALLREDUCE_MIN_CHUNK_ELEMS,
+        _ALLREDUCE_TARGET_CHUNK_BYTES // max(tensor.element_size(), 1),
+    )
+    target = min(target, _ALLREDUCE_MAX_CHUNK_ELEMS, numel)
+    return max(1, min(numel, _round_down_power_of_two(target)))
+
+
+def _select_allreduce_pipeline_slots(
+    *,
+    num_chunks: int,
+    tensor: torch.Tensor,
+) -> int:
+    """Choose the number of concurrent allreduce pipeline slots."""
+    if num_chunks <= 1:
+        return 1
+
+    try:
+        props = torch.cuda.get_device_properties(tensor.device)
+        compute_units = int(getattr(props, "multi_processor_count", 1))
+    except Exception:
+        compute_units = 1
+
+    return max(
+        1,
+        min(
+            num_chunks,
+            compute_units,
+            _ALLREDUCE_MAX_PIPELINE_SLOTS,
+        ),
+    )
+
+
 def _allreduce_workspace_key(
     tensor: torch.Tensor,
     *,
     heap: "xtile.memory.SymmetricHeap",
+    spec: AllReduceExecutionSpec,
 ) -> tuple[object, ...]:
     """Return a process-local key for cached allreduce workspaces."""
     heap_bases = tuple(int(base) for base in heap.get_heap_bases().tolist())
@@ -961,20 +1246,34 @@ def _allreduce_workspace_key(
         heap.get_offset(int(tensor.data_ptr())),
         tuple(int(dim) for dim in tensor.shape),
         str(tensor.dtype),
+        spec.chunk_elems,
+        spec.pipeline_slots,
+        spec.implementation,
     )
 
 
-def _allreduce_workspaces(
+def _allreduce_workspace(
     tensor: torch.Tensor,
+    *,
     heap: "xtile.memory.SymmetricHeap",
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return cached shard/gather workspaces for composed allreduce."""
-    key = _allreduce_workspace_key(tensor, heap=heap)
+    spec: AllReduceExecutionSpec,
+) -> _AllReduceWorkspace:
+    """Return the cached workspace for the staged allreduce fast path."""
+    key = _allreduce_workspace_key(tensor, heap=heap, spec=spec)
     workspace = _ALLREDUCE_WORKSPACE_CACHE.get(key)
-    shard_size = tensor.numel() // heap.world_size
     if workspace is None:
-        shard = heap.allocate_tensor((shard_size,), tensor.dtype)
-        gathered = heap.allocate_tensor(tuple(int(dim) for dim in tensor.shape), tensor.dtype)
-        workspace = (shard, gathered)
+        staging = heap.allocate_tensor(
+            (spec.pipeline_slots, spec.chunk_elems),
+            tensor.dtype,
+        )
+        published_epoch = heap.allocate_tensor((spec.pipeline_slots,), torch.int32)
+        consumed_count = heap.allocate_tensor((spec.pipeline_slots,), torch.int32)
+        published_epoch.zero_()
+        consumed_count.zero_()
+        workspace = _AllReduceWorkspace(
+            staging=staging,
+            published_epoch=published_epoch,
+            consumed_count=consumed_count,
+        )
         _ALLREDUCE_WORKSPACE_CACHE[key] = workspace
     return workspace

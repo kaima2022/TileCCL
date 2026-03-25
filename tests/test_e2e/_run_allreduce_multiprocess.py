@@ -112,7 +112,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
     import xtile
     from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives.collectives import _allreduce_kernel
+    from xtile.primitives.collectives import _allreduce_kernel, resolve_allreduce_execution
     from xtile.primitives import allreduce as primitive_allreduce
 
     heap = SymmetricHeap(
@@ -139,7 +139,13 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         primitive_timing = None
         primitive_ok = None
         primitive_first_value = None
+        primitive_execution = None
         if config.launcher in {"primitive", "primitive_ops", "all"}:
+            primitive_execution = resolve_allreduce_execution(
+                tensor_primitive,
+                heap=heap,
+                op="sum",
+            ).to_dict()
             primitive_timing = _timed_collective(
                 lambda: primitive_allreduce(tensor_primitive, heap),
                 prepare_fn=lambda: _fill_allreduce_input(tensor_primitive, rank=rank),
@@ -179,7 +185,12 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_timing = None
         high_level_ok = None
         high_level_first_value = None
+        high_level_plan = None
         if config.launcher in {"ops", "primitive_ops", "all"}:
+            high_level_plan = xtile.ops.build_allreduce_plan(
+                tensor_ops,
+                ctx=ctx,
+            ).to_dict()
             high_level_timing = _timed_collective(
                 lambda: xtile.ops.allreduce(
                     tensor_ops,
@@ -218,9 +229,11 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             "primitive_first_value": primitive_first_value,
             "primitive_ok": primitive_ok,
             "primitive_timing_ms": primitive_timing,
+            "primitive_execution": primitive_execution,
             "high_level_first_value": high_level_first_value,
             "high_level_ok": high_level_ok,
             "high_level_timing_ms": high_level_timing,
+            "high_level_plan": high_level_plan,
             "kernel_first_value": kernel_first_value,
             "kernel_ok": kernel_ok,
             "kernel_timing_ms": kernel_timing,

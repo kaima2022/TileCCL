@@ -23,6 +23,8 @@ def test_allreduce_multiprocess_default_transport(
             "tests.test_e2e._run_allreduce_multiprocess",
             "--dtype",
             dtype_name,
+            "--block-size",
+            "2049",
             "--warmup",
             "2",
             "--iters",
@@ -53,3 +55,10 @@ def test_allreduce_multiprocess_default_transport(
         assert payload["primitive_ok"] is True
         assert payload["high_level_ok"] is True
         assert payload["kernel_ok"] is None
+        assert payload["total_elements"] == 4098
+        assert payload["primitive_execution"]["implementation"] == "device_staged_pipeline"
+        assert payload["primitive_execution"]["protocol"] == "slot_epoch_pipeline"
+        assert payload["primitive_execution"]["pipeline_slots"] >= 2
+        assert payload["high_level_plan"]["implementation"] == "device_staged_pipeline"
+        assert payload["high_level_plan"]["protocol"] == "slot_epoch_pipeline"
+        assert payload["high_level_plan"]["pipeline_slots"] >= 2

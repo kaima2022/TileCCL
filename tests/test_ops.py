@@ -637,10 +637,14 @@ def test_build_allreduce_plan_exposes_stable_metadata(
         payload = plan.to_dict()
 
         assert plan.block_size == 32
+        assert plan.implementation == "noop"
+        assert plan.protocol == "local_identity"
+        assert plan.pipeline_slots == 0
         assert payload["op"] == "allreduce"
         assert payload["block_size"] == 32
         assert payload["tensor_shape"] == [32]
         assert payload["reduction"] == "sum"
+        assert payload["workspace_bytes"] == 0
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -652,7 +656,7 @@ def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
     from xtile.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
-    total_elements = 128
+    total_elements = 4097
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
@@ -672,6 +676,16 @@ def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
             tensor = heaps[rank].allocate_tensor((total_elements,), torch.float32)
             tensor.fill_(float(rank + 1))
             tensors.append(tensor)
+
+        plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
+        assert plan.implementation == "device_staged_pipeline"
+        assert plan.protocol == "slot_epoch_pipeline"
+        assert plan.block_size == total_elements
+        assert plan.chunk_elems > 0
+        assert plan.num_chunks >= 2
+        assert plan.pipeline_slots >= 2
+        assert plan.grid_size == plan.pipeline_slots
+        assert plan.workspace_bytes > 0
 
         for rank in range(world_size):
             xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])

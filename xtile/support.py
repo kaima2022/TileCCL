@@ -192,8 +192,9 @@ def describe_runtime_support(
         ),
         "allreduce.in_place": SupportStatus(
             allreduce_status.state,
-            "Stable public in-place host contract: tensor.numel must be divisible by "
-            "world_size, and the tensor must reside in the attached symmetric heap.",
+            "Stable public in-place host contract: contiguous tensor on the attached "
+            "symmetric heap. The current public fast path does not require "
+            "tensor.numel to be divisible by world_size.",
         ),
     }
 
