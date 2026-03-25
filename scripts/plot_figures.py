@@ -834,40 +834,68 @@ def fig6_collective_comm_only():
         anchor_points.append((title, point["xtile_bw"], point["nccl_bw"]))
 
     if anchor_points:
-        x = np.arange(len(anchor_points))
-        width = 0.34
+        y = np.arange(len(anchor_points))
         anchor_labels = []
         xtile_bw = [item[1] for item in anchor_points]
         nccl_bw = [item[2] for item in anchor_points]
         for title, _, _ in anchor_points:
             anchor_labels.append("Reduce\nScatter" if title == "ReduceScatter" else title)
-        anchor_ax.bar(
-            x - width / 2,
+        minima = [min(xt, nc) for xt, nc in zip(xtile_bw, nccl_bw)]
+        maxima = [max(xt, nc) for xt, nc in zip(xtile_bw, nccl_bw)]
+
+        anchor_ax.hlines(
+            y,
+            minima,
+            maxima,
+            color="#B8B8B8",
+            linewidth=1.1,
+            zorder=1,
+        )
+        anchor_ax.plot(
             nccl_bw,
-            width,
+            y,
+            "s",
             color=COLORS[0],
-            edgecolor="white",
-            linewidth=0.5,
+            markersize=6.2,
             label="NCCL",
+            zorder=3,
         )
-        anchor_ax.bar(
-            x + width / 2,
+        anchor_ax.plot(
             xtile_bw,
-            width,
+            y,
+            "o",
             color=COLORS[1],
-            edgecolor="white",
-            linewidth=0.5,
+            markersize=6.2,
             label="XTile",
+            zorder=4,
         )
-        anchor_ax.set_xticks(x)
-        anchor_ax.set_xticklabels(anchor_labels, fontsize=9)
-        anchor_ax.set_ylabel("Bandwidth (GB/s)")
-        anchor_ax.set_xlabel("Collective")
+        anchor_ax.set_yticks(y)
+        anchor_ax.set_yticklabels(anchor_labels, fontsize=9)
+        anchor_ax.invert_yaxis()
+        anchor_ax.set_ylabel("Collective")
+        anchor_ax.set_xlabel("Bandwidth (GB/s, log scale)")
         anchor_ax.set_title("Bandwidth at 256 KiB")
-        anchor_ax.set_ylim(0, max(max(xtile_bw), max(nccl_bw)) * 1.18)
-        anchor_ax.grid(True, axis="y", alpha=0.25)
-        anchor_ax.grid(False, axis="x")
-        anchor_ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
+        anchor_ax.set_xscale("log")
+        anchor_ax.set_xlim(min(minima) * 0.7, max(maxima) * 1.35)
+        anchor_ax.grid(True, axis="x", which="major", alpha=0.25)
+        anchor_ax.grid(False, axis="y")
+        anchor_ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
+
+        reduce_scatter_idx = next(
+            (idx for idx, label in enumerate(anchor_labels) if label == "Reduce\nScatter"),
+            None,
+        )
+        if reduce_scatter_idx is not None:
+            anchor_ax.annotate(
+                f"{xtile_bw[reduce_scatter_idx]:.5f}",
+                xy=(xtile_bw[reduce_scatter_idx], y[reduce_scatter_idx]),
+                xytext=(8, 0),
+                textcoords="offset points",
+                ha="left",
+                va="center",
+                fontsize=8,
+                color=COLORS[1],
+            )
 
     allreduce_series = COLLECTIVE_SERIES.get("allreduce")
     if allreduce_series:
@@ -906,11 +934,19 @@ def fig6_collective_comm_only():
             sweep_ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
 
     if legend_handles and legend_labels:
-        sweep_ax.legend(legend_handles, legend_labels, loc="upper left")
+        fig.legend(
+            legend_handles,
+            legend_labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.952),
+            ncol=2,
+            columnspacing=1.4,
+            handletextpad=0.6,
+        )
 
     sns.despine(fig=fig)
     fig.suptitle("Communication-only Collectives: Latency and Bandwidth", fontsize=14, y=0.995)
-    fig.subplots_adjust(left=0.055, right=0.99, top=0.88, bottom=0.18, wspace=0.55, hspace=0.5)
+    fig.subplots_adjust(left=0.07, right=0.99, top=0.84, bottom=0.18, wspace=0.55, hspace=0.5)
 
     footer = benchmark_footer_text(
         COLLECTIVE_PAYLOAD,

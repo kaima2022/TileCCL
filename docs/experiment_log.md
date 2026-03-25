@@ -21,6 +21,7 @@
 | Collective vs bulk_sync | XTile collective 相对本仓库 `bulk_sync` 的收益 | `figures/data/collective_bulk_sync_latest.json` |
 | 自动摘要 | 汇总运行时、拓扑和 headline 指标 | `docs/generated/benchmark_runtime_summary.md` |
 | 实验注意事项 | benchmark 口径、防踩坑 checklist | `docs/benchmark_experiment_notes.md` |
+| Fig6 归因说明 | 当前 collective 图的现象、根因与阅读方式 | `docs/fig6_collective_analysis.md` |
 
 ## 当前有效结论
 
