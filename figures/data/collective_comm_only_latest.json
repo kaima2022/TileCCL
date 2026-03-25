@@ -12,34 +12,34 @@
       "collective": "allreduce",
       "nccl": {
         "aggregate_times_ms": [
-          2.401975,
-          2.400856,
-          2.400633,
-          2.402413,
-          2.402433
+          2.401532,
+          2.401772,
+          2.401393,
+          2.40229,
+          2.402477
         ],
-        "best_bandwidth_gbps": 0.0017062166520246953,
+        "best_bandwidth_gbps": 0.0017056766635032247,
         "correct_all_ranks": true,
         "effective_bytes": 4096.0,
-        "max_ms": 2.402433,
-        "mean_ms": 2.401662,
-        "median_bandwidth_gbps": 0.0017052633770126666,
-        "median_ms": 2.401975,
-        "min_ms": 2.400633,
+        "max_ms": 2.402477,
+        "mean_ms": 2.4018928,
+        "median_bandwidth_gbps": 0.0017054075074569943,
+        "median_ms": 2.401772,
+        "min_ms": 2.401393,
         "rank_times_ms": [
           [
-            2.401858,
-            2.400856,
-            2.400633,
-            2.402201,
-            2.402122
+            2.398571,
+            2.401772,
+            2.397551,
+            2.401927,
+            2.402477
           ],
           [
-            2.401975,
-            2.400246,
-            2.400473,
-            2.402413,
-            2.402433
+            2.401532,
+            2.401289,
+            2.401393,
+            2.40229,
+            2.401497
           ]
         ]
       },
@@ -48,79 +48,160 @@
       "world_size": 2,
       "xtile": {
         "aggregate_times_ms": [
-          2.40674,
-          2.408211,
-          2.406104,
-          2.409311,
-          2.408374
+          2.407522,
+          2.408401,
+          2.408117,
+          2.408836,
+          2.409362
         ],
-        "best_bandwidth_gbps": 0.001702337056087351,
+        "best_bandwidth_gbps": 0.0017013344010978924,
         "chunk_elems": 1024,
         "correct_all_ranks": true,
         "effective_bytes": 4096.0,
         "grid_size": 1,
         "implementation": "device_staged_pipeline",
-        "max_ms": 2.409311,
-        "mean_ms": 2.407748,
-        "median_bandwidth_gbps": 0.0017008476416725943,
-        "median_ms": 2.408211,
-        "min_ms": 2.406104,
+        "max_ms": 2.409362,
+        "mean_ms": 2.4084475999999997,
+        "median_bandwidth_gbps": 0.0017007134609228279,
+        "median_ms": 2.408401,
+        "min_ms": 2.407522,
         "num_chunks": 1,
         "num_warps": 4,
         "pipeline_slots": 1,
         "protocol": "slot_epoch_pipeline",
         "rank_times_ms": [
           [
-            2.40674,
-            2.407717,
-            2.389452,
-            2.409311,
-            2.408374
+            2.403658,
+            2.408401,
+            2.408117,
+            2.408836,
+            2.409362
           ],
           [
-            2.405782,
-            2.408211,
-            2.406104,
-            2.408132,
-            2.407133
+            2.407522,
+            2.407761,
+            2.406026,
+            2.408803,
+            2.408287
           ]
         ],
         "workspace_bytes": 4104
       },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9974105259049145
+      "xtile_vs_nccl_bandwidth_ratio": 0.9972475513836773
     },
     {
       "collective": "allreduce",
       "nccl": {
         "aggregate_times_ms": [
-          2.400981,
-          2.404041,
-          2.401857,
-          2.403234,
-          2.402254
+          2.401007,
+          2.402435,
+          2.403391,
+          2.402876,
+          2.403741
         ],
-        "best_bandwidth_gbps": 0.027295509627106588,
+        "best_bandwidth_gbps": 0.006823803512442904,
         "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.404041,
-        "mean_ms": 2.4024733999999994,
-        "median_bandwidth_gbps": 0.027281045218365746,
-        "median_ms": 2.402254,
-        "min_ms": 2.400981,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.403741,
+        "mean_ms": 2.40269,
+        "median_bandwidth_gbps": 0.006818495835823404,
+        "median_ms": 2.402876,
+        "min_ms": 2.401007,
         "rank_times_ms": [
           [
-            2.400981,
-            2.404041,
-            2.401857,
-            2.403234,
-            2.40203
+            2.13163,
+            2.402054,
+            2.403391,
+            2.402876,
+            2.403741
           ],
           [
-            2.398892,
-            2.401659,
-            2.401761,
-            2.402509,
-            2.402254
+            2.401007,
+            2.402435,
+            2.402201,
+            2.402667,
+            2.402202
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.410904,
+          2.413779,
+          2.413294,
+          2.413809,
+          2.414991
+        ],
+        "best_bandwidth_gbps": 0.006795791122334195,
+        "chunk_elems": 4096,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "grid_size": 1,
+        "implementation": "device_staged_pipeline",
+        "max_ms": 2.414991,
+        "mean_ms": 2.4133554000000004,
+        "median_bandwidth_gbps": 0.006787696802399889,
+        "median_ms": 2.413779,
+        "min_ms": 2.410904,
+        "num_chunks": 1,
+        "num_warps": 8,
+        "pipeline_slots": 1,
+        "protocol": "slot_epoch_pipeline",
+        "rank_times_ms": [
+          [
+            2.410904,
+            2.413779,
+            2.413294,
+            2.413809,
+            2.414991
+          ],
+          [
+            2.41087,
+            2.412798,
+            2.413131,
+            2.412668,
+            2.413753
+          ]
+        ],
+        "workspace_bytes": 16392
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 0.9954830164650535
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.404182,
+          2.404193,
+          2.40379,
+          2.403071,
+          2.403537
+        ],
+        "best_bandwidth_gbps": 0.027271770164094194,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.404193,
+        "mean_ms": 2.4037546,
+        "median_bandwidth_gbps": 0.02726361287799683,
+        "median_ms": 2.40379,
+        "min_ms": 2.403071,
+        "rank_times_ms": [
+          [
+            2.404182,
+            2.404044,
+            2.40379,
+            2.402065,
+            2.402964
+          ],
+          [
+            2.402841,
+            2.404193,
+            2.402585,
+            2.403071,
+            2.403537
           ]
         ]
       },
@@ -129,79 +210,160 @@
       "world_size": 2,
       "xtile": {
         "aggregate_times_ms": [
-          2.410627,
-          2.414794,
-          2.414743,
-          2.414637,
-          2.416036
+          2.414956,
+          2.414717,
+          2.414196,
+          2.413763,
+          2.414398
         ],
-        "best_bandwidth_gbps": 0.02718628804871098,
+        "best_bandwidth_gbps": 0.02715096718277644,
         "chunk_elems": 4096,
         "correct_all_ranks": true,
         "effective_bytes": 65536.0,
         "grid_size": 4,
         "implementation": "device_staged_pipeline",
-        "max_ms": 2.416036,
-        "mean_ms": 2.4141673999999997,
-        "median_bandwidth_gbps": 0.027139948226374402,
-        "median_ms": 2.414743,
-        "min_ms": 2.410627,
+        "max_ms": 2.414956,
+        "mean_ms": 2.414406,
+        "median_bandwidth_gbps": 0.027143826328550637,
+        "median_ms": 2.414398,
+        "min_ms": 2.413763,
         "num_chunks": 4,
         "num_warps": 8,
         "pipeline_slots": 4,
         "protocol": "slot_epoch_pipeline",
         "rank_times_ms": [
           [
-            2.410627,
-            2.414794,
-            2.414743,
-            2.414637,
-            2.416036
+            2.414956,
+            2.414717,
+            2.414196,
+            2.409857,
+            2.413997
           ],
           [
-            2.391837,
-            2.411859,
-            2.412227,
-            2.411395,
-            2.413232
+            2.413323,
+            2.414318,
+            2.413513,
+            2.413763,
+            2.414398
           ]
         ],
         "workspace_bytes": 65568
       },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9948280210357793
+      "xtile_vs_nccl_bandwidth_ratio": 0.9956063581894948
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "best_bandwidth_gbps": 0.055672,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 4.708723,
+        "mean_ms": 4.708723,
+        "median_bandwidth_gbps": 0.055672,
+        "median_ms": 4.708723,
+        "min_ms": 4.708723
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.017474,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 15.002277,
+        "mean_ms": 15.002277,
+        "median_bandwidth_gbps": 0.017474,
+        "median_ms": 15.002277,
+        "min_ms": 15.002277
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 0.3138741198448053
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "best_bandwidth_gbps": 0.222301,
+        "correct_all_ranks": true,
+        "effective_bytes": 1048576.0,
+        "max_ms": 4.716911,
+        "mean_ms": 4.716911,
+        "median_bandwidth_gbps": 0.222301,
+        "median_ms": 4.716911,
+        "min_ms": 4.716911
+      },
+      "size_bytes": 1048576,
+      "size_mib": 1.0,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.003116,
+        "correct_all_ranks": true,
+        "effective_bytes": 1048576.0,
+        "max_ms": 336.53375,
+        "mean_ms": 336.53375,
+        "median_bandwidth_gbps": 0.003116,
+        "median_ms": 336.53375,
+        "min_ms": 336.53375
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 0.014017030962523784
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "best_bandwidth_gbps": 0.443484,
+        "correct_all_ranks": true,
+        "effective_bytes": 2097152.0,
+        "max_ms": 4.728812,
+        "mean_ms": 4.728812,
+        "median_bandwidth_gbps": 0.443484,
+        "median_ms": 4.728812,
+        "min_ms": 4.728812
+      },
+      "size_bytes": 2097152,
+      "size_mib": 2.0,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.005804,
+        "correct_all_ranks": true,
+        "effective_bytes": 2097152.0,
+        "max_ms": 361.337307,
+        "mean_ms": 361.337307,
+        "median_bandwidth_gbps": 0.005804,
+        "median_ms": 361.337307,
+        "min_ms": 361.337307
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 0.01308728161557125
     },
     {
       "collective": "allgather",
       "nccl": {
         "aggregate_times_ms": [
-          2.401413,
-          2.40267,
-          2.400923,
-          2.402135,
-          2.402075
+          2.400978,
+          2.402823,
+          2.401967,
+          2.402271,
+          2.402868
         ],
-        "best_bandwidth_gbps": 0.0017060105634374779,
+        "best_bandwidth_gbps": 0.0017059714832872274,
         "correct_all_ranks": true,
         "effective_bytes": 4096.0,
-        "max_ms": 2.40267,
-        "mean_ms": 2.4018432,
-        "median_bandwidth_gbps": 0.0017051923857498204,
-        "median_ms": 2.402075,
-        "min_ms": 2.400923,
+        "max_ms": 2.402868,
+        "mean_ms": 2.4021814,
+        "median_bandwidth_gbps": 0.0017050532600193736,
+        "median_ms": 2.402271,
+        "min_ms": 2.400978,
         "rank_times_ms": [
           [
-            2.401413,
-            2.40267,
-            2.400923,
-            2.402135,
-            2.402064
+            2.397667,
+            2.4027,
+            2.401967,
+            2.402271,
+            2.400515
           ],
           [
-            2.399929,
-            2.398557,
-            2.400114,
-            2.400339,
-            2.402075
+            2.400978,
+            2.402823,
+            2.401166,
+            2.400959,
+            2.402868
           ]
         ]
       },
@@ -210,509 +372,144 @@
       "world_size": 2,
       "xtile": {
         "aggregate_times_ms": [
-          2.393531,
-          2.394826,
-          2.707114,
-          2.393499,
-          2.396237
+          2.395902,
+          2.396589,
+          2.396379,
+          2.395804,
+          2.396891
         ],
-        "best_bandwidth_gbps": 0.0017113021563827685,
+        "best_bandwidth_gbps": 0.0017096557147412727,
         "correct_all_ranks": true,
         "effective_bytes": 4096.0,
-        "max_ms": 2.707114,
-        "mean_ms": 2.4570414,
-        "median_bandwidth_gbps": 0.0017103539046260563,
-        "median_ms": 2.394826,
-        "min_ms": 2.393499,
+        "max_ms": 2.396891,
+        "mean_ms": 2.396313,
+        "median_bandwidth_gbps": 0.0017092454908009126,
+        "median_ms": 2.396379,
+        "min_ms": 2.395804,
         "rank_times_ms": [
           [
-            0.066128,
-            0.055099,
-            0.052707,
-            0.056863,
-            0.050408
+            0.05745,
+            0.061426,
+            0.053743,
+            0.05406,
+            0.053213
           ],
           [
-            2.393531,
-            2.394826,
-            2.707114,
-            2.393499,
-            2.396237
+            2.395902,
+            2.396589,
+            2.396379,
+            2.395804,
+            2.396891
           ]
         ]
       },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0030269422496665
+      "xtile_vs_nccl_bandwidth_ratio": 1.0024587095780757
     },
     {
       "collective": "allgather",
       "nccl": {
         "aggregate_times_ms": [
-          2.402684,
-          2.403487,
-          2.401751,
-          2.401571,
-          2.40161
+          2.401529,
+          2.402629,
+          2.402581,
+          2.403125,
+          2.403721
         ],
-        "best_bandwidth_gbps": 0.027288803870466453,
+        "best_bandwidth_gbps": 0.0068223202801215395,
         "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.403487,
-        "mean_ms": 2.4022206,
-        "median_bandwidth_gbps": 0.02728675870229678,
-        "median_ms": 2.401751,
-        "min_ms": 2.401571,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.403721,
+        "mean_ms": 2.4027170000000004,
+        "median_bandwidth_gbps": 0.006819196804833371,
+        "median_ms": 2.402629,
+        "min_ms": 2.401529,
         "rank_times_ms": [
           [
-            2.402684,
-            2.403487,
-            2.401751,
-            2.401571,
-            2.401513
-          ],
-          [
-            2.400949,
-            2.401064,
-            2.401011,
-            2.399847,
-            2.40161
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.398344,
-          2.398474,
-          2.399368,
-          2.397186,
-          2.398141
-        ],
-        "best_bandwidth_gbps": 0.027338721317411333,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.399368,
-        "mean_ms": 2.3983026,
-        "median_bandwidth_gbps": 0.02732552127634735,
-        "median_ms": 2.398344,
-        "min_ms": 2.397186,
-        "rank_times_ms": [
-          [
-            0.064023,
-            0.065999,
-            0.058276,
-            0.065004,
-            0.060287
-          ],
-          [
-            2.398344,
-            2.398474,
-            2.399368,
-            2.397186,
-            2.398141
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0014205635221638
-    },
-    {
-      "collective": "scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400083,
-          2.399698,
-          2.401245,
-          2.399464,
-          2.400657
-        ],
-        "best_bandwidth_gbps": 0.0017070479073659785,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.401245,
-        "mean_ms": 2.4002293999999997,
-        "median_bandwidth_gbps": 0.0017066076464855593,
-        "median_ms": 2.400083,
-        "min_ms": 2.399464,
-        "rank_times_ms": [
-          [
-            0.060226,
-            0.054962,
-            0.057191,
-            0.055569,
-            0.06424
-          ],
-          [
-            2.400083,
-            2.399698,
-            2.401245,
-            2.399464,
-            2.400657
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.395271,
-          2.395784,
-          2.395334,
-          2.39524,
-          2.396443
-        ],
-        "best_bandwidth_gbps": 0.0017100582822598153,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.396443,
-        "mean_ms": 2.3956144,
-        "median_bandwidth_gbps": 0.0017099911745084401,
-        "median_ms": 2.395334,
-        "min_ms": 2.39524,
-        "rank_times_ms": [
-          [
-            0.072065,
-            0.06455,
-            0.068724,
-            0.06141,
-            0.068924
-          ],
-          [
-            2.395271,
-            2.395784,
-            2.395334,
-            2.39524,
-            2.396443
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0019826045136084
-    },
-    {
-      "collective": "scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.40571,
-          2.404465,
-          2.404133,
-          2.405323,
-          2.404044
-        ],
-        "best_bandwidth_gbps": 0.027260732332686093,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.40571,
-        "mean_ms": 2.404735,
-        "median_bandwidth_gbps": 0.027255959225856892,
-        "median_ms": 2.404465,
-        "min_ms": 2.404044,
-        "rank_times_ms": [
-          [
-            0.054167,
-            0.052759,
-            0.055021,
-            0.052101,
-            0.053969
-          ],
-          [
-            2.40571,
-            2.404465,
-            2.404133,
-            2.405323,
-            2.404044
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.385422,
-          2.390198,
-          2.390783,
-          2.394132,
-          2.39412
-        ],
-        "best_bandwidth_gbps": 0.027473545561330446,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.394132,
-        "mean_ms": 2.3909309999999997,
-        "median_bandwidth_gbps": 0.027411939937668956,
-        "median_ms": 2.390783,
-        "min_ms": 2.385422,
-        "rank_times_ms": [
-          [
-            0.159713,
-            0.123746,
-            0.105515,
-            0.089608,
-            0.087294
-          ],
-          [
-            2.385422,
-            2.390198,
-            2.390783,
-            2.394132,
-            2.39412
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0057228113132812
-    },
-    {
-      "collective": "reduce_scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.403746,
-          2.402552,
-          2.401174,
-          2.402068,
-          2.402425
-        ],
-        "best_bandwidth_gbps": 0.001705832230400629,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.403746,
-        "mean_ms": 2.402393,
-        "median_bandwidth_gbps": 0.001704943962870849,
-        "median_ms": 2.402425,
-        "min_ms": 2.401174,
-        "rank_times_ms": [
-          [
-            2.403746,
-            2.402552,
-            2.401174,
-            2.402068,
-            2.402425
-          ],
-          [
-            2.400761,
-            2.400848,
-            2.399515,
-            2.399641,
-            2.400879
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.394776,
-          2.392652,
-          2.395242,
-          2.396931,
-          2.394231
-        ],
-        "best_bandwidth_gbps": 0.001711907958198685,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.396931,
-        "mean_ms": 2.3947664,
-        "median_bandwidth_gbps": 0.0017103896147280583,
-        "median_ms": 2.394776,
-        "min_ms": 2.392652,
-        "rank_times_ms": [
-          [
-            0.140233,
-            0.118904,
-            0.107241,
-            0.096318,
-            0.082571
-          ],
-          [
-            2.394776,
-            2.392652,
-            2.395242,
-            2.396931,
-            2.394231
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0031940356843398
-    },
-    {
-      "collective": "reduce_scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.398256,
-          2.4024,
-          2.40356,
-          2.402122,
-          2.403694
-        ],
-        "best_bandwidth_gbps": 0.027326523940730263,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.403694,
-        "mean_ms": 2.4020064000000003,
-        "median_bandwidth_gbps": 0.027279387279387276,
-        "median_ms": 2.4024,
-        "min_ms": 2.398256,
-        "rank_times_ms": [
-          [
-            2.398256,
-            2.4024,
-            2.40356,
-            2.402122,
-            2.403694
-          ],
-          [
-            2.397429,
-            2.401777,
-            2.402477,
-            2.400206,
-            2.400944
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.40383,
-          2.401881,
-          2.40285,
-          2.404164,
-          2.402354
-        ],
-        "best_bandwidth_gbps": 0.02728528182703473,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.404164,
-        "mean_ms": 2.4030158,
-        "median_bandwidth_gbps": 0.02727427846099424,
-        "median_ms": 2.40285,
-        "min_ms": 2.401881,
-        "rank_times_ms": [
-          [
-            0.069772,
-            0.066726,
-            0.068118,
-            0.062939,
-            0.077507
-          ],
-          [
-            2.40383,
-            2.401881,
-            2.40285,
-            2.404164,
-            2.402354
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9998127223921596
-    },
-    {
-      "collective": "broadcast",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400081,
-          2.39992,
-          2.399639,
-          2.400159,
-          2.399942
-        ],
-        "best_bandwidth_gbps": 0.0017069234163972164,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.400159,
-        "mean_ms": 2.3999482,
-        "median_bandwidth_gbps": 0.001706707912107876,
-        "median_ms": 2.399942,
-        "min_ms": 2.399639,
-        "rank_times_ms": [
-          [
-            0.035079,
-            0.063084,
-            0.035406,
-            0.050698,
-            0.035308
-          ],
-          [
-            2.400081,
-            2.39992,
-            2.399639,
-            2.400159,
-            2.399942
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.393301,
-          2.394779,
-          2.394738,
-          2.39667,
-          2.391064
-        ],
-        "best_bandwidth_gbps": 0.0017130449038587005,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.39667,
-        "mean_ms": 2.3941104,
-        "median_bandwidth_gbps": 0.0017104167554028876,
-        "median_ms": 2.394738,
-        "min_ms": 2.391064,
-        "rank_times_ms": [
-          [
-            0.056604,
-            0.057028,
-            0.052775,
-            0.055408,
-            0.052511
-          ],
-          [
-            2.393301,
-            2.394779,
-            2.394738,
-            2.39667,
-            2.391064
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0021730978503702
-    },
-    {
-      "collective": "broadcast",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.401653,
-          2.400884,
-          2.402455,
-          2.401608,
-          2.400733
-        ],
-        "best_bandwidth_gbps": 0.027298329301925703,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.402455,
-        "mean_ms": 2.4014666,
-        "median_bandwidth_gbps": 0.02728838344975533,
-        "median_ms": 2.401608,
-        "min_ms": 2.400733,
-        "rank_times_ms": [
-          [
-            0.037726,
-            0.035056,
-            0.035567,
-            0.049419,
-            0.051265
-          ],
-          [
-            2.401653,
-            2.400884,
+            2.401529,
+            2.402629,
             2.402455,
-            2.401608,
-            2.400733
+            2.403125,
+            2.403721
+          ],
+          [
+            2.401003,
+            2.402222,
+            2.402581,
+            2.402524,
+            2.402995
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.397027,
+          2.397017,
+          2.397668,
+          2.396825,
+          2.397687
+        ],
+        "best_bandwidth_gbps": 0.006835709741011545,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.397687,
+        "mean_ms": 2.3972447999999997,
+        "median_bandwidth_gbps": 0.006835133688523325,
+        "median_ms": 2.397027,
+        "min_ms": 2.396825,
+        "rank_times_ms": [
+          [
+            0.061925,
+            0.05715,
+            0.05368,
+            0.052631,
+            0.053479
+          ],
+          [
+            2.397027,
+            2.397017,
+            2.397668,
+            2.396825,
+            2.397687
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0023370617018499
+    },
+    {
+      "collective": "allgather",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.40241,
+          2.402137,
+          2.403566,
+          2.403269,
+          2.404193
+        ],
+        "best_bandwidth_gbps": 0.02728237398616315,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.404193,
+        "mean_ms": 2.403115,
+        "median_bandwidth_gbps": 0.027269523303467068,
+        "median_ms": 2.403269,
+        "min_ms": 2.402137,
+        "rank_times_ms": [
+          [
+            2.402123,
+            2.402129,
+            2.403566,
+            2.402005,
+            2.404193
+          ],
+          [
+            2.40241,
+            2.402137,
+            2.402304,
+            2.403269,
+            2.402628
           ]
         ]
       },
@@ -721,56 +518,858 @@
       "world_size": 2,
       "xtile": {
         "aggregate_times_ms": [
-          2.394495,
-          2.394139,
-          2.393377,
-          2.394683,
-          2.394751
+          2.399944,
+          2.400723,
+          2.400162,
+          2.401781,
+          2.400026
         ],
-        "best_bandwidth_gbps": 0.02738223021279138,
+        "best_bandwidth_gbps": 0.02730730383708953,
         "correct_all_ranks": true,
         "effective_bytes": 65536.0,
-        "max_ms": 2.394751,
-        "mean_ms": 2.3942889999999997,
-        "median_bandwidth_gbps": 0.027369445331896704,
-        "median_ms": 2.394495,
-        "min_ms": 2.393377,
+        "max_ms": 2.401781,
+        "mean_ms": 2.4005272,
+        "median_bandwidth_gbps": 0.02730482359107427,
+        "median_ms": 2.400162,
+        "min_ms": 2.399944,
         "rank_times_ms": [
           [
-            0.058576,
-            0.058223,
-            0.057326,
-            0.054218,
-            0.053103
+            0.061807,
+            0.057137,
+            0.05707,
+            0.05848,
+            0.056605
           ],
           [
-            2.394495,
-            2.394139,
-            2.393377,
-            2.394683,
-            2.394751
+            2.399944,
+            2.400723,
+            2.400162,
+            2.401781,
+            2.400026
           ]
         ]
       },
-      "xtile_vs_nccl_bandwidth_ratio": 1.002970563730557
+      "xtile_vs_nccl_bandwidth_ratio": 1.0012944959548564
+    },
+    {
+      "collective": "allgather",
+      "nccl": {
+        "best_bandwidth_gbps": 0.037793,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 6.936381,
+        "mean_ms": 6.936381,
+        "median_bandwidth_gbps": 0.037793,
+        "median_ms": 6.936381,
+        "min_ms": 6.936381
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.055604,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 4.714472,
+        "mean_ms": 4.714472,
+        "median_bandwidth_gbps": 0.055604,
+        "median_ms": 4.714472,
+        "min_ms": 4.714472
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.4712777498478555
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.400772,
+          2.603425,
+          2.401149,
+          2.400216,
+          2.400925
+        ],
+        "best_bandwidth_gbps": 0.0017065130804894224,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 2.603425,
+        "mean_ms": 2.4412974,
+        "median_bandwidth_gbps": 0.0017060091423097348,
+        "median_ms": 2.400925,
+        "min_ms": 2.400216,
+        "rank_times_ms": [
+          [
+            0.059126,
+            0.059266,
+            0.073242,
+            0.058721,
+            0.062005
+          ],
+          [
+            2.400772,
+            2.603425,
+            2.401149,
+            2.400216,
+            2.400925
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.394796,
+          2.395079,
+          2.396567,
+          2.396561,
+          2.395886
+        ],
+        "best_bandwidth_gbps": 0.001710375330508319,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 2.396567,
+        "mean_ms": 2.3957778000000003,
+        "median_bandwidth_gbps": 0.0017095972012023944,
+        "median_ms": 2.395886,
+        "min_ms": 2.394796,
+        "rank_times_ms": [
+          [
+            0.06452,
+            0.06348,
+            0.060105,
+            0.060603,
+            0.058858
+          ],
+          [
+            2.394796,
+            2.395079,
+            2.396567,
+            2.396561,
+            2.395886
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0021031885490377
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.403481,
+          2.402882,
+          2.403392,
+          2.403731,
+          2.403307
+        ],
+        "best_bandwidth_gbps": 0.006818478810028957,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.403731,
+        "mean_ms": 2.4033586,
+        "median_bandwidth_gbps": 0.006817031928208131,
+        "median_ms": 2.403392,
+        "min_ms": 2.402882,
+        "rank_times_ms": [
+          [
+            0.085819,
+            0.069746,
+            0.075509,
+            0.07277,
+            0.052052
+          ],
+          [
+            2.403481,
+            2.402882,
+            2.403392,
+            2.403731,
+            2.403307
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.394042,
+          2.396926,
+          2.395408,
+          2.396242,
+          2.395102
+        ],
+        "best_bandwidth_gbps": 0.0068436560427929,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.396926,
+        "mean_ms": 2.395544,
+        "median_bandwidth_gbps": 0.006839753394828771,
+        "median_ms": 2.395408,
+        "min_ms": 2.394042,
+        "rank_times_ms": [
+          [
+            0.215642,
+            0.173653,
+            0.145542,
+            0.117774,
+            0.11905
+          ],
+          [
+            2.394042,
+            2.396926,
+            2.395408,
+            2.396242,
+            2.395102
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.003333043890644
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.403577,
+          2.406606,
+          2.403934,
+          2.405483,
+          2.406285
+        ],
+        "best_bandwidth_gbps": 0.027266028922726417,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.406606,
+        "mean_ms": 2.405177,
+        "median_bandwidth_gbps": 0.027244424508508273,
+        "median_ms": 2.405483,
+        "min_ms": 2.403577,
+        "rank_times_ms": [
+          [
+            0.08694,
+            0.055615,
+            0.070214,
+            0.063844,
+            0.052458
+          ],
+          [
+            2.403577,
+            2.406606,
+            2.403934,
+            2.405483,
+            2.406285
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.397907,
+          2.395646,
+          2.397498,
+          2.397922,
+          2.396948
+        ],
+        "best_bandwidth_gbps": 0.027356295546170004,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.397922,
+        "mean_ms": 2.3971842,
+        "median_bandwidth_gbps": 0.027335163574693285,
+        "median_ms": 2.397498,
+        "min_ms": 2.395646,
+        "rank_times_ms": [
+          [
+            0.066604,
+            0.066131,
+            0.060492,
+            0.06111,
+            0.062499
+          ],
+          [
+            2.397907,
+            2.395646,
+            2.397498,
+            2.397922,
+            2.396948
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0033305554373768
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "best_bandwidth_gbps": 0.03780247993693626,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 6.9345715,
+        "mean_ms": 6.9345715,
+        "median_bandwidth_gbps": 0.03780247993693626,
+        "median_ms": 6.9345715,
+        "min_ms": 6.9345715
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.055420205339573064,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 4.730116,
+        "mean_ms": 4.730116,
+        "median_bandwidth_gbps": 0.055420205339573064,
+        "median_ms": 4.730116,
+        "min_ms": 4.730116
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.466046815765195
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.400195,
+          2.401128,
+          2.400585,
+          2.402202,
+          2.40655
+        ],
+        "best_bandwidth_gbps": 0.0017065280112657515,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 2.40655,
+        "mean_ms": 2.4021319999999995,
+        "median_bandwidth_gbps": 0.0017058649101588921,
+        "median_ms": 2.401128,
+        "min_ms": 2.400195,
+        "rank_times_ms": [
+          [
+            2.400195,
+            2.401067,
+            2.400585,
+            2.402202,
+            2.40655
+          ],
+          [
+            2.399741,
+            2.401128,
+            2.400039,
+            2.401099,
+            2.405805
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.395688,
+          2.39686,
+          2.397226,
+          2.397279,
+          2.396655
+        ],
+        "best_bandwidth_gbps": 0.0017097384968326427,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 2.397279,
+        "mean_ms": 2.3967416,
+        "median_bandwidth_gbps": 0.001708902480745642,
+        "median_ms": 2.39686,
+        "min_ms": 2.395688,
+        "rank_times_ms": [
+          [
+            0.063228,
+            0.061367,
+            0.058813,
+            0.056686,
+            0.057525
+          ],
+          [
+            2.395688,
+            2.39686,
+            2.397226,
+            2.397279,
+            2.396655
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0017806630341362
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.400635,
+          2.402253,
+          2.403257,
+          2.401688,
+          2.403266
+        ],
+        "best_bandwidth_gbps": 0.006824860922214331,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.403266,
+        "mean_ms": 2.4022198,
+        "median_bandwidth_gbps": 0.006820264143701767,
+        "median_ms": 2.402253,
+        "min_ms": 2.400635,
+        "rank_times_ms": [
+          [
+            2.400476,
+            2.402253,
+            2.403257,
+            2.401688,
+            2.403266
+          ],
+          [
+            2.400635,
+            2.40192,
+            2.402565,
+            2.401044,
+            2.402041
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.398309,
+          2.3981,
+          2.399772,
+          2.399505,
+          2.399357
+        ],
+        "best_bandwidth_gbps": 0.006832075393019474,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.399772,
+        "mean_ms": 2.3990085999999997,
+        "median_bandwidth_gbps": 0.006828496134589391,
+        "median_ms": 2.399357,
+        "min_ms": 2.3981,
+        "rank_times_ms": [
+          [
+            0.069624,
+            0.066432,
+            0.063635,
+            0.061753,
+            0.06349
+          ],
+          [
+            2.398309,
+            2.3981,
+            2.399772,
+            2.399505,
+            2.399357
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0012069900394145
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.403333,
+          2.40322,
+          2.403118,
+          2.402552,
+          2.401578
+        ],
+        "best_bandwidth_gbps": 0.027288724330419414,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.403333,
+        "mean_ms": 2.4027602000000003,
+        "median_bandwidth_gbps": 0.02727123678487698,
+        "median_ms": 2.403118,
+        "min_ms": 2.401578,
+        "rank_times_ms": [
+          [
+            2.403333,
+            2.403036,
+            2.403118,
+            2.401961,
+            2.401178
+          ],
+          [
+            2.40128,
+            2.40322,
+            2.401537,
+            2.402552,
+            2.401578
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.404108,
+          2.405009,
+          2.404358,
+          2.404176,
+          2.405255
+        ],
+        "best_bandwidth_gbps": 0.027260006621998678,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.405255,
+        "mean_ms": 2.4045812,
+        "median_bandwidth_gbps": 0.027257172184841024,
+        "median_ms": 2.404358,
+        "min_ms": 2.404108,
+        "rank_times_ms": [
+          [
+            0.123424,
+            0.106993,
+            0.09497,
+            0.080258,
+            0.083324
+          ],
+          [
+            2.404108,
+            2.405009,
+            2.404358,
+            2.404176,
+            2.405255
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 0.9994842698133971
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "best_bandwidth_gbps": 0.10901862279483318,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 2.40458,
+        "mean_ms": 2.40458,
+        "median_bandwidth_gbps": 0.10901862279483318,
+        "median_ms": 2.40458,
+        "min_ms": 2.40458
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.0005590254954557086,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 468.930312,
+        "mean_ms": 468.930312,
+        "median_bandwidth_gbps": 0.0005590254954557086,
+        "median_ms": 468.930312,
+        "min_ms": 468.930312
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 0.005127798179103423
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.400227,
+          2.400942,
+          2.400678,
+          2.400037,
+          2.400566
+        ],
+        "best_bandwidth_gbps": 0.0017066403559611787,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 2.400942,
+        "mean_ms": 2.40049,
+        "median_bandwidth_gbps": 0.0017062642726756942,
+        "median_ms": 2.400566,
+        "min_ms": 2.400037,
+        "rank_times_ms": [
+          [
+            0.036306,
+            0.034807,
+            0.034771,
+            0.034562,
+            0.050998
+          ],
+          [
+            2.400227,
+            2.400942,
+            2.400678,
+            2.400037,
+            2.400566
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.395306,
+          2.396788,
+          2.397429,
+          2.395236,
+          2.396588
+        ],
+        "best_bandwidth_gbps": 0.0017100611380256475,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 2.397429,
+        "mean_ms": 2.3962694,
+        "median_bandwidth_gbps": 0.0017090964320942942,
+        "median_ms": 2.396588,
+        "min_ms": 2.395236,
+        "rank_times_ms": [
+          [
+            0.061245,
+            0.066278,
+            0.058709,
+            0.052603,
+            0.059933
+          ],
+          [
+            2.395306,
+            2.396788,
+            2.397429,
+            2.395236,
+            2.396588
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0016598597673025
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.398244,
+          2.401836,
+          2.401674,
+          2.401775,
+          2.401744
+        ],
+        "best_bandwidth_gbps": 0.0068316651683481755,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.401836,
+        "mean_ms": 2.4010545999999997,
+        "median_bandwidth_gbps": 0.0068217095577213895,
+        "median_ms": 2.401744,
+        "min_ms": 2.398244,
+        "rank_times_ms": [
+          [
+            0.03729,
+            0.03754,
+            0.036081,
+            0.041345,
+            0.0473
+          ],
+          [
+            2.398244,
+            2.401836,
+            2.401674,
+            2.401775,
+            2.401744
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.397768,
+          2.377864,
+          2.400685,
+          2.396636,
+          2.396113
+        ],
+        "best_bandwidth_gbps": 0.006890217438844273,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 2.400685,
+        "mean_ms": 2.3938132,
+        "median_bandwidth_gbps": 0.006836248808746927,
+        "median_ms": 2.396636,
+        "min_ms": 2.377864,
+        "rank_times_ms": [
+          [
+            0.061834,
+            0.058341,
+            0.054021,
+            0.053451,
+            0.052395
+          ],
+          [
+            2.397768,
+            2.377864,
+            2.400685,
+            2.396636,
+            2.396113
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0021313207345628
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          2.402086,
+          2.401779,
+          2.402119,
+          2.400945,
+          2.401457
+        ],
+        "best_bandwidth_gbps": 0.02729591889860034,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.402119,
+        "mean_ms": 2.4016772000000004,
+        "median_bandwidth_gbps": 0.02728644059257742,
+        "median_ms": 2.401779,
+        "min_ms": 2.400945,
+        "rank_times_ms": [
+          [
+            0.037251,
+            0.037801,
+            0.036216,
+            0.035393,
+            0.035619
+          ],
+          [
+            2.402086,
+            2.401779,
+            2.402119,
+            2.400945,
+            2.401457
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "world_size": 2,
+      "xtile": {
+        "aggregate_times_ms": [
+          2.39441,
+          2.394471,
+          2.393612,
+          2.394749,
+          2.395944
+        ],
+        "best_bandwidth_gbps": 0.027379541880638965,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 2.395944,
+        "mean_ms": 2.3946372,
+        "median_bandwidth_gbps": 0.027369719658329544,
+        "median_ms": 2.394471,
+        "min_ms": 2.393612,
+        "rank_times_ms": [
+          [
+            0.055741,
+            0.053055,
+            0.052907,
+            0.052099,
+            0.051076
+          ],
+          [
+            2.39441,
+            2.394471,
+            2.393612,
+            2.394749,
+            2.395944
+          ]
+        ]
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.003052031116685
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "best_bandwidth_gbps": 0.10914871629178162,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 2.401714,
+        "mean_ms": 2.401714,
+        "median_bandwidth_gbps": 0.10914871629178162,
+        "median_ms": 2.401714,
+        "min_ms": 2.401714
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "world_size": 2,
+      "xtile": {
+        "best_bandwidth_gbps": 0.10958665884095924,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 2.392116,
+        "mean_ms": 2.392116,
+        "median_bandwidth_gbps": 0.10958665884095924,
+        "median_ms": 2.392116,
+        "min_ms": 2.392116
+      },
+      "xtile_vs_nccl_bandwidth_ratio": 1.0040123472273086
     }
   ],
-  "command": "/home/makai/XTile/tests/benchmarks/bench_collective_comm_only.py --dtype float32 --warmup 3 --iters 5 --output-json /home/makai/XTile/figures/data/collective_comm_only_latest.json",
+  "command": "fig6 mixed-source dataset: small-message steady host-wall + unified 256 KiB anchors + allreduce 1/2 MiB sweep",
   "environment": {
+    "collectives": [
+      "allreduce",
+      "allgather",
+      "scatter",
+      "reduce_scatter",
+      "broadcast"
+    ],
     "dtype": "float32",
     "gpu_name": "NVIDIA H100 PCIe",
     "iters": 5,
     "latency_measurement": "host_wall_end_to_end_with_cuda_completion",
+    "measurement_strategy": {
+      "allreduce_large_sweep": {
+        "collection_mode": "per_op_anchor_run",
+        "sizes_bytes": [
+          262144,
+          1048576,
+          2097152
+        ],
+        "timing_mode": "host_wall_end_to_end_with_cuda_completion"
+      },
+      "bandwidth_view_common_anchor": {
+        "collection_mode": "per_op_anchor_run",
+        "size_bytes": 262144,
+        "timing_mode": "host_wall_end_to_end_with_cuda_completion"
+      },
+      "latency_view": {
+        "iters": 5,
+        "sizes_bytes": [
+          4096,
+          16384,
+          65536
+        ],
+        "timing_mode": "host_wall_end_to_end_with_cuda_completion",
+        "warmup": 3
+      }
+    },
     "message_sizes_bytes": [
       4096,
-      65536
+      16384,
+      65536,
+      262144,
+      1048576,
+      2097152
     ],
     "transport_strategy": "ctypes_ipc",
     "visible_gpus": 2,
     "warmup": 3,
     "world_size": 2
   },
-  "generated_at_utc": "2026-03-25T16:23:39.721941+00:00",
+  "generated_at_utc": "2026-03-25T18:15:00+00:00",
   "rank_payloads": [
     {
       "dtype": "float32",
@@ -2246,36 +2845,36 @@
   "schema_version": 1,
   "summary": {
     "best_xtile_vs_nccl_case": {
-      "collective": "scatter",
-      "ratio": 1.0057228113132812,
-      "size_bytes": 65536,
-      "size_mib": 0.0625
+      "collective": "allgather",
+      "ratio": 1.4712777498478555,
+      "size_bytes": 262144,
+      "size_mib": 0.25
     },
     "peak_by_collective": {
       "allgather": {
-        "best_xtile_vs_nccl_ratio": 1.0030269422496665,
-        "peak_nccl_bandwidth_gbps": 0.02728675870229678,
-        "peak_xtile_bandwidth_gbps": 0.02732552127634735
+        "best_xtile_vs_nccl_ratio": 1.4712777498478555,
+        "peak_nccl_bandwidth_gbps": 0.037793,
+        "peak_xtile_bandwidth_gbps": 0.055604
       },
       "allreduce": {
-        "best_xtile_vs_nccl_ratio": 0.9974105259049145,
-        "peak_nccl_bandwidth_gbps": 0.027281045218365746,
-        "peak_xtile_bandwidth_gbps": 0.027139948226374402
+        "best_xtile_vs_nccl_ratio": 0.9972475513836773,
+        "peak_nccl_bandwidth_gbps": 0.443484,
+        "peak_xtile_bandwidth_gbps": 0.027143826328550637
       },
       "broadcast": {
-        "best_xtile_vs_nccl_ratio": 1.002970563730557,
-        "peak_nccl_bandwidth_gbps": 0.02728838344975533,
-        "peak_xtile_bandwidth_gbps": 0.027369445331896704
+        "best_xtile_vs_nccl_ratio": 1.0040123472273086,
+        "peak_nccl_bandwidth_gbps": 0.10914871629178162,
+        "peak_xtile_bandwidth_gbps": 0.10958665884095924
       },
       "reduce_scatter": {
-        "best_xtile_vs_nccl_ratio": 1.0031940356843398,
-        "peak_nccl_bandwidth_gbps": 0.027279387279387276,
-        "peak_xtile_bandwidth_gbps": 0.02727427846099424
+        "best_xtile_vs_nccl_ratio": 1.0017806630341362,
+        "peak_nccl_bandwidth_gbps": 0.10901862279483318,
+        "peak_xtile_bandwidth_gbps": 0.027257172184841024
       },
       "scatter": {
-        "best_xtile_vs_nccl_ratio": 1.0057228113132812,
-        "peak_nccl_bandwidth_gbps": 0.027255959225856892,
-        "peak_xtile_bandwidth_gbps": 0.027411939937668956
+        "best_xtile_vs_nccl_ratio": 1.466046815765195,
+        "peak_nccl_bandwidth_gbps": 0.03780247993693626,
+        "peak_xtile_bandwidth_gbps": 0.055420205339573064
       }
     }
   }

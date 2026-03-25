@@ -261,23 +261,31 @@ def _load_collective_comm_only():
         bucket = per_collective.setdefault(
             collective,
             {
+                "size_bytes": [],
                 "size_mib": [],
+                "xtile_ms": [],
+                "nccl_ms": [],
                 "xtile_bw": [],
                 "nccl_bw": [],
-                "ratio": [],
+                "latency_ratio": [],
+                "bandwidth_ratio": [],
             },
         )
+        xtile_ms = float(xtile["median_ms"])
+        nccl_ms = float(nccl["median_ms"])
+        bucket["size_bytes"].append(int(case["size_bytes"]))
         bucket["size_mib"].append(float(case["size_mib"]))
+        bucket["xtile_ms"].append(xtile_ms)
+        bucket["nccl_ms"].append(nccl_ms)
         bucket["xtile_bw"].append(float(xtile["median_bandwidth_gbps"]))
         bucket["nccl_bw"].append(float(nccl["median_bandwidth_gbps"]))
-        bucket["ratio"].append(float(case["xtile_vs_nccl_bandwidth_ratio"]))
+        bucket["latency_ratio"].append(xtile_ms / max(nccl_ms, 1e-9))
+        bucket["bandwidth_ratio"].append(float(case["xtile_vs_nccl_bandwidth_ratio"]))
 
     for bucket in per_collective.values():
-        order = np.argsort(bucket["size_mib"])
-        bucket["size_mib"] = [bucket["size_mib"][idx] for idx in order]
-        bucket["xtile_bw"] = [bucket["xtile_bw"][idx] for idx in order]
-        bucket["nccl_bw"] = [bucket["nccl_bw"][idx] for idx in order]
-        bucket["ratio"] = [bucket["ratio"][idx] for idx in order]
+        order = np.argsort(bucket["size_bytes"])
+        for key in tuple(bucket):
+            bucket[key] = [bucket[key][idx] for idx in order]
 
     return per_collective, payload.get("summary", {})
 
@@ -322,6 +330,8 @@ P2P_CURVE, P2P_ENV = _load_p2p_curve()
 PATTERN_SPEEDUPS, PATTERN_SUMMARY = _load_pattern_speedups()
 COLLECTIVE_SERIES, COLLECTIVE_SUMMARY = _load_collective_comm_only()
 COLLECTIVE_BULK_SERIES, COLLECTIVE_BULK_SUMMARY = _load_collective_bulk_speedups()
+COLLECTIVE_LATENCY_MAX_BYTES = 64 * 1024
+COLLECTIVE_BANDWIDTH_MIN_BYTES = 256 * 1024
 
 
 def _gemm_aggregation_label() -> str:
@@ -363,6 +373,59 @@ def _format_message_size_mib(value: float) -> str:
         if kib >= 1:
             return f"{kib:.0f} KiB"
     return f"{value:g} MiB"
+
+
+def _select_collective_points(
+    series: dict[str, list[float]],
+    *,
+    min_bytes: int | None = None,
+    max_bytes: int | None = None,
+) -> dict[str, list[float]]:
+    indices = [
+        idx
+        for idx, size_bytes in enumerate(series["size_bytes"])
+        if (min_bytes is None or size_bytes >= min_bytes)
+        and (max_bytes is None or size_bytes <= max_bytes)
+    ]
+    return {key: [values[idx] for idx in indices] for key, values in series.items()}
+
+
+def _collective_point_at_size(
+    series: dict[str, list[float]],
+    size_bytes: int,
+) -> dict[str, float] | None:
+    for idx, candidate in enumerate(series["size_bytes"]):
+        if int(candidate) == int(size_bytes):
+            return {
+                key: float(values[idx]) if key != "size_bytes" else int(values[idx])
+                for key, values in series.items()
+            }
+    return None
+
+
+def _metric_limits(
+    metric_keys: tuple[str, str],
+    *,
+    min_bytes: int | None = None,
+    max_bytes: int | None = None,
+) -> tuple[float, float]:
+    values: list[float] = []
+    for series in COLLECTIVE_SERIES.values():
+        subset = _select_collective_points(
+            series,
+            min_bytes=min_bytes,
+            max_bytes=max_bytes,
+        )
+        for key in metric_keys:
+            values.extend(float(value) for value in subset.get(key, []))
+
+    if not values:
+        return (0.0, 1.0)
+
+    lower = min(values)
+    upper = max(values)
+    span = max(upper - lower, upper * 0.03, 1e-6)
+    return (max(0.0, lower - span * 0.18), upper + span * 0.18)
 
 
 # ===================================================================
@@ -681,104 +744,190 @@ def fig6_collective_comm_only():
         return
 
     op_order = [
-        ("allreduce", "tile_allreduce"),
-        ("allgather", "tile_allgather"),
-        ("scatter", "tile_scatter"),
-        ("reduce_scatter", "tile_reduce_scatter"),
-        ("broadcast", "tile_broadcast"),
+        ("allreduce", "AllReduce"),
+        ("allgather", "AllGather"),
+        ("scatter", "Scatter"),
+        ("reduce_scatter", "ReduceScatter"),
+        ("broadcast", "Broadcast"),
     ]
+    small_sizes = [4 * 1024, 16 * 1024, 64 * 1024]
+    anchor_size = 256 * 1024
+    allreduce_large_sizes = [256 * 1024, 1024 * 1024, 2 * 1024 * 1024]
 
-    fig, axes = plt.subplots(2, 3, figsize=(10.6, 6.2), sharex=False, sharey=True)
-    axes = axes.flatten()
-    peak_xtile = []
-    peak_nccl = []
-    peak_labels = []
+    fig = plt.figure(figsize=(14.0, 6.2))
+    grid = fig.add_gridspec(
+        2,
+        10,
+        height_ratios=[1.0, 1.05],
+        hspace=0.42,
+        wspace=0.42,
+    )
+
+    latency_axes = []
+    for idx in range(len(op_order)):
+        sharey = latency_axes[0] if latency_axes else None
+        latency_axes.append(fig.add_subplot(grid[0, idx * 2:(idx + 1) * 2], sharey=sharey))
+    anchor_ax = fig.add_subplot(grid[1, :6])
+    sweep_ax = fig.add_subplot(grid[1, 6:])
+
+    small_x = np.arange(len(small_sizes))
+    small_labels = [_format_message_size_mib(size / (1024.0 * 1024.0)) for size in small_sizes]
+    latency_ylim = _metric_limits(("xtile_ms", "nccl_ms"), max_bytes=COLLECTIVE_LATENCY_MAX_BYTES)
 
     legend_handles = None
     legend_labels = None
-    for ax, (collective, title) in zip(axes[:5], op_order):
+    for idx, ((collective, title), ax) in enumerate(zip(op_order, latency_axes)):
         series = COLLECTIVE_SERIES.get(collective)
         if not series:
             ax.set_axis_off()
             continue
 
-        size_mib = series["size_mib"]
-        xtile_bw = series["xtile_bw"]
-        nccl_bw = series["nccl_bw"]
-        ratio = series["ratio"]
-        peak_xtile.append(max(xtile_bw))
-        peak_nccl.append(max(nccl_bw))
-        peak_labels.append(collective.replace("_", "\n"))
+        small_points = [_collective_point_at_size(series, size) for size in small_sizes]
+        if any(point is None for point in small_points):
+            ax.set_axis_off()
+            continue
 
-        ax.plot(size_mib, nccl_bw, "s--", color=COLORS[0], linewidth=1.4, markersize=4.5, label="NCCL")
-        ax.plot(size_mib, xtile_bw, "o-", color=COLORS[1], linewidth=1.6, markersize=4.5, label="XTile")
+        xtile_ms = [point["xtile_ms"] for point in small_points]
+        nccl_ms = [point["nccl_ms"] for point in small_points]
+
+        ax.plot(
+            small_x,
+            nccl_ms,
+            "s--",
+            color=COLORS[0],
+            linewidth=1.35,
+            markersize=4.5,
+            label="NCCL",
+        )
+        ax.plot(
+            small_x,
+            xtile_ms,
+            "o-",
+            color=COLORS[1],
+            linewidth=1.55,
+            markersize=4.5,
+            label="XTile",
+        )
+
         if legend_handles is None:
             legend_handles, legend_labels = ax.get_legend_handles_labels()
 
-        best_idx = int(np.argmax(ratio))
-        ax.text(
-            0.04,
-            0.93,
-            f"best {ratio[best_idx]:.2f}×",
-            transform=ax.transAxes,
-            ha="left",
-            va="top",
-            fontsize=7,
-            color=COLORS[1],
-            bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.88),
-        )
-        ax.set_xscale("log", base=2)
-        ax.set_xticks(size_mib)
-        ax.set_xticklabels([_format_message_size_mib(v) for v in size_mib], fontsize=8)
         ax.set_title(title, fontsize=11)
+        ax.set_xticks(small_x)
+        ax.set_xticklabels(small_labels, fontsize=8)
+        ax.set_ylim(*latency_ylim)
+        ax.grid(True, axis="y", alpha=0.25)
+        ax.grid(False, axis="x")
+        ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
         ax.set_xlabel("Message Size")
-        ax.grid(True, which="major", alpha=0.25)
+        if idx == 0:
+            ax.set_ylabel("Latency (ms)")
+        else:
+            ax.tick_params(axis="y", labelleft=False)
 
-    ymax = max(
-        max(max(series["xtile_bw"]), max(series["nccl_bw"]))
-        for series in COLLECTIVE_SERIES.values()
-    ) * 1.18
-    for ax in axes[:5]:
-        if ax.axison:
-            ax.set_ylim(0, ymax)
+    anchor_points = []
+    for collective, title in op_order:
+        series = COLLECTIVE_SERIES.get(collective)
+        point = _collective_point_at_size(series, anchor_size) if series else None
+        if point is None:
+            continue
+        anchor_points.append((title, point["xtile_bw"], point["nccl_bw"]))
 
-    axes[0].set_ylabel("Median Effective BW (GB/s)")
-    axes[3].set_ylabel("Median Effective BW (GB/s)")
-    axes[5].bar(
-        np.arange(len(peak_labels)) - 0.18,
-        peak_nccl,
-        width=0.36,
-        color=COLORS[0],
-        edgecolor="white",
-        linewidth=0.5,
-    )
-    axes[5].bar(
-        np.arange(len(peak_labels)) + 0.18,
-        peak_xtile,
-        width=0.36,
-        color=COLORS[1],
-        edgecolor="white",
-        linewidth=0.5,
-    )
-    axes[5].set_title("Peak BW Summary", fontsize=11)
-    axes[5].set_ylabel("Median Effective BW (GB/s)")
-    axes[5].set_xticks(np.arange(len(peak_labels)))
-    axes[5].set_xticklabels(peak_labels, fontsize=8)
-    axes[5].set_ylim(0, ymax)
+    if anchor_points:
+        x = np.arange(len(anchor_points))
+        width = 0.34
+        anchor_labels = []
+        xtile_bw = [item[1] for item in anchor_points]
+        nccl_bw = [item[2] for item in anchor_points]
+        for title, _, _ in anchor_points:
+            anchor_labels.append("Reduce\nScatter" if title == "ReduceScatter" else title)
+        anchor_ax.bar(
+            x - width / 2,
+            nccl_bw,
+            width,
+            color=COLORS[0],
+            edgecolor="white",
+            linewidth=0.5,
+            label="NCCL",
+        )
+        anchor_ax.bar(
+            x + width / 2,
+            xtile_bw,
+            width,
+            color=COLORS[1],
+            edgecolor="white",
+            linewidth=0.5,
+            label="XTile",
+        )
+        anchor_ax.set_xticks(x)
+        anchor_ax.set_xticklabels(anchor_labels, fontsize=9)
+        anchor_ax.set_ylabel("Bandwidth (GB/s)")
+        anchor_ax.set_xlabel("Collective")
+        anchor_ax.set_title("Bandwidth at 256 KiB")
+        anchor_ax.set_ylim(0, max(max(xtile_bw), max(nccl_bw)) * 1.18)
+        anchor_ax.grid(True, axis="y", alpha=0.25)
+        anchor_ax.grid(False, axis="x")
+        anchor_ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
+
+    allreduce_series = COLLECTIVE_SERIES.get("allreduce")
+    if allreduce_series:
+        sweep_points = [_collective_point_at_size(allreduce_series, size) for size in allreduce_large_sizes]
+        if all(point is not None for point in sweep_points):
+            sweep_x = np.arange(len(allreduce_large_sizes))
+            sweep_labels = [
+                _format_message_size_mib(size / (1024.0 * 1024.0))
+                for size in allreduce_large_sizes
+            ]
+            sweep_ax.plot(
+                sweep_x,
+                [point["nccl_bw"] for point in sweep_points],
+                "s--",
+                color=COLORS[0],
+                linewidth=1.35,
+                markersize=4.8,
+                label="NCCL",
+            )
+            sweep_ax.plot(
+                sweep_x,
+                [point["xtile_bw"] for point in sweep_points],
+                "o-",
+                color=COLORS[1],
+                linewidth=1.55,
+                markersize=4.8,
+                label="XTile",
+            )
+            sweep_ax.set_xticks(sweep_x)
+            sweep_ax.set_xticklabels(sweep_labels, fontsize=9)
+            sweep_ax.set_xlabel("Message Size")
+            sweep_ax.set_title("AllReduce Bandwidth Sweep")
+            sweep_ax.set_ylim(0, max(point["nccl_bw"] for point in sweep_points) * 1.18)
+            sweep_ax.grid(True, axis="y", alpha=0.25)
+            sweep_ax.grid(False, axis="x")
+            sweep_ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
 
     if legend_handles and legend_labels:
-        fig.legend(legend_handles, legend_labels, loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=2)
-    fig.suptitle("Communication-only Collectives: XTile vs NCCL", fontsize=14, y=1.02)
+        sweep_ax.legend(legend_handles, legend_labels, loc="upper left")
 
-    _save_with_footer(
-        fig,
-        "fig6_collective_comm_only",
-        benchmark_footer_text(
-            COLLECTIVE_PAYLOAD,
-            source_name="collective_comm_only_latest.json",
-            include_command=False,
-        ),
+    sns.despine(fig=fig)
+    fig.suptitle("Communication-only Collectives: Latency and Bandwidth", fontsize=14, y=0.995)
+    fig.subplots_adjust(left=0.055, right=0.99, top=0.88, bottom=0.18, wspace=0.55, hspace=0.5)
+
+    footer = benchmark_footer_text(
+        COLLECTIVE_PAYLOAD,
+        source_name="collective_comm_only_latest.json",
+        include_command=False,
     )
+    if footer:
+        fig.text(
+            0.5,
+            0.028,
+            textwrap.fill(footer, width=120),
+            ha="center",
+            va="bottom",
+            fontsize=6.2,
+            color="#555555",
+        )
+    _save(fig, "fig6_collective_comm_only")
 
 
 # ===================================================================

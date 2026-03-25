@@ -58,14 +58,22 @@ _COLLECTIVES = (
     "reduce_scatter",
     "broadcast",
 )
+_LARGE_MESSAGE_THRESHOLD_BYTES = 256 * 1024
+_VERY_LARGE_MESSAGE_THRESHOLD_BYTES = 1024 * 1024
+_LARGE_MESSAGE_WARMUP_CAP = 1
+_LARGE_MESSAGE_ITERS_CAP = 2
+_VERY_LARGE_MESSAGE_WARMUP_CAP = 0
+_VERY_LARGE_MESSAGE_ITERS_CAP = 1
 
 
 @dataclass(frozen=True)
 class _RunConfig:
     """Configuration for one comm-only benchmark run."""
 
+    collectives: tuple[str, ...]
     message_sizes_bytes: tuple[int, ...]
     dtype_name: str
+    timing_mode: str
     warmup: int
     iters: int
     world_size: int
@@ -86,8 +94,23 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--message-sizes",
         type=str,
-        default="4096,65536",
-        help="Comma-separated rank-local message sizes in bytes.",
+        default="4096,16384,65536,262144,1048576,2097152",
+        help=(
+            "Comma-separated rank-local message sizes in bytes. "
+            "Default spans small-message latency points through multi-MiB bandwidth points."
+        ),
+    )
+    parser.add_argument(
+        "--collectives",
+        type=str,
+        default=",".join(_COLLECTIVES),
+        help="Comma-separated subset of collectives to run.",
+    )
+    parser.add_argument(
+        "--timing-mode",
+        choices=["host_wall", "device_event"],
+        default="host_wall",
+        help="Measurement window to use for timed iterations.",
     )
     parser.add_argument("--warmup", type=int, default=3, help="Warmup iterations per case.")
     parser.add_argument("--iters", type=int, default=5, help="Timed iterations per case.")
@@ -139,6 +162,21 @@ def _parse_message_sizes(raw: str, *, element_size: int, world_size: int) -> tup
     return tuple(sorted(set(sizes)))
 
 
+def _parse_collectives(raw: str) -> tuple[str, ...]:
+    selected: list[str] = []
+    for token in raw.split(","):
+        item = token.strip()
+        if not item:
+            continue
+        if item not in _COLLECTIVES:
+            allowed = ", ".join(_COLLECTIVES)
+            raise ValueError(f"unsupported collective {item!r}; expected one of {allowed}")
+        selected.append(item)
+    if not selected:
+        raise ValueError("at least one collective is required")
+    return tuple(dict.fromkeys(selected))
+
+
 def _block_elements(*, collective: str, size_bytes: int, dtype: torch.dtype, world_size: int) -> int:
     element_size = torch.tensor([], dtype=dtype).element_size()
     if collective == "allreduce":
@@ -182,12 +220,30 @@ def _bandwidth_summary(
     }
 
 
+def _sampling_budget_for_size(
+    *,
+    size_bytes: int,
+    warmup: int,
+    iters: int,
+) -> tuple[int, int]:
+    """Return a size-aware timing budget for one benchmark case."""
+    if size_bytes < _LARGE_MESSAGE_THRESHOLD_BYTES:
+        return warmup, iters
+    if size_bytes >= _VERY_LARGE_MESSAGE_THRESHOLD_BYTES:
+        return min(warmup, _VERY_LARGE_MESSAGE_WARMUP_CAP), min(
+            iters,
+            _VERY_LARGE_MESSAGE_ITERS_CAP,
+        )
+    return min(warmup, _LARGE_MESSAGE_WARMUP_CAP), min(iters, _LARGE_MESSAGE_ITERS_CAP)
+
+
 def _timed_collective(
     fn,
     *,
     prepare_fn,
     rank: int,
     barrier_kwargs: dict[str, object],
+    timing_mode: str,
     warmup: int,
     iters: int,
 ) -> list[float]:
@@ -195,7 +251,9 @@ def _timed_collective(
         prepare_fn()
         torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
-        fn()
+        result = fn()
+        if hasattr(result, "wait"):
+            result.wait()
         torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
 
@@ -204,14 +262,28 @@ def _timed_collective(
         prepare_fn()
         torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
-        # Measure the public collective as the caller observes it:
-        # launch/rendezvous plus device completion on this rank.
-        start_ns = time.perf_counter_ns()
-        fn()
-        torch.cuda.synchronize(rank)
-        end_ns = time.perf_counter_ns()
+        if timing_mode == "device_event":
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+            result = fn()
+            if hasattr(result, "wait"):
+                result.wait()
+            end.record()
+            torch.cuda.synchronize(rank)
+            elapsed_ms = float(start.elapsed_time(end))
+        else:
+            # Measure the public collective as the caller observes it:
+            # launch/rendezvous plus device completion on this rank.
+            start_ns = time.perf_counter_ns()
+            result = fn()
+            if hasattr(result, "wait"):
+                result.wait()
+            torch.cuda.synchronize(rank)
+            end_ns = time.perf_counter_ns()
+            elapsed_ms = float(end_ns - start_ns) / 1_000_000.0
         dist.barrier(**barrier_kwargs)
-        times_ms.append(float(end_ns - start_ns) / 1_000_000.0)
+        times_ms.append(elapsed_ms)
     return times_ms
 
 
@@ -389,8 +461,9 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
         nccl_broadcast = torch.empty_like(xt_broadcast)
 
         results: list[dict[str, Any]] = []
-        for collective in _COLLECTIVES:
+        for collective in config.collectives:
             for size_bytes in config.message_sizes_bytes:
+                nccl_async = config.timing_mode == "device_event"
                 block_elements = _block_elements(
                     collective=collective,
                     size_bytes=size_bytes,
@@ -398,6 +471,11 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     world_size=config.world_size,
                 )
                 allreduce_plan = None
+                case_warmup, case_iters = _sampling_budget_for_size(
+                    size_bytes=size_bytes,
+                    warmup=config.warmup,
+                    iters=config.iters,
+                )
 
                 if collective == "allreduce":
                     total_elements = block_elements
@@ -412,7 +490,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         _fill_allreduce_input(nccl_view, rank=rank)
 
                     xtile_fn = lambda: primitive_allreduce(xt_view, heap)
-                    nccl_fn = lambda: dist.all_reduce(nccl_view)
+                    nccl_fn = lambda: dist.all_reduce(nccl_view, async_op=nccl_async)
                     expected_xt = _expected_allreduce(xt_view, world_size=config.world_size)
                     expected_nccl = _expected_allreduce(nccl_view, world_size=config.world_size)
 
@@ -429,7 +507,11 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         _fill_allgather_input(nccl_src, nccl_dst, rank=rank)
 
                     xtile_fn = lambda: primitive_allgather(xt_src, xt_dst, heap)
-                    nccl_fn = lambda: dist.all_gather_into_tensor(nccl_dst, nccl_src)
+                    nccl_fn = lambda: dist.all_gather_into_tensor(
+                        nccl_dst,
+                        nccl_src,
+                        async_op=nccl_async,
+                    )
                     expected_xt = _expected_allgather(
                         xt_dst,
                         world_size=config.world_size,
@@ -484,6 +566,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         nccl_dst,
                         scatter_list=nccl_scatter_list,
                         src=config.root,
+                        async_op=nccl_async,
                     )
                     expected_xt = _expected_scatter_or_broadcast(
                         xt_dst,
@@ -530,7 +613,11 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         heap,
                         implementation="device",
                     )
-                    nccl_fn = lambda: dist.reduce_scatter_tensor(nccl_dst, nccl_src)
+                    nccl_fn = lambda: dist.reduce_scatter_tensor(
+                        nccl_dst,
+                        nccl_src,
+                        async_op=nccl_async,
+                    )
                     expected_xt = _expected_reduce_scatter(
                         xt_dst,
                         rank=rank,
@@ -553,7 +640,11 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         _fill_broadcast_input(nccl_view, rank=rank, root=config.root)
 
                     xtile_fn = lambda: primitive_broadcast(xt_view, heap, root=config.root)
-                    nccl_fn = lambda: dist.broadcast(nccl_view, src=config.root)
+                    nccl_fn = lambda: dist.broadcast(
+                        nccl_view,
+                        src=config.root,
+                        async_op=nccl_async,
+                    )
                     expected_xt = _expected_scatter_or_broadcast(
                         xt_view,
                         rank=rank,
@@ -591,16 +682,18 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     prepare_fn=prepare_xtile,
                     rank=rank,
                     barrier_kwargs=barrier_kwargs,
-                    warmup=config.warmup,
-                    iters=config.iters,
+                    timing_mode=config.timing_mode,
+                    warmup=case_warmup,
+                    iters=case_iters,
                 )
                 nccl_times_ms = _timed_collective(
                     nccl_fn,
                     prepare_fn=prepare_nccl,
                     rank=rank,
                     barrier_kwargs=barrier_kwargs,
-                    warmup=config.warmup,
-                    iters=config.iters,
+                    timing_mode=config.timing_mode,
+                    warmup=case_warmup,
+                    iters=case_iters,
                 )
 
                 if collective == "allreduce":
@@ -624,6 +717,12 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         "collective": collective,
                         "size_bytes": size_bytes,
                         "block_elements": block_elements,
+                        "timing_budget": {
+                            "warmup": case_warmup,
+                            "iters": case_iters,
+                            "size_adaptive": bool(size_bytes >= _LARGE_MESSAGE_THRESHOLD_BYTES),
+                            "timing_mode": config.timing_mode,
+                        },
                         "xtile": {
                             **xtile_result,
                             "times_ms": xtile_times_ms,
@@ -839,6 +938,7 @@ def main() -> None:
         raise SystemExit("--iters must be > 0")
 
     dtype = _resolve_dtype(args.dtype)
+    collectives = _parse_collectives(args.collectives)
     message_sizes_bytes = _parse_message_sizes(
         args.message_sizes,
         element_size=torch.tensor([], dtype=dtype).element_size(),
@@ -849,8 +949,10 @@ def main() -> None:
     heap_size_bytes = max(512 * 1024 * 1024, max_message_bytes * 12)
 
     config = _RunConfig(
+        collectives=collectives,
         message_sizes_bytes=message_sizes_bytes,
         dtype_name=args.dtype,
+        timing_mode=str(args.timing_mode),
         warmup=int(args.warmup),
         iters=int(args.iters),
         world_size=world_size,
@@ -867,8 +969,10 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="xtile_collective_comm_rank_") as temp_output_dir:
         run_config = _RunConfig(
+            collectives=config.collectives,
             message_sizes_bytes=config.message_sizes_bytes,
             dtype_name=config.dtype_name,
+            timing_mode=config.timing_mode,
             warmup=config.warmup,
             iters=config.iters,
             world_size=config.world_size,
@@ -941,12 +1045,29 @@ def main() -> None:
             "gpu_name": torch.cuda.get_device_name(0),
             "visible_gpus": torch.cuda.device_count(),
             "world_size": world_size,
+            "collectives": list(collectives),
             "dtype": args.dtype,
+            "timing_mode": str(args.timing_mode),
             "warmup": int(args.warmup),
             "iters": int(args.iters),
             "message_sizes_bytes": list(message_sizes_bytes),
             "transport_strategy": transport_strategy,
-            "latency_measurement": "host_wall_end_to_end_with_cuda_completion",
+            "latency_measurement": (
+                "host_wall_end_to_end_with_cuda_completion"
+                if args.timing_mode == "host_wall"
+                else "device_event_collective_completion"
+            ),
+            "sampling_policy": {
+                "mode": "size_adaptive",
+                "base_warmup": int(args.warmup),
+                "base_iters": int(args.iters),
+                "large_message_threshold_bytes": _LARGE_MESSAGE_THRESHOLD_BYTES,
+                "very_large_message_threshold_bytes": _VERY_LARGE_MESSAGE_THRESHOLD_BYTES,
+                "large_message_warmup_cap": _LARGE_MESSAGE_WARMUP_CAP,
+                "large_message_iters_cap": _LARGE_MESSAGE_ITERS_CAP,
+                "very_large_message_warmup_cap": _VERY_LARGE_MESSAGE_WARMUP_CAP,
+                "very_large_message_iters_cap": _VERY_LARGE_MESSAGE_ITERS_CAP,
+            },
         },
         "bandwidth_definition": {
             "allreduce": "2*(world_size-1)/world_size * rank_local_bytes / latency",
@@ -963,7 +1084,7 @@ def main() -> None:
     }
     written = write_json(output_path, payload)
     print(f"Structured results written to: {written}", flush=True)
-    for collective in _COLLECTIVES:
+    for collective in collectives:
         collective_cases = [case for case in cases if case["collective"] == collective]
         if not collective_cases:
             continue

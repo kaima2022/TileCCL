@@ -20,6 +20,7 @@
 | Comm-only collectives | 纯通信 collective 相对 NCCL 的当前差距 | `figures/data/collective_comm_only_latest.json` |
 | Collective vs bulk_sync | XTile collective 相对本仓库 `bulk_sync` 的收益 | `figures/data/collective_bulk_sync_latest.json` |
 | 自动摘要 | 汇总运行时、拓扑和 headline 指标 | `docs/generated/benchmark_runtime_summary.md` |
+| 实验注意事项 | benchmark 口径、防踩坑 checklist | `docs/benchmark_experiment_notes.md` |
 
 ## 当前有效结论
 
@@ -49,4 +50,3 @@
 - multiprocess 正式 baseline 目前只应写 `world_size=2 + ctypes_ipc`。
 - `pytorch_ipc` 和 `peer_access_pointer_exchange` 不能写成“已支持”，当前仍是诊断路径。
 - comm-only collective 的性能结论应与 `single_process + peer_access` 的 overlap/GEMM 结论分开写，不能混为同一条 headline。
-
