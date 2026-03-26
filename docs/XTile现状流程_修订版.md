@@ -30,6 +30,22 @@ M=8192, N=4608, K=36864, 4 GPUs.
 
 ## 第 1 层：用户代码
 
+### 当前公开入口总览
+
+当前仓库里与 XTile 主流程直接相关的公开入口，至少包括：
+
+- `xtile.init(...)`、`xtile.init_local(...)`、`xtile.current_context()`
+- `xtile.ops.gemm_allscatter(...)`、`xtile.ops.gemm_allscatter_sharded(...)`
+- `xtile.ops.gemm_allgather(...)`、`xtile.ops.gemm_reducescatter(...)`
+- `xtile.ops.allgather(...)`、`xtile.ops.allreduce(...)`、`xtile.ops.reduce_scatter(...)`
+- `ctx.empty(...)`、`ctx.zeros(...)`、`ctx.randn(...)`、`ctx.workspace(...)`
+- `ctx.auto_select_pattern(...)` 与 `xtile.patterns.auto_select(...)`
+
+这里有两条口径必须写死，避免后面文档继续漂移：
+
+- `ctx.randn(...)`、`ctx.empty(...)`、`ctx.zeros(...)` 都是当前真实 API，不是示意写法。
+- 仓库中不存在 `xtile.fused_gemm_scatter(...)` 这个公开名字；当前稳定主入口仍然是 `xtile.ops.gemm_allscatter(...)`。
+
 ### 实际源码（方式 A：当前推荐用户入口，高层 API）
 
 这部分直接贴当前 `xtile/ops.py` 里的真实入口实现。当前推荐用户入口仍是 `xtile.ops.gemm_allscatter(...)`，其内部已经升级成“build plan -> execute plan”的主链：
@@ -104,6 +120,15 @@ plan.execute(A, B, C)
 
 需要特别注意：benchmark 路径已经**不再依赖 `B.shape[1]` 隐式猜 full-N**；并且 benchmark / CLI helper / 高层 op 现在已经开始共享同一条 `build_gemm_allscatter_plan(...)` 主链。
 
+### 补充：expert / internal 路径仍然存在
+
+除了默认 public `xtile.ops.*` 主链，当前仓库里还有两条真实但更偏 expert/internal 的使用方式：
+
+- 可以直接 `build_gemm_allscatter_plan(...)` 后重复 `plan.execute(...)`，这不是过时残留，而是稳定可复用的 host-side plan 路径。
+- 可以通过 `xtile.patterns.auto_select(...)` 或 `ctx.auto_select_pattern(...)` 拿到具体 pattern，再直接 `pattern.execute(...)`；只是它现在不再应被文档写成“默认 public 入口”。
+
+另外，`xtile.ops.gemm_allscatter_sharded(...)` 仍然是明确存在的 expert `shard/shard` 契约，不应在文档里被省略成“只有 full/full 一条路”。
+
 ### 当前状态与边界
 
 | 主题 | 当前状态 | 当前边界 |
@@ -127,9 +152,31 @@ plan.execute(A, B, C)
 
 这几类入口现在都走 `build_*_plan(...) -> plan.execute(...)` 主链，而不是继续依赖调用方手工拼 `pattern.execute(...)`。当前真正保守处理的边界，不是“有没有 API”，而是 multiprocess 正式支持面仍只收口到 `world_size=2 + ctypes_ipc`。
 
+还要补一条实现层面的事实：当前 `gemm_allscatter(...)` 仍然是 pattern-centric 主路径；而 `gemm_allgather(...)` / `gemm_reducescatter(...)` 虽然也已有稳定公开 host API，但实现上更保守，分别复用验证过的 `allgather` / `reduce_scatter` 主链，而不是统一走 Triton fused overlap pattern auto-select。
+
+因此，当前第 1 层更准确的结构应当理解为：
+
+- 高层 host op
+- reusable plan
+- overlap pattern
+- device primitives
+
+也就是说，用户表面上看到的是 `xtile.ops.*`，但真正落到设备侧仍然是“plan 解析 contract，再由 pattern 或 collective launcher 驱动 primitives 执行”。
+
 ---
 
 ## 第 2 层：Pattern 层（以 FusedSequential 为例）
+
+### 当前真实可选的 overlap pattern 家族
+
+当前仓库里真正可选的 overlap pattern 不是抽象占位，而是下面四个具体类：
+
+- `BulkSyncPattern`：先跑 GEMM kernel，再 `backend.synchronize()`，再跑 scatter kernel。
+- `FusedSequentialPattern`：单个 fused persistent Triton kernel，计算完 tile 后直接 scatter。
+- `ProducerConsumerPattern`：两条 stream 上分别跑 producer / consumer kernel，用 lock tensor 同步。
+- `WGSpecializedPattern`：单个 kernel 内划分计算 workgroup 与通信 workgroup，`pid < COMPUTE_SMS` 做计算，其余 workgroup 做通信。
+
+因此，XTile 当前 pattern 层不是“只有 fused kernel 一条路”，而是已经形成了可显式选择、也可 auto-select 的四类真实执行形态。
 
 ### 实际源码：显式 execution contract
 
@@ -320,9 +367,77 @@ for tile_id in range(pid, total_tiles, NUM_SMS):
 - full/shard 语义已经提升成显式 host-side contract，不再依赖 pattern 内部猜 `B.shape[1]`
 - 当前仍未完全收敛的，是默认 public API 是否全部走 `xtile.ops.*`，以及是否继续保留多种输出 layout 模型
 
+### 编译可见性补充
+
+这部分要说得更准确一点：XTile 当前并没有像 Triton-distributed 那样再额外引入一层 distributed dialect。
+
+host 侧主链更接近下面这种形态：
+
+```text
+xtile.ops.* / build_*_plan(...)
+  -> 校验 tensor contract
+  -> 解析 layout / storage_kind
+  -> 选择 pattern（显式指定或 auto-select）
+  -> 启动普通 Triton kernel / collective launcher
+```
+
+device 侧则仍然是标准 Triton `@triton.jit` 函数组合：
+
+- `translate_ptr(...)`
+- `tile_remote_load/store(...)`
+- `tile_put/get(...)`
+- `tile_signal / tile_wait / tile_atomic_*`
+
+更准确的说法不是“编译器已经自动做完了跨 GPU 调度优化”，而是：**当前通信在 IR 形态上仍是 Triton 可见的 `load/store/atomic` 组合**，没有额外的 distributed IR 黑盒边界。
+
 ---
 
 ## 第 3 层：通信底层
+
+### 当前 device-side primitives 分组与语义
+
+当前仓库里的 device-side 通信原语，主要可以分成三组：
+
+```python
+from xtile.memory.translation import translate_ptr
+
+from xtile.primitives.communication import (
+    tile_remote_load,
+    tile_remote_store,
+    tile_put,
+    tile_get,
+)
+
+from xtile.sync.primitives import (
+    tile_atomic_add,
+    tile_atomic_cas,
+    tile_atomic_xchg,
+    tile_atomic_min,
+    tile_atomic_max,
+    tile_atomic_and,
+    tile_atomic_or,
+    tile_atomic_xor,
+    tile_signal,
+    tile_wait,
+)
+
+from xtile.primitives.collectives import (
+    tile_allreduce,
+    tile_allgather,
+    tile_scatter,
+    tile_reduce_scatter,
+    tile_broadcast,
+)
+```
+
+它们的语义应当这样理解：
+
+- `translate_ptr` 是核心地址翻译层，把一个 rank 的 heap 内指针映射成另一个 rank 可解引用的地址。
+- `tile_remote_load/store` 是寄存器和远端显存之间的 value-based 读写。
+- `tile_put/get` 是本地显存和远端显存之间的 pointer-based 拷贝。
+- `tile_atomic_*` 是“可远端”的 atomic，内部会先做 `translate_ptr`。
+- `tile_signal` / `tile_wait` 默认是本地同步原语，本身不做指针翻译；如果要跨 GPU 对锁地址操作，必须先把锁指针翻译到本 rank 地址空间。
+- `tile_allreduce`、`tile_allgather`、`tile_scatter`、`tile_reduce_scatter`、`tile_broadcast` 都已有真实 device-side 实现。
 
 ### 实际 scatter_tile_to_peer 实现
 
@@ -383,6 +498,28 @@ def translate_ptr(ptr, from_rank, to_rank, heap_bases, HINT: tl.constexpr = 0):
 ---
 
 ## 第 4 层：内存建立
+
+### 用户入口视角：两条真实内存建立路径
+
+如果从用户 API 视角总结，第 4 层当前明确分成两条路径：
+
+```python
+# 路径 A：单进程多 GPU
+contexts = xtile.init_local(world_size=2, heap_size=1 << 30)
+# 内部走 SymmetricHeap.create_all(...)
+# -> enable_peer_access
+# -> 直接交换 peer bases
+# -> heap.mode = "single_process"
+# -> transport_strategy = "peer_access"
+
+# 路径 B：rank-local / 多进程
+ctx = xtile.init(backend="auto", heap_size=1 << 30)
+# 如果 world_size > 1，这条路径要求 torch.distributed 已经初始化
+# 内部 heap.mode = "multiprocess"
+# 当前默认公开 transport 是 ctypes_ipc
+```
+
+`xtile.current_context()` 只是返回当前 attached ctx；真正决定 symmetric heap 建立方式的，仍然是 `init_local(...)` 还是 `init(...)`。
 
 ### 模式 A：单进程 — SymmetricHeap.create_all（推荐）
 
@@ -563,6 +700,25 @@ def _setup_multiprocess(self):
 
 ## 第 5 层：硬件执行
 
+从抽象上说，这一层应当先理解成：
+
+```text
+kernel 内部：
+  local ptr
+    -> translate_ptr(...)
+    -> remote-accessible ptr
+    -> tl.load / tl.store / tl.atomic_*
+
+运行时前提：
+  single_process: peer_access
+  multiprocess: imported peer mapping / IPC transport
+
+硬件实际路由：
+  由 backend、heap mode、transport_strategy、机器拓扑共同决定
+```
+
+也就是说，第 5 层真正统一下来的表达不是“调用一个黑盒通信库”，而是：**翻译后的远端地址 + Triton memory op**。host/runtime 负责把远端 heap 建成当前 GPU 可解引用的地址；真正走 NVLink、PCIe、Infinity Fabric 还是其他互连，则取决于运行环境与拓扑。
+
 ```
   GPU0 上的 warp 执行 tl.store(translated_ptr, tile_data, cache_modifier=".wt")
     │
@@ -592,7 +748,7 @@ P2P benchmark 最新 canonical serial rerun 显示 best read ≈ 248.74 GB/s、b
 ```python
 # xtile/patterns/auto_select.py
 
-def auto_select(op, M, N, K, world_size, ctx=None):
+def auto_select(op, M, N, K, world_size, hw_info=None, ctx=None):
     sm_count, bw = _detect_hardware_info()
     bw_scale = bw / 300.0
 
@@ -622,6 +778,8 @@ def auto_select(op, M, N, K, world_size, ctx=None):
 
 当前实现需要明确补两点：
 - `auto_select(...)` 当前识别的 op 名包括 `gemm_allscatter`、`gemm_allgather`、`gemm_reducescatter`，不是 `gemm_scatter`；其中 `gemm_reducescatter(...)` 现已具备稳定 host-side public contract，但当前并不走 Triton fused pattern auto-select，而是“local GEMM materialize + packed reduce_scatter”主链。
+- 传 `ctx` 时，`auto_select(...)` 返回“已绑定上下文的 pattern 实例”；不传 `ctx` 时，返回 pattern 类本身。这意味着它既能用于 `xtile.ops.*` 内部，也能用于 expert 手工持有 pattern 的路径。
+- `hw_info` 不是伪参数；它会参与阈值缩放，默认不传时才回落到当前机器的硬件探测。
 - 对本例 `N=4608, world_size=4`，`n_per_rank = 1152`，不会命中 `fused_sequential` 的 `< 1024` 分支，而会更接近 `producer_consumer` 分支。
 - 当前实现还带 `compute_intensity` 与 `N > 4096` 的补充分支，不只依赖少量固定规则。
 
