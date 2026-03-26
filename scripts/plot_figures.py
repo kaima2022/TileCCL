@@ -773,6 +773,12 @@ def fig6_collective_comm_only():
     small_x = np.arange(len(small_sizes))
     small_labels = [_format_message_size_mib(size / (1024.0 * 1024.0)) for size in small_sizes]
     latency_ylim = _metric_limits(("xtile_ms", "nccl_ms"), max_bytes=COLLECTIVE_LATENCY_MAX_BYTES)
+    latency_center = 0.5 * (latency_ylim[0] + latency_ylim[1])
+    latency_span = max(latency_ylim[1] - latency_ylim[0], 0.20)
+    latency_ylim = (
+        max(0.0, latency_center - 0.5 * latency_span),
+        latency_center + 0.5 * latency_span,
+    )
 
     legend_handles = None
     legend_labels = None
@@ -812,12 +818,27 @@ def fig6_collective_comm_only():
         if legend_handles is None:
             legend_handles, legend_labels = ax.get_legend_handles_labels()
 
+        mean_delta_pct = (float(np.mean(xtile_ms)) / max(float(np.mean(nccl_ms)), 1e-9) - 1.0) * 100.0
+        delta_direction = "higher" if mean_delta_pct >= 0 else "lower"
+        ax.text(
+            0.04,
+            0.93,
+            f"{abs(mean_delta_pct):.2f}% {delta_direction} vs NCCL",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=7.5,
+            color=COLORS[1],
+            bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.88),
+        )
+
         ax.set_title(title, fontsize=11)
         ax.set_xticks(small_x)
         ax.set_xticklabels(small_labels, fontsize=8)
         ax.set_ylim(*latency_ylim)
         ax.grid(True, axis="y", alpha=0.25)
         ax.grid(False, axis="x")
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(0.05))
         ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
         ax.set_xlabel("Message Size")
         if idx == 0:
@@ -834,65 +855,53 @@ def fig6_collective_comm_only():
         anchor_points.append((title, point["xtile_bw"], point["nccl_bw"]))
 
     if anchor_points:
-        y = np.arange(len(anchor_points))
+        x = np.arange(len(anchor_points))
+        width = 0.34
         anchor_labels = []
         xtile_bw = [item[1] for item in anchor_points]
         nccl_bw = [item[2] for item in anchor_points]
         for title, _, _ in anchor_points:
             anchor_labels.append("Reduce\nScatter" if title == "ReduceScatter" else title)
-        minima = [min(xt, nc) for xt, nc in zip(xtile_bw, nccl_bw)]
-        maxima = [max(xt, nc) for xt, nc in zip(xtile_bw, nccl_bw)]
-
-        anchor_ax.hlines(
-            y,
-            minima,
-            maxima,
-            color="#B8B8B8",
-            linewidth=1.1,
-            zorder=1,
-        )
-        anchor_ax.plot(
+        anchor_ax.bar(
+            x - width / 2,
             nccl_bw,
-            y,
-            "s",
+            width,
             color=COLORS[0],
-            markersize=6.2,
+            edgecolor="white",
+            linewidth=0.5,
             label="NCCL",
-            zorder=3,
         )
-        anchor_ax.plot(
+        anchor_ax.bar(
+            x + width / 2,
             xtile_bw,
-            y,
-            "o",
+            width,
             color=COLORS[1],
-            markersize=6.2,
+            edgecolor="white",
+            linewidth=0.5,
             label="XTile",
-            zorder=4,
         )
-        anchor_ax.set_yticks(y)
-        anchor_ax.set_yticklabels(anchor_labels, fontsize=9)
-        anchor_ax.invert_yaxis()
-        anchor_ax.set_ylabel("Collective")
-        anchor_ax.set_xlabel("Bandwidth (GB/s, log scale)")
         anchor_ax.set_title("Bandwidth at 256 KiB")
-        anchor_ax.set_xscale("log")
-        anchor_ax.set_xlim(min(minima) * 0.7, max(maxima) * 1.35)
-        anchor_ax.grid(True, axis="x", which="major", alpha=0.25)
-        anchor_ax.grid(False, axis="y")
-        anchor_ax.xaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
+        anchor_ax.set_ylabel("Bandwidth (GB/s)")
+        anchor_ax.set_xticks(x)
+        anchor_ax.set_xticklabels(anchor_labels, fontsize=9)
+        anchor_ax.set_xlabel("Collective")
+        anchor_ax.set_ylim(0.0, max(max(xtile_bw), max(nccl_bw)) * 1.18)
+        anchor_ax.grid(True, axis="y", alpha=0.25)
+        anchor_ax.grid(False, axis="x")
+        anchor_ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
 
         reduce_scatter_idx = next(
             (idx for idx, label in enumerate(anchor_labels) if label == "Reduce\nScatter"),
             None,
         )
         if reduce_scatter_idx is not None:
-            anchor_ax.annotate(
+            y_offset = max(anchor_ax.get_ylim()[1] * 0.02, 0.0015)
+            anchor_ax.text(
+                x[reduce_scatter_idx] + width / 2,
+                xtile_bw[reduce_scatter_idx] + y_offset,
                 f"{xtile_bw[reduce_scatter_idx]:.5f}",
-                xy=(xtile_bw[reduce_scatter_idx], y[reduce_scatter_idx]),
-                xytext=(8, 0),
-                textcoords="offset points",
-                ha="left",
-                va="center",
+                ha="center",
+                va="bottom",
                 fontsize=8,
                 color=COLORS[1],
             )
