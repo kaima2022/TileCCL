@@ -40,10 +40,64 @@ from xtile.utils.feature_gates import (
 # Maximum supported world_size for collective operations.
 # Determined by tl.static_range upper bound (Triton unrolls statically).
 MAX_COLLECTIVE_WORLD_SIZE = 33
+_ALLREDUCE_LATENCY_MESSAGE_BYTES = 8 * 1024
+_ALLREDUCE_BANDWIDTH_MESSAGE_BYTES = 256 * 1024
 _ALLREDUCE_TARGET_CHUNK_BYTES = 16 * 1024
 _ALLREDUCE_MIN_CHUNK_ELEMS = 256
 _ALLREDUCE_MAX_CHUNK_ELEMS = 4096
-_ALLREDUCE_MAX_PIPELINE_SLOTS = 8
+_ALLREDUCE_MAX_THROUGHPUT_PIPELINE_SLOTS = 4
+_ALLREDUCE_MAX_BANDWIDTH_PIPELINE_SLOTS = 16
+
+
+@dataclass(frozen=True, slots=True)
+class _AllReduceRegimePolicy:
+    """Stable tuning policy for one allreduce message regime."""
+
+    message_regime: str
+    implementation: str
+    protocol: str
+    target_chunk_bytes: int
+    min_chunk_elems: int
+    max_chunk_elems: int
+    max_pipeline_slots: int
+    small_chunk_num_warps: int
+    large_chunk_num_warps: int
+    large_chunk_threshold_elems: int = 1024
+
+
+_ALLREDUCE_LATENCY_POLICY = _AllReduceRegimePolicy(
+    message_regime="latency",
+    implementation="device_single_slot_staged",
+    protocol="single_slot_epoch_staged",
+    target_chunk_bytes=_ALLREDUCE_LATENCY_MESSAGE_BYTES,
+    min_chunk_elems=1,
+    max_chunk_elems=_ALLREDUCE_MAX_CHUNK_ELEMS,
+    max_pipeline_slots=1,
+    small_chunk_num_warps=2,
+    large_chunk_num_warps=4,
+)
+_ALLREDUCE_THROUGHPUT_POLICY = _AllReduceRegimePolicy(
+    message_regime="throughput",
+    implementation="device_staged_pipeline",
+    protocol="slot_epoch_pipeline",
+    target_chunk_bytes=_ALLREDUCE_TARGET_CHUNK_BYTES,
+    min_chunk_elems=_ALLREDUCE_MIN_CHUNK_ELEMS,
+    max_chunk_elems=_ALLREDUCE_MAX_CHUNK_ELEMS,
+    max_pipeline_slots=_ALLREDUCE_MAX_THROUGHPUT_PIPELINE_SLOTS,
+    small_chunk_num_warps=4,
+    large_chunk_num_warps=4,
+)
+_ALLREDUCE_BANDWIDTH_POLICY = _AllReduceRegimePolicy(
+    message_regime="bandwidth",
+    implementation="device_staged_pipeline",
+    protocol="slot_epoch_pipeline",
+    target_chunk_bytes=_ALLREDUCE_TARGET_CHUNK_BYTES,
+    min_chunk_elems=_ALLREDUCE_MIN_CHUNK_ELEMS,
+    max_chunk_elems=_ALLREDUCE_MAX_CHUNK_ELEMS,
+    max_pipeline_slots=_ALLREDUCE_MAX_BANDWIDTH_PIPELINE_SLOTS,
+    small_chunk_num_warps=4,
+    large_chunk_num_warps=8,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,9 +105,16 @@ class AllReduceExecutionSpec:
     """Resolved execution contract for the public allreduce launcher."""
 
     op: str
+    world_size: int
     implementation: str
     protocol: str
+    kernel_family: str
+    reuse_handshake: str
     tensor_numel: int
+    message_bytes: int
+    message_regime: str
+    cta_policy: str
+    epoch_policy: str
     block_size: int
     chunk_elems: int
     num_chunks: int
@@ -66,9 +127,16 @@ class AllReduceExecutionSpec:
         """Serialize the resolved execution contract for logs and benchmarks."""
         return {
             "op": self.op,
+            "world_size": self.world_size,
             "implementation": self.implementation,
             "protocol": self.protocol,
+            "kernel_family": self.kernel_family,
+            "reuse_handshake": self.reuse_handshake,
             "tensor_numel": self.tensor_numel,
+            "message_bytes": self.message_bytes,
+            "message_regime": self.message_regime,
+            "cta_policy": self.cta_policy,
+            "epoch_policy": self.epoch_policy,
             "block_size": self.block_size,
             "chunk_elems": self.chunk_elems,
             "num_chunks": self.num_chunks,
@@ -85,7 +153,7 @@ class _AllReduceWorkspace:
 
     staging: torch.Tensor
     published_epoch: torch.Tensor
-    consumed_count: torch.Tensor
+    slot_sync_state: torch.Tensor
     next_epoch: int = 0
 
     def reserve_epoch_range(self, num_chunks: int) -> int:
@@ -505,7 +573,7 @@ def _allreduce_staged_kernel(
     tensor_ptr,
     staging_ptr,
     published_epoch_ptr,
-    consumed_count_ptr,
+    slot_sync_state_ptr,
     heap_bases_ptr,
     rank,
     world_size,
@@ -548,7 +616,7 @@ def _allreduce_staged_kernel(
 
         staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
         published_slot_ptr = published_epoch_ptr + slot
-        consumed_slot_ptr = consumed_count_ptr + slot
+        consumed_slot_ptr = slot_sync_state_ptr + slot
 
         tl.store(staging_slot_ptr + offsets, local_values, mask=mask)
         tl.atomic_xchg(consumed_slot_ptr, 0, sem="release", scope="sys")
@@ -606,15 +674,112 @@ def _allreduce_staged_kernel(
 
         tl.store(tensor_ptr + idx, reduced, mask=mask)
 
-        expected_consumers = world_size - 1
+        if chunk_idx + num_slots < num_chunks:
+            expected_consumers = world_size - 1
+            while tl.atomic_cas(
+                consumed_slot_ptr,
+                expected_consumers,
+                expected_consumers,
+                sem="acquire",
+                scope="sys",
+            ) != expected_consumers:
+                pass
+
+        chunk_idx += num_slots
+
+
+@triton.jit
+def _allreduce_staged_kernel_ws2(
+    tensor_ptr,
+    staging_ptr,
+    published_epoch_ptr,
+    slot_sync_state_ptr,
+    heap_bases_ptr,
+    rank,
+    numel,
+    num_chunks,
+    num_slots,
+    base_epoch,
+    BLOCK_SIZE: tl.constexpr,
+    op: tl.constexpr = "sum",
+):
+    """World-size-2 fast path for the staged allreduce launcher.
+
+    The current validated public multiprocess surface is ``world_size=2``.
+    This kernel specializes that case so the hot path does not pay for the
+    generic peer loop or count-based reuse handshake. One peer means one
+    direct remote publish wait, one remote load, and one epoch ack.
+    """
+    pid = tl.program_id(0)
+    if pid >= num_slots:
+        return
+
+    offsets = tl.arange(0, BLOCK_SIZE)
+    slot = pid
+    chunk_idx = pid
+    peer_rank = 1 - rank
+
+    while chunk_idx < num_chunks:
+        chunk_start = chunk_idx * BLOCK_SIZE
+        idx = chunk_start + offsets
+        mask = idx < numel
+        local_values = tl.load(tensor_ptr + idx, mask=mask, other=0.0)
+
+        staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
+        published_slot_ptr = published_epoch_ptr + slot
+        ack_slot_ptr = slot_sync_state_ptr + slot
+        epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
+
+        tl.store(staging_slot_ptr + offsets, local_values, mask=mask)
+        tl.atomic_xchg(published_slot_ptr, epoch, sem="release", scope="sys")
+
+        remote_published = translate_ptr(
+            published_slot_ptr,
+            rank,
+            peer_rank,
+            heap_bases_ptr,
+        )
         while tl.atomic_cas(
-            consumed_slot_ptr,
-            expected_consumers,
-            expected_consumers,
+            remote_published,
+            epoch,
+            epoch,
             sem="acquire",
             scope="sys",
-        ) != expected_consumers:
+        ) != epoch:
             pass
+
+        remote_staging = translate_ptr(
+            staging_slot_ptr,
+            rank,
+            peer_rank,
+            heap_bases_ptr,
+        )
+        incoming = tl.load(
+            remote_staging + offsets,
+            mask=mask,
+            other=0.0,
+            cache_modifier=".cg",
+        )
+        reduced = _reduce_op(local_values, incoming, op)
+        tl.store(tensor_ptr + idx, reduced, mask=mask)
+
+        if chunk_idx + num_slots < num_chunks:
+            remote_ack = translate_ptr(
+                ack_slot_ptr,
+                rank,
+                peer_rank,
+                heap_bases_ptr,
+            )
+            tl.atomic_xchg(remote_ack, epoch, sem="release", scope="sys")
+
+            while tl.atomic_cas(
+                ack_slot_ptr,
+                epoch,
+                epoch,
+                sem="acquire",
+                scope="sys",
+            ) != epoch:
+                pass
 
         chunk_idx += num_slots
 
@@ -745,6 +910,8 @@ def allreduce(
     tensor: torch.Tensor,
     heap: "xtile.memory.SymmetricHeap",
     op: str = "sum",
+    *,
+    _execution: AllReduceExecutionSpec | None = None,
 ) -> None:
     """Host-side launcher for the public in-place allreduce collective.
 
@@ -753,30 +920,57 @@ def allreduce(
     longer composes ``reduce_scatter + allgather`` on the hot path.
     """
     torch.cuda.set_device(tensor.device)
-    spec = resolve_allreduce_execution(tensor, heap=heap, op=op)
+    if _execution is None:
+        spec = resolve_allreduce_execution(tensor, heap=heap, op=op)
+    else:
+        _validate_allreduce_execution_spec(
+            tensor,
+            heap=heap,
+            op=op,
+            execution=_execution,
+        )
+        spec = _execution
     if spec.implementation == "noop":
         return
 
     workspace = _allreduce_workspace(tensor, heap=heap, spec=spec)
     base_epoch = workspace.reserve_epoch_range(spec.num_chunks)
     heap_bases = heap.get_heap_bases()
-    _allreduce_staged_kernel[(spec.grid_size,)](
-        tensor,
-        workspace.staging,
-        workspace.published_epoch,
-        workspace.consumed_count,
-        heap_bases,
-        heap.rank,
-        heap.world_size,
-        spec.tensor_numel,
-        spec.num_chunks,
-        spec.pipeline_slots,
-        base_epoch,
-        BLOCK_SIZE=spec.chunk_elems,
-        op=op,
-        num_warps=spec.num_warps,
-        num_stages=1,
-    )
+    if spec.world_size == 2:
+        _allreduce_staged_kernel_ws2[(spec.grid_size,)](
+            tensor,
+            workspace.staging,
+            workspace.published_epoch,
+            workspace.slot_sync_state,
+            heap_bases,
+            heap.rank,
+            spec.tensor_numel,
+            spec.num_chunks,
+            spec.pipeline_slots,
+            base_epoch,
+            BLOCK_SIZE=spec.chunk_elems,
+            op=op,
+            num_warps=spec.num_warps,
+            num_stages=1,
+        )
+    else:
+        _allreduce_staged_kernel[(spec.grid_size,)](
+            tensor,
+            workspace.staging,
+            workspace.published_epoch,
+            workspace.slot_sync_state,
+            heap_bases,
+            heap.rank,
+            heap.world_size,
+            spec.tensor_numel,
+            spec.num_chunks,
+            spec.pipeline_slots,
+            base_epoch,
+            BLOCK_SIZE=spec.chunk_elems,
+            op=op,
+            num_warps=spec.num_warps,
+            num_stages=1,
+        )
 
 
 def allgather(
@@ -1125,31 +1319,26 @@ def resolve_allreduce_execution(
     op: str = "sum",
 ) -> AllReduceExecutionSpec:
     """Resolve the execution contract for the public allreduce launcher."""
-    if op != "sum":
-        raise ValueError(f"Only op='sum' is currently supported, got {op!r}")
-
-    world_size = heap.world_size
-    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
-        raise ValueError(
-            f"world_size={world_size} exceeds maximum supported "
-            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
-            f"tl.static_range bound in collectives.py."
-        )
-    if not tensor.is_contiguous():
-        raise ValueError("allreduce currently requires tensor to be contiguous")
-    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
-    _require_device_remote_access_transport(
-        heap,
-        operation="xtile.primitives.allreduce(...)",
+    numel = _validate_allreduce_launch_prereqs(
+        tensor,
+        heap=heap,
+        op=op,
     )
-
-    numel = int(tensor.numel())
+    world_size = heap.world_size
+    message_bytes = _allreduce_message_bytes(tensor)
     if world_size == 1 or numel == 0:
         return AllReduceExecutionSpec(
             op=op,
+            world_size=world_size,
             implementation="noop",
             protocol="local_identity",
+            kernel_family="local_identity",
+            reuse_handshake="none",
             tensor_numel=numel,
+            message_bytes=message_bytes,
+            message_regime="local_identity",
+            cta_policy="single_cta",
+            epoch_policy="none",
             block_size=numel,
             chunk_elems=numel,
             num_chunks=0,
@@ -1160,21 +1349,47 @@ def resolve_allreduce_execution(
         )
 
     torch.cuda.set_device(tensor.device)
-    chunk_elems = _select_allreduce_chunk_elems(tensor)
+    policy = _allreduce_regime_policy(message_bytes)
+    message_regime = policy.message_regime
+    chunk_elems = _select_allreduce_chunk_elems(
+        tensor,
+        policy=policy,
+    )
     num_chunks = triton.cdiv(numel, chunk_elems)
     pipeline_slots = _select_allreduce_pipeline_slots(
         num_chunks=num_chunks,
         tensor=tensor,
+        policy=policy,
     )
-    num_warps = 4 if chunk_elems <= 1024 else 8
+    num_warps = _select_allreduce_num_warps(
+        chunk_elems=chunk_elems,
+        policy=policy,
+    )
+    implementation = policy.implementation
+    protocol = policy.protocol
+    kernel_family = "ws2_specialized" if world_size == 2 else "generic_multi_peer"
+    reuse_handshake = "ws2_epoch_ack" if world_size == 2 else "count_ack"
+    cta_policy = "single_cta" if pipeline_slots == 1 else "multi_cta_pipeline"
+    epoch_policy = (
+        "per_call_monotonic_epoch"
+        if pipeline_slots == 1 and num_chunks == 1
+        else "per_chunk_slot_epoch"
+    )
     workspace_bytes = pipeline_slots * (
         chunk_elems * tensor.element_size() + (2 * 4)
     )
     return AllReduceExecutionSpec(
         op=op,
-        implementation="device_staged_pipeline",
-        protocol="slot_epoch_pipeline",
+        world_size=world_size,
+        implementation=implementation,
+        protocol=protocol,
+        kernel_family=kernel_family,
+        reuse_handshake=reuse_handshake,
         tensor_numel=numel,
+        message_bytes=message_bytes,
+        message_regime=message_regime,
+        cta_policy=cta_policy,
+        epoch_policy=epoch_policy,
         block_size=numel,
         chunk_elems=chunk_elems,
         num_chunks=num_chunks,
@@ -1192,17 +1407,58 @@ def _round_down_power_of_two(value: int) -> int:
     return 1 << (value.bit_length() - 1)
 
 
-def _select_allreduce_chunk_elems(tensor: torch.Tensor) -> int:
-    """Choose a conservative chunk size for the staged allreduce protocol."""
+def _round_up_power_of_two(value: int) -> int:
+    """Return the smallest power of two greater than or equal to *value*."""
+    if value <= 1:
+        return 1
+    return 1 << ((value - 1).bit_length())
+
+
+def _allreduce_message_bytes(tensor: torch.Tensor) -> int:
+    """Return the contiguous allreduce payload size in bytes."""
+    return int(tensor.numel()) * max(tensor.element_size(), 1)
+
+
+def _classify_allreduce_message_regime(message_bytes: int) -> str:
+    """Classify the allreduce payload into a stable message regime."""
+    if message_bytes <= _ALLREDUCE_LATENCY_MESSAGE_BYTES:
+        return "latency"
+    if message_bytes >= _ALLREDUCE_BANDWIDTH_MESSAGE_BYTES:
+        return "bandwidth"
+    return "throughput"
+
+
+def _allreduce_regime_policy(message_bytes: int) -> _AllReduceRegimePolicy:
+    """Return the tuning policy for one rank-local message size."""
+    message_regime = _classify_allreduce_message_regime(message_bytes)
+    if message_regime == "latency":
+        return _ALLREDUCE_LATENCY_POLICY
+    if message_regime == "bandwidth":
+        return _ALLREDUCE_BANDWIDTH_POLICY
+    return _ALLREDUCE_THROUGHPUT_POLICY
+
+
+def _select_allreduce_chunk_elems(
+    tensor: torch.Tensor,
+    *,
+    policy: _AllReduceRegimePolicy,
+) -> int:
+    """Choose a chunk size for the staged allreduce protocol."""
     numel = int(tensor.numel())
     if numel <= 0:
         return 1
 
+    if policy.message_regime == "latency":
+        return max(
+            1,
+            min(_round_up_power_of_two(numel), policy.max_chunk_elems),
+        )
+
     target = max(
-        _ALLREDUCE_MIN_CHUNK_ELEMS,
-        _ALLREDUCE_TARGET_CHUNK_BYTES // max(tensor.element_size(), 1),
+        policy.min_chunk_elems,
+        policy.target_chunk_bytes // max(tensor.element_size(), 1),
     )
-    target = min(target, _ALLREDUCE_MAX_CHUNK_ELEMS, numel)
+    target = min(target, policy.max_chunk_elems, numel)
     return max(1, min(numel, _round_down_power_of_two(target)))
 
 
@@ -1210,6 +1466,7 @@ def _select_allreduce_pipeline_slots(
     *,
     num_chunks: int,
     tensor: torch.Tensor,
+    policy: _AllReduceRegimePolicy,
 ) -> int:
     """Choose the number of concurrent allreduce pipeline slots."""
     if num_chunks <= 1:
@@ -1226,9 +1483,82 @@ def _select_allreduce_pipeline_slots(
         min(
             num_chunks,
             compute_units,
-            _ALLREDUCE_MAX_PIPELINE_SLOTS,
+            policy.max_pipeline_slots,
         ),
     )
+
+
+def _select_allreduce_num_warps(
+    *,
+    chunk_elems: int,
+    policy: _AllReduceRegimePolicy,
+) -> int:
+    """Choose a stable warp count for the resolved allreduce regime."""
+    if chunk_elems <= policy.large_chunk_threshold_elems:
+        return policy.small_chunk_num_warps
+    return policy.large_chunk_num_warps
+
+
+def _validate_allreduce_launch_prereqs(
+    tensor: torch.Tensor,
+    *,
+    heap: "xtile.memory.SymmetricHeap",
+    op: str,
+) -> int:
+    """Validate the public allreduce runtime contract and return tensor numel."""
+    if op != "sum":
+        raise ValueError(f"Only op='sum' is currently supported, got {op!r}")
+
+    world_size = heap.world_size
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
+    if not tensor.is_contiguous():
+        raise ValueError("allreduce currently requires tensor to be contiguous")
+    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
+    _require_device_remote_access_transport(
+        heap,
+        operation="xtile.primitives.allreduce(...)",
+    )
+    return int(tensor.numel())
+
+
+def _validate_allreduce_execution_spec(
+    tensor: torch.Tensor,
+    *,
+    heap: "xtile.memory.SymmetricHeap",
+    op: str,
+    execution: AllReduceExecutionSpec,
+) -> None:
+    """Validate one caller-provided execution spec before launch."""
+    numel = _validate_allreduce_launch_prereqs(
+        tensor,
+        heap=heap,
+        op=op,
+    )
+    if execution.op != op:
+        raise ValueError(
+            f"allreduce execution op mismatch: {execution.op!r} != {op!r}"
+        )
+    if execution.world_size != heap.world_size:
+        raise ValueError(
+            "allreduce execution world_size mismatch: "
+            f"{execution.world_size} != {heap.world_size}"
+        )
+    if execution.tensor_numel != numel:
+        raise ValueError(
+            "allreduce execution tensor_numel mismatch: "
+            f"{execution.tensor_numel} != {numel}"
+        )
+    expected_message_bytes = _allreduce_message_bytes(tensor)
+    if execution.message_bytes != expected_message_bytes:
+        raise ValueError(
+            "allreduce execution message_bytes mismatch: "
+            f"{execution.message_bytes} != {expected_message_bytes}"
+        )
 
 
 def _allreduce_workspace_key(
@@ -1267,13 +1597,13 @@ def _allreduce_workspace(
             tensor.dtype,
         )
         published_epoch = heap.allocate_tensor((spec.pipeline_slots,), torch.int32)
-        consumed_count = heap.allocate_tensor((spec.pipeline_slots,), torch.int32)
+        slot_sync_state = heap.allocate_tensor((spec.pipeline_slots,), torch.int32)
         published_epoch.zero_()
-        consumed_count.zero_()
+        slot_sync_state.zero_()
         workspace = _AllReduceWorkspace(
             staging=staging,
             published_epoch=published_epoch,
-            consumed_count=consumed_count,
+            slot_sync_state=slot_sync_state,
         )
         _ALLREDUCE_WORKSPACE_CACHE[key] = workspace
     return workspace

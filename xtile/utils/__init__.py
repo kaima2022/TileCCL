@@ -3,6 +3,7 @@
 from xtile.utils.topology import TopologyDetector
 from xtile.utils.profiling import TileProfiler
 from xtile.utils.benchmark_results import (
+    benchmark_environment_health,
     canonical_benchmark_run,
     default_collective_bulk_sync_benchmark_path,
     default_collective_comm_only_benchmark_path,
@@ -11,6 +12,7 @@ from xtile.utils.benchmark_results import (
     default_pattern_benchmark_path,
     describe_runtime_metadata_snapshot,
     describe_runtime_support_snapshot,
+    emit_benchmark_environment_warnings,
     figures_data_dir,
     is_canonical_benchmark_output,
     project_root,
@@ -43,7 +45,9 @@ __all__ = [
     "default_p2p_benchmark_path",
     "default_pattern_benchmark_path",
     "is_canonical_benchmark_output",
+    "benchmark_environment_health",
     "canonical_benchmark_run",
+    "emit_benchmark_environment_warnings",
     "runtime_metadata_snapshot",
     "runtime_support_snapshot",
     "describe_runtime_metadata_snapshot",

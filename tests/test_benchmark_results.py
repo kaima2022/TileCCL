@@ -6,15 +6,19 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import importlib.util
+import io
 
 import xtile
 from xtile.utils.benchmark_results import (
+    benchmark_environment_health,
     canonical_benchmark_run,
     default_collective_bulk_sync_benchmark_path,
     default_collective_comm_only_benchmark_path,
     default_gemm_benchmark_path,
     describe_runtime_metadata_snapshot,
     describe_runtime_support_snapshot,
+    emit_benchmark_environment_warnings,
     is_canonical_benchmark_output,
     project_root,
     runtime_metadata_snapshot,
@@ -150,6 +154,70 @@ def test_describe_runtime_metadata_snapshot_without_heap(
     assert payload["heap"] is None
 
 
+def test_benchmark_environment_health_flags_foreign_gpu_activity(monkeypatch) -> None:
+    """Benchmark health snapshot should flag pre-run foreign compute activity."""
+
+    def _fake_run(command, capture_output, text, check):
+        assert capture_output is True
+        assert text is True
+        assert check is True
+        query_arg = next(item for item in command if item.startswith("--query-"))
+        if query_arg.startswith("--query-gpu="):
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=(
+                    "0, GPU-AAA, NVIDIA H100 PCIe, 34197, 81559, 0, 0\n"
+                    "1, GPU-BBB, NVIDIA H100 PCIe, 1055, 81559, 100, 0\n"
+                ),
+                stderr="",
+            )
+        if query_arg.startswith("--query-compute-apps="):
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=(
+                    "GPU-AAA, 3286824, llama-box, 34197\n"
+                    "GPU-BBB, 1054772, python, 1055\n"
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr("xtile.utils.benchmark_results.subprocess.run", _fake_run)
+
+    snapshot = benchmark_environment_health(visible_gpu_count=2)
+
+    assert snapshot["status"] == "contaminated"
+    assert snapshot["target_gpu_indices"] == [0, 1]
+    assert len(snapshot["gpus"]) == 2
+    assert snapshot["gpus"][0]["contamination_reasons"] == ["resident_compute_processes"]
+    assert snapshot["gpus"][1]["contamination_reasons"] == [
+        "resident_compute_processes",
+        "active_gpu_utilization",
+    ]
+    assert any("GPU 0 is not isolated" in warning for warning in snapshot["warnings"])
+    assert any("GPU 1 is not isolated" in warning for warning in snapshot["warnings"])
+
+
+def test_emit_benchmark_environment_warnings_formats_warning_block() -> None:
+    """Benchmark warning emitter should produce one readable warning block."""
+    stream = io.StringIO()
+    emit_benchmark_environment_warnings(
+        {
+            "status": "contaminated",
+            "warnings": [
+                "GPU 1 is not isolated before benchmark: util=100%, resident_compute_processes=[python (pid=1)]."
+            ],
+        },
+        stream=stream,
+    )
+
+    rendered = stream.getvalue()
+    assert "benchmark environment is contaminated before the run" in rendered
+    assert "GPU 1 is not isolated before benchmark" in rendered
+
+
 def test_is_canonical_benchmark_output_matches_figures_data() -> None:
     """Canonical benchmark outputs should be recognized by directory."""
     assert is_canonical_benchmark_output(default_collective_bulk_sync_benchmark_path())
@@ -192,3 +260,100 @@ except RuntimeError:
         )
 
     assert proc.returncode == 0, proc.stderr
+
+
+def _load_comm_only_benchmark_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path = repo_root / "tests" / "benchmarks" / "bench_collective_comm_only.py"
+    spec = importlib.util.spec_from_file_location(
+        "_bench_collective_comm_only_test",
+        script_path,
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    sys.modules.setdefault("_bench_collective_comm_only_test", module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_collective_comm_only_aggregate_preserves_allreduce_execution_metadata() -> None:
+    """Comm-only aggregation should keep rank-invariant allreduce execution metadata."""
+    bench = _load_comm_only_benchmark_module()
+
+    rank_payloads = [
+        {
+            "results": [
+                {
+                    "collective": "allreduce",
+                    "size_bytes": 65536,
+                    "xtile": {
+                        "times_ms": [1.0, 1.1],
+                        "correct": True,
+                        "implementation": "device_staged_pipeline",
+                        "protocol": "slot_epoch_pipeline",
+                        "kernel_family": "ws2_specialized",
+                        "reuse_handshake": "ws2_epoch_ack",
+                        "message_bytes": 65536,
+                        "message_regime": "throughput",
+                        "cta_policy": "multi_cta_pipeline",
+                        "epoch_policy": "per_chunk_slot_epoch",
+                        "chunk_elems": 4096,
+                        "num_chunks": 4,
+                        "pipeline_slots": 4,
+                        "grid_size": 4,
+                        "num_warps": 4,
+                        "workspace_bytes": 65568,
+                    },
+                    "nccl": {
+                        "times_ms": [0.5, 0.6],
+                        "correct": True,
+                    },
+                }
+            ]
+        },
+        {
+            "results": [
+                {
+                    "collective": "allreduce",
+                    "size_bytes": 65536,
+                    "xtile": {
+                        "times_ms": [0.9, 1.0],
+                        "correct": True,
+                        "implementation": "device_staged_pipeline",
+                        "protocol": "slot_epoch_pipeline",
+                        "kernel_family": "ws2_specialized",
+                        "reuse_handshake": "ws2_epoch_ack",
+                        "message_bytes": 65536,
+                        "message_regime": "throughput",
+                        "cta_policy": "multi_cta_pipeline",
+                        "epoch_policy": "per_chunk_slot_epoch",
+                        "chunk_elems": 4096,
+                        "num_chunks": 4,
+                        "pipeline_slots": 4,
+                        "grid_size": 4,
+                        "num_warps": 4,
+                        "workspace_bytes": 65568,
+                    },
+                    "nccl": {
+                        "times_ms": [0.45, 0.55],
+                        "correct": True,
+                    },
+                }
+            ]
+        },
+    ]
+
+    cases, summary = bench._aggregate_rank_results(rank_payloads, world_size=2)
+
+    assert len(cases) == 1
+    case = cases[0]
+    assert case["xtile"]["implementation"] == "device_staged_pipeline"
+    assert case["xtile"]["protocol"] == "slot_epoch_pipeline"
+    assert case["xtile"]["kernel_family"] == "ws2_specialized"
+    assert case["xtile"]["reuse_handshake"] == "ws2_epoch_ack"
+    assert case["xtile"]["message_bytes"] == 65536
+    assert case["xtile"]["message_regime"] == "throughput"
+    assert case["xtile"]["cta_policy"] == "multi_cta_pipeline"
+    assert case["xtile"]["epoch_policy"] == "per_chunk_slot_epoch"
+    assert case["xtile"]["chunk_elems"] == 4096
+    assert summary["peak_by_collective"]["allreduce"]["peak_xtile_bandwidth_gbps"] > 0.0

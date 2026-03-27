@@ -58,7 +58,11 @@ def test_allreduce_multiprocess_default_transport(
         assert payload["total_elements"] == 4098
         assert payload["primitive_execution"]["implementation"] == "device_staged_pipeline"
         assert payload["primitive_execution"]["protocol"] == "slot_epoch_pipeline"
+        assert payload["primitive_execution"]["kernel_family"] == "ws2_specialized"
+        assert payload["primitive_execution"]["reuse_handshake"] == "ws2_epoch_ack"
         assert payload["primitive_execution"]["pipeline_slots"] >= 2
         assert payload["high_level_plan"]["implementation"] == "device_staged_pipeline"
         assert payload["high_level_plan"]["protocol"] == "slot_epoch_pipeline"
+        assert payload["high_level_plan"]["kernel_family"] == "ws2_specialized"
+        assert payload["high_level_plan"]["reuse_handshake"] == "ws2_epoch_ack"
         assert payload["high_level_plan"]["pipeline_slots"] >= 2

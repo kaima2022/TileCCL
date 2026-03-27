@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import xtile
 from xtile.patterns import (
@@ -24,6 +24,9 @@ from xtile.utils.feature_gates import (
     multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
+
+if TYPE_CHECKING:
+    from xtile.primitives.collectives import AllReduceExecutionSpec
 
 PatternLike = str | type[Pattern] | Pattern | None
 LayoutKind = Literal["full", "shard"]
@@ -407,16 +410,79 @@ class AllReducePlan:
     ctx: xtile.XTileContext
     tensor_shape: tuple[int, ...]
     block_size: int
+    execution: "AllReduceExecutionSpec" = field(repr=False)
     op: str = "sum"
     storage_kind: str = "symmetric"
-    implementation: str = "noop"
-    protocol: str = "local_identity"
-    chunk_elems: int = 0
-    num_chunks: int = 0
-    pipeline_slots: int = 0
-    grid_size: int = 1
-    num_warps: int = 1
-    workspace_bytes: int = 0
+
+    @property
+    def implementation(self) -> str:
+        """Return the resolved backend implementation family."""
+        return self.execution.implementation
+
+    @property
+    def protocol(self) -> str:
+        """Return the resolved allreduce protocol."""
+        return self.execution.protocol
+
+    @property
+    def message_bytes(self) -> int:
+        """Return the rank-local payload size in bytes."""
+        return self.execution.message_bytes
+
+    @property
+    def kernel_family(self) -> str:
+        """Return the selected kernel family for this execution plan."""
+        return self.execution.kernel_family
+
+    @property
+    def reuse_handshake(self) -> str:
+        """Return the slot-reuse handshake family for this plan."""
+        return self.execution.reuse_handshake
+
+    @property
+    def message_regime(self) -> str:
+        """Return the resolved message-size regime."""
+        return self.execution.message_regime
+
+    @property
+    def cta_policy(self) -> str:
+        """Return the resolved CTA / launch policy."""
+        return self.execution.cta_policy
+
+    @property
+    def epoch_policy(self) -> str:
+        """Return the resolved epoch publication policy."""
+        return self.execution.epoch_policy
+
+    @property
+    def chunk_elems(self) -> int:
+        """Return the resolved chunk size in elements."""
+        return self.execution.chunk_elems
+
+    @property
+    def num_chunks(self) -> int:
+        """Return the number of chunks in the resolved plan."""
+        return self.execution.num_chunks
+
+    @property
+    def pipeline_slots(self) -> int:
+        """Return the number of concurrent pipeline slots."""
+        return self.execution.pipeline_slots
+
+    @property
+    def grid_size(self) -> int:
+        """Return the resolved grid size for the launcher."""
+        return self.execution.grid_size
+
+    @property
+    def num_warps(self) -> int:
+        """Return the resolved Triton warp count."""
+        return self.execution.num_warps
+
+    @property
+    def workspace_bytes(self) -> int:
+        """Return the required symmetric workspace footprint."""
+        return self.execution.workspace_bytes
 
     def validate_tensor(self, tensor: Any) -> None:
         """Validate that the tensor still matches the plan."""
@@ -435,7 +501,12 @@ class AllReducePlan:
             self.validate_tensor(tensor)
         from xtile.primitives.collectives import allreduce as collective_allreduce
 
-        collective_allreduce(tensor, self.ctx.require_heap(), op=self.op)
+        collective_allreduce(
+            tensor,
+            self.ctx.require_heap(),
+            op=self.op,
+            _execution=self.execution,
+        )
         return tensor
 
     def to_dict(self) -> dict[str, object]:
@@ -454,6 +525,12 @@ class AllReducePlan:
             "reduction": self.op,
             "implementation": self.implementation,
             "protocol": self.protocol,
+            "kernel_family": self.kernel_family,
+            "reuse_handshake": self.reuse_handshake,
+            "message_bytes": self.message_bytes,
+            "message_regime": self.message_regime,
+            "cta_policy": self.cta_policy,
+            "epoch_policy": self.epoch_policy,
             "chunk_elems": self.chunk_elems,
             "num_chunks": self.num_chunks,
             "pipeline_slots": self.pipeline_slots,
@@ -1063,16 +1140,9 @@ def build_allreduce_plan(
         ctx=resolved_ctx,
         tensor_shape=tuple(int(dim) for dim in tensor.shape),
         block_size=block_size,
+        execution=execution,
         op=op,
         storage_kind=storage_kind,
-        implementation=execution.implementation,
-        protocol=execution.protocol,
-        chunk_elems=execution.chunk_elems,
-        num_chunks=execution.num_chunks,
-        pipeline_slots=execution.pipeline_slots,
-        grid_size=execution.grid_size,
-        num_warps=execution.num_warps,
-        workspace_bytes=execution.workspace_bytes,
     )
 
 

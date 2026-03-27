@@ -639,12 +639,58 @@ def test_build_allreduce_plan_exposes_stable_metadata(
         assert plan.block_size == 32
         assert plan.implementation == "noop"
         assert plan.protocol == "local_identity"
+        assert plan.kernel_family == "local_identity"
+        assert plan.reuse_handshake == "none"
+        assert plan.message_bytes == 32 * torch.tensor([], dtype=torch.float32).element_size()
+        assert plan.message_regime == "local_identity"
+        assert plan.cta_policy == "single_cta"
+        assert plan.epoch_policy == "none"
         assert plan.pipeline_slots == 0
         assert payload["op"] == "allreduce"
         assert payload["block_size"] == 32
         assert payload["tensor_shape"] == [32]
         assert payload["reduction"] == "sum"
+        assert payload["kernel_family"] == "local_identity"
+        assert payload["reuse_handshake"] == "none"
+        assert payload["message_regime"] == "local_identity"
+        assert payload["cta_policy"] == "single_cta"
+        assert payload["epoch_policy"] == "none"
         assert payload["workspace_bytes"] == 0
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_allreduce_plan_execute_reuses_resolved_execution(
+    skip_no_multigpu,
+    device_info,
+    monkeypatch,
+) -> None:
+    """AllReducePlan.execute should launch with the pre-resolved execution spec."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+    import xtile.primitives.collectives as collectives
+
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
+    try:
+        ctx = xtile.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=1,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        tensor = ctx.zeros(32, dtype=torch.float32)
+        tensor.fill_(1.0)
+        plan = xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+
+        def _unexpected_resolve(*args, **kwargs):
+            raise AssertionError("plan.execute should not re-resolve allreduce execution")
+
+        monkeypatch.setattr(collectives, "resolve_allreduce_execution", _unexpected_resolve)
+
+        plan.execute(tensor)
+
+        assert torch.allclose(tensor, torch.ones_like(tensor))
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -680,6 +726,11 @@ def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
         plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
         assert plan.implementation == "device_staged_pipeline"
         assert plan.protocol == "slot_epoch_pipeline"
+        assert plan.kernel_family == "ws2_specialized"
+        assert plan.reuse_handshake == "ws2_epoch_ack"
+        assert plan.message_regime == "throughput"
+        assert plan.cta_policy == "multi_cta_pipeline"
+        assert plan.epoch_policy == "per_chunk_slot_epoch"
         assert plan.block_size == total_elements
         assert plan.chunk_elems > 0
         assert plan.num_chunks >= 2
@@ -697,6 +748,172 @@ def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
                 torch.full_like(tensors[rank], 3.0),
                 atol=1e-4,
             )
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+@pytest.mark.multigpu
+def test_allreduce_high_level_api_small_message_uses_latency_regime(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """Small allreduce payloads should stay on the single-CTA latency regime."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    total_elements = 256
+    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
+    try:
+        contexts = [
+            xtile.init(
+                backend=device_info.backend,
+                rank=rank,
+                world_size=world_size,
+                heap=heaps[rank],
+                force_backend=True,
+            )
+            for rank in range(world_size)
+        ]
+
+        tensors = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            tensor = heaps[rank].allocate_tensor((total_elements,), torch.float32)
+            tensor.fill_(float(rank + 1))
+            tensors.append(tensor)
+
+        plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
+        assert plan.implementation == "device_single_slot_staged"
+        assert plan.protocol == "single_slot_epoch_staged"
+        assert plan.kernel_family == "ws2_specialized"
+        assert plan.reuse_handshake == "ws2_epoch_ack"
+        assert plan.message_regime == "latency"
+        assert plan.cta_policy == "single_cta"
+        assert plan.epoch_policy == "per_call_monotonic_epoch"
+        assert plan.num_chunks == 1
+        assert plan.pipeline_slots == 1
+        assert plan.grid_size == 1
+
+        for rank in range(world_size):
+            xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])
+
+        for rank in range(world_size):
+            torch.cuda.synchronize(rank)
+            assert torch.allclose(
+                tensors[rank],
+                torch.full_like(tensors[rank], 3.0),
+                atol=1e-4,
+            )
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+@pytest.mark.multigpu
+def test_allreduce_high_level_api_bandwidth_message_uses_wider_pipeline(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """Bandwidth-sized allreduce payloads should use the wider pipeline policy."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    total_elements = 65536
+    heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
+    try:
+        contexts = [
+            xtile.init(
+                backend=device_info.backend,
+                rank=rank,
+                world_size=world_size,
+                heap=heaps[rank],
+                force_backend=True,
+            )
+            for rank in range(world_size)
+        ]
+
+        tensors = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            tensor = heaps[rank].allocate_tensor((total_elements,), torch.float32)
+            tensor.fill_(float(rank + 1))
+            tensors.append(tensor)
+
+        plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
+        assert plan.implementation == "device_staged_pipeline"
+        assert plan.protocol == "slot_epoch_pipeline"
+        assert plan.kernel_family == "ws2_specialized"
+        assert plan.reuse_handshake == "ws2_epoch_ack"
+        assert plan.message_regime == "bandwidth"
+        assert plan.cta_policy == "multi_cta_pipeline"
+        assert plan.epoch_policy == "per_chunk_slot_epoch"
+        assert plan.num_chunks == 16
+        assert plan.pipeline_slots == 16
+        assert plan.grid_size == 16
+        assert plan.num_warps == 8
+
+        for rank in range(world_size):
+            xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])
+
+        for rank in range(world_size):
+            torch.cuda.synchronize(rank)
+            assert torch.allclose(
+                tensors[rank],
+                torch.full_like(tensors[rank], 3.0),
+                atol=1e-4,
+            )
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+@pytest.mark.multigpu
+def test_allreduce_plan_repeated_multigpu_runs_reuse_epochs_safely(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """Repeated multigpu plan execution should safely reuse staged slots."""
+    from xtile.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    total_elements = 4097
+    heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
+    try:
+        contexts = [
+            xtile.init(
+                backend=device_info.backend,
+                rank=rank,
+                world_size=world_size,
+                heap=heaps[rank],
+                force_backend=True,
+            )
+            for rank in range(world_size)
+        ]
+        tensors = []
+        plans = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            tensor = heaps[rank].allocate_tensor((total_elements,), torch.float32)
+            tensors.append(tensor)
+            plans.append(xtile.ops.build_allreduce_plan(tensor, ctx=contexts[rank]))
+
+        test_inputs = (
+            (1.0, 2.0, 3.0),
+            (5.0, 7.0, 12.0),
+        )
+        for rank0_value, rank1_value, expected in test_inputs:
+            tensors[0].fill_(rank0_value)
+            tensors[1].fill_(rank1_value)
+            for rank in range(world_size):
+                plans[rank].execute(tensors[rank])
+            for rank in range(world_size):
+                torch.cuda.synchronize(rank)
+                assert torch.allclose(
+                    tensors[rank],
+                    torch.full_like(tensors[rank], expected),
+                    atol=1e-4,
+                )
     finally:
         for heap in heaps:
             heap.cleanup()

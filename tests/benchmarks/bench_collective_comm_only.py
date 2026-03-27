@@ -36,8 +36,10 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 
 from xtile.utils.benchmark_results import (
+    benchmark_environment_health,
     canonical_benchmark_run,
     default_collective_comm_only_benchmark_path,
+    emit_benchmark_environment_warnings,
     runtime_metadata_snapshot,
     runtime_support_snapshot,
     write_json,
@@ -668,6 +670,12 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         {
                             "implementation": allreduce_plan.implementation,
                             "protocol": allreduce_plan.protocol,
+                            "kernel_family": allreduce_plan.kernel_family,
+                            "reuse_handshake": allreduce_plan.reuse_handshake,
+                            "message_bytes": allreduce_plan.message_bytes,
+                            "message_regime": allreduce_plan.message_regime,
+                            "cta_policy": allreduce_plan.cta_policy,
+                            "epoch_policy": allreduce_plan.epoch_policy,
                             "chunk_elems": allreduce_plan.chunk_elems,
                             "num_chunks": allreduce_plan.num_chunks,
                             "pipeline_slots": allreduce_plan.pipeline_slots,
@@ -811,6 +819,12 @@ def _aggregate_rank_results(
             keys=(
                 "implementation",
                 "protocol",
+                "kernel_family",
+                "reuse_handshake",
+                "message_bytes",
+                "message_regime",
+                "cta_policy",
+                "epoch_policy",
                 "chunk_elems",
                 "num_chunks",
                 "pipeline_slots",
@@ -961,6 +975,10 @@ def main() -> None:
         heap_size_bytes=heap_size_bytes,
         output_dir="",
     )
+    environment_health = benchmark_environment_health(
+        visible_gpu_count=world_size,
+    )
+    emit_benchmark_environment_warnings(environment_health)
 
     output_path = Path(args.output_json)
     store_fd, store_path = tempfile.mkstemp(prefix="xtile_collective_comm_store_")
@@ -1078,6 +1096,7 @@ def main() -> None:
         },
         "runtime_support": runtime_support,
         "runtime_metadata": runtime_metadata,
+        "environment_health": environment_health,
         "rank_payloads": rank_payloads,
         "cases": cases,
         "summary": summary,

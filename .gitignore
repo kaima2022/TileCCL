@@ -51,3 +51,5 @@ benchmarks/results/
 results/*.txt
 results/*.json
 figures/data/.canonical_benchmark.lock
+
+figures/
