@@ -53,3 +53,6 @@ results/*.json
 figures/data/.canonical_benchmark.lock
 
 figures/
+
+# GitHub Actions workflows
+.github/workflows/
