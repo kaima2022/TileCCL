@@ -48,6 +48,79 @@ User Code
 +---------------------------+  +---------------------------+
 ```
 
+
+
+上文分层图里的 `Layer 3: Sync Primitives` 与 `Layer 4: Memory`
+更适合理解为：**Kernel 向下依赖的两个底层能力**，而不是“时间顺序上的下一步初始化流程”。
+
+
+
+## 时间顺序上的全局流程
+
+这一节是对上文分层图的**补充说明**，不替代原图，只是把容易混淆的两件事拆开：
+
+1. `heap_bases` / peer mapping 是 **初始化阶段**准备好的运行时元数据
+2. `translate_ptr()` / `tile_signal()` / `tile_wait()` 是 **kernel 执行阶段**实际使用的底层原语
+
+### 1. 初始化链路（Host-side，只做一次）
+
+```text
+User Code
+  |
+  v
+xtile.init_local(world_size, heap_size)
+  |
+  v
+SymmetricHeap.create_all()
+  |
+  +--> 为每个 GPU 分配本地 symmetric heap buffer
+  |
+  +--> 建立 peer access / IPC mapping
+  |
+  +--> 为每个 rank 构造本 rank 视角下的 heap_bases
+  |    heap_bases[i] = "在当前 GPU 地址空间中可解引用的 rank i heap 基址"
+  |
+  v
+XTileContext.attach_heap()
+  |
+  v
+ctx.heap_bases 传入 Triton kernel
+```
+
+这条链路的本质职责是：**把跨 GPU 可访问的对称堆环境准备好**，并把
+`translate_ptr()` 运行时所需的 `heap_bases` 张量准备出来。
+
+### 2. 运行时链路（Device-side，每次 kernel 执行）
+
+```text
+gemm_allscatter()
+  |
+  v
+WGSpecializedPattern.execute()
+  |
+  v
+_wg_specialized_kernel()
+  |
+  +--> Compute Workers
+  |      |
+  |      +--> tl.dot(...) 计算 tile
+  |      +--> tl.store(local C tile)
+  |      +--> tile_signal(locks, tile_id)
+  |
+  +--> Comm Workers
+         |
+         +--> tile_wait(locks, tile_id)
+         +--> tl.load(local C tile)
+         +--> scatter_tile_to_peer(...)
+                 |
+                 +--> translate_ptr(C_ptr, rank, peer, heap_bases)
+                 +--> tl.store(remote_C, ...)
+```
+
+这条链路的本质职责是：**在 kernel 内完成 tile 级生产者-消费者同步，并把本地指针翻译成远端可访问指针**。
+
+
+
 ---
 
 ## 第一部分：主线流程
@@ -681,3 +754,520 @@ gemm_allscatter()
           -> translate_ptr()           # L4: 指针翻译
           -> tl.store(remote, .wt)     # 远端写入
 ```
+
+---
+
+# XTile WG 工作组模式第 4-6 节源码解读补充
+
+本文是对文档 [XTile WG工作组模式完整代码流程报告.md](/home/makai/XTile/docs/XTile%20WG%E5%B7%A5%E4%BD%9C%E7%BB%84%E6%A8%A1%E5%BC%8F%E5%AE%8C%E6%95%B4%E4%BB%A3%E7%A0%81%E6%B5%81%E7%A8%8B%E6%8A%A5%E5%91%8A.md) 中以下三节的补充解读：
+
+- `4. Triton 内核 (xtile/patterns/wg_specialized.py)`
+- `5. Scatter Helper (xtile/patterns/_helpers.py)`
+- `6. 指针翻译 (xtile/memory/translation.py)`
+
+目标不是改写原文，而是结合一个固定实例，按原文展示的源码顺序，把这些代码在矩阵中的含义解释清楚。
+
+---
+
+## 一、固定实例
+
+后文统一使用这个例子：
+
+- `world_size = 2`
+- `full/full` contract
+- 全局输出 `C` 的列数为 `8`
+- 为了便于看清 tile 位置，假设：
+  - `BLOCK_M = 4`
+  - `BLOCK_N = 2`
+
+这样，输出矩阵 `C` 会被切成 `2 x 4` 个 tile：
+
+```text
+C 的 tile 网格
+
+            tile_n=0   tile_n=1   tile_n=2   tile_n=3
+            cols 0-1   cols 2-3   cols 4-5   cols 6-7
+          ---------------------------------------------
+tile_m=0      T00        T01        T02        T03
+tile_m=1      T10        T11        T12        T13
+```
+
+在 `full/full, world_size=2` 下，两边都会计算完整的 `C`，但 scatter 的列所有权是按列区间划分的：
+
+```text
+rank0 负责列 [0, 4)   -> T00 T01 T10 T11
+rank1 负责列 [4, 8)   -> T02 T03 T12 T13
+```
+
+这个“负责”说的是 scatter 阶段谁对哪段列形成有效远端写入，不是说谁只计算哪一半。
+
+---
+
+## 二、对第 4 节的解读：Triton 内核
+
+原文第 4 节给出的核心判断是：
+
+```python
+pid = tl.program_id(0)
+
+if pid < COMPUTE_SMS:
+    ...
+else:
+    ...
+```
+
+这段代码的直接含义是：
+
+- 同一次 kernel launch 内，前一部分 program instance 是 compute worker
+- 后一部分 program instance 是 comm worker
+- 两类 worker 在同一个 kernel 内并行执行
+
+这和原文图示是一一对应的：前面的 SM 负责 GEMM，后面的 SM 负责 wait + scatter。
+
+### 2.1 Compute Worker 路径
+
+原文第 4a 节代码：
+
+```python
+if pid < COMPUTE_SMS:
+    for tile_id in range(pid, total_tiles, COMPUTE_SMS):
+        # --- tile 坐标计算 ---
+        tile_m = tile_id // num_tiles_n
+        tile_n = tile_id % num_tiles_n
+        offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+        offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+
+        # --- Iris 风格 mask-free K-loop ---
+        rm = offs_m % M
+        rn = offs_n % N
+        rm = tl.max_contiguous(tl.multiple_of(rm, BLOCK_M), BLOCK_M)
+        rn = tl.max_contiguous(tl.multiple_of(rn, BLOCK_N), BLOCK_N)
+
+        rk = tl.arange(0, BLOCK_K)
+        A_BASE = A_ptr + rm[:, None] * stride_am + rk[None, :] * stride_ak
+        B_BASE = B_ptr + rk[:, None] * stride_bk + rn[None, :] * stride_bn
+        acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+
+        # --- GEMM 主循环 ---
+        for k in range(0, tl.cdiv(K, BLOCK_K)):
+            a = tl.load(A_BASE)
+            b = tl.load(B_BASE)
+            acc = tl.dot(a, b, acc, allow_tf32=True)
+            A_BASE += BLOCK_K * stride_ak
+            B_BASE += BLOCK_K * stride_bk
+
+        # --- 写入本地 C ---
+        result = acc.to(C_ptr.dtype.element_ty)
+        c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
+        tl.store(c_ptrs, result, mask=c_mask)
+
+        # --- 发信号：此 tile 计算完毕 ---
+        tile_signal(locks_ptr, tile_id)  # release 语义
+```
+
+下面按原代码顺序解读。
+
+#### 2.1.1 `for tile_id in range(pid, total_tiles, COMPUTE_SMS)`
+
+这句的含义必须严格按代码理解：
+
+- 当前 compute worker 从自己的 `pid` 开始领取 tile
+- 每次跨 `COMPUTE_SMS` 个 tile 继续处理下一个
+- 所有 compute worker 共同覆盖 `0 .. total_tiles-1`
+
+它并不是“先处理 rank0 负责的左半边，再处理 rank1 负责的右半边”。
+
+如果示意地假设 `COMPUTE_SMS = 4`，那么：
+
+```text
+pid 0 -> tile_id 0, 4
+pid 1 -> tile_id 1, 5
+pid 2 -> tile_id 2, 6
+pid 3 -> tile_id 3, 7
+```
+
+对应到 tile 网格：
+
+```text
+pid 0 -> T00, T10
+pid 1 -> T01, T11
+pid 2 -> T02, T12
+pid 3 -> T03, T13
+```
+
+从这句代码本身就可以看出，tile 的计算调度是全局 round-robin。
+
+#### 2.1.2 `tile_m / tile_n / offs_m / offs_n`
+
+原文代码：
+
+```python
+tile_m = tile_id // num_tiles_n
+tile_n = tile_id % num_tiles_n
+offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+```
+
+这四句是 tile 定位的核心。
+
+拿 `tile_id = 6` 举例：
+
+- `num_tiles_n = 4`
+- `tile_m = 6 // 4 = 1`
+- `tile_n = 6 % 4 = 2`
+
+所以这个 tile 是 `T12`。
+
+再代入本例中 `BLOCK_M = 4, BLOCK_N = 2`：
+
+- `offs_m = 1 * 4 + [0, 1, 2, 3] = [4, 5, 6, 7]`
+- `offs_n = 2 * 2 + [0, 1] = [4, 5]`
+
+也就是说：
+
+```text
+tile_id = 6
+=> tile_m = 1, tile_n = 2
+=> 这个 tile 对应 C[4:8, 4:6]
+=> 它就是图中的 T12
+```
+
+所以这四句代码不是抽象意义上的“算 tile 坐标”，而是精确地把一维 `tile_id` 恢复成矩阵中的二维 tile 位置。
+
+#### 2.1.3 `rm / rn`
+
+原文代码：
+
+```python
+rm = offs_m % M
+rn = offs_n % N
+rm = tl.max_contiguous(tl.multiple_of(rm, BLOCK_M), BLOCK_M)
+rn = tl.max_contiguous(tl.multiple_of(rn, BLOCK_N), BLOCK_N)
+```
+
+这几句的作用是：
+
+- `rm` / `rn` 是真正用于 A/B 访存的行列索引
+- `% M`、`% N` 让边界 tile 也能复用同一条主路径
+- `tl.multiple_of` / `tl.max_contiguous` 是给编译器的约束与向量化提示
+
+在本例里，如果 `tile_id = 6` 对应 `T12`，那么主路径中：
+
+- `rm` 代表输出 tile 的行块 `[4, 5, 6, 7]`
+- `rn` 代表输出 tile 的列块 `[4, 5]`
+
+#### 2.1.4 `A_BASE / B_BASE / acc`
+
+原文代码：
+
+```python
+rk = tl.arange(0, BLOCK_K)
+A_BASE = A_ptr + rm[:, None] * stride_am + rk[None, :] * stride_ak
+B_BASE = B_ptr + rk[:, None] * stride_bk + rn[None, :] * stride_bn
+acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+```
+
+这三句定义了当前输出 tile 的一次 K 分块计算所需的两块输入：
+
+- `A_BASE` 指向 `A` 的一个 `BLOCK_M x BLOCK_K` 子块
+- `B_BASE` 指向 `B` 的一个 `BLOCK_K x BLOCK_N` 子块
+- `acc` 是当前输出 tile 的寄存器累加器
+
+继续用 `T12 = C[4:8, 4:6]` 举例：
+
+- `A` 需要的是固定行块 `4:8`
+- `B` 需要的是固定列块 `4:6`
+- 然后沿着 `K` 维不断前进
+
+所以这里不是“一次取完整的 A/B”，而是：
+
+```text
+第一轮：取 A[4:8, 0:BLOCK_K]，B[0:BLOCK_K, 4:6]
+第二轮：取 A[4:8, BLOCK_K:2*BLOCK_K]，B[BLOCK_K:2*BLOCK_K, 4:6]
+...
+```
+
+#### 2.1.5 GEMM 主循环
+
+原文代码：
+
+```python
+for k in range(0, tl.cdiv(K, BLOCK_K)):
+    a = tl.load(A_BASE)
+    b = tl.load(B_BASE)
+    acc = tl.dot(a, b, acc, allow_tf32=True)
+    A_BASE += BLOCK_K * stride_ak
+    B_BASE += BLOCK_K * stride_bk
+```
+
+这段代码的含义是：
+
+- 当前 worker 正在计算某个固定输出 tile
+- 它每轮加载一对 `A/B` 的 K 分块
+- 做一次 `tl.dot`
+- 然后把 A、B 的指针都沿 K 维推进一块
+
+对 `T12` 来说，这段循环实际上是在做：
+
+```text
+T12 =
+  A[4:8, 0:BK]    @ B[0:BK, 4:6]
++ A[4:8, BK:2BK]  @ B[BK:2BK, 4:6]
++ A[4:8, 2BK:3BK] @ B[2BK:3BK, 4:6]
++ ...
+```
+
+也就是说，`K` 是 GEMM 的归约维：
+
+- `A` 的列维
+- `B` 的行维
+- 每个输出元素做内积时累加的那一维
+
+#### 2.1.6 写回本地 C 并 signal
+
+原文代码：
+
+```python
+result = acc.to(C_ptr.dtype.element_ty)
+c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
+tl.store(c_ptrs, result, mask=c_mask)
+
+tile_signal(locks_ptr, tile_id)
+```
+
+这几句必须连起来看：
+
+1. `c_ptrs` 定位本地 `C` 中当前 tile 的位置
+2. `tl.store` 把计算好的 tile 写回本地 `C`
+3. `tile_signal(locks_ptr, tile_id)` 通知 comm worker：这个 tile 可以消费了
+
+还是用 `tile_id = 6 / T12` 举例：
+
+```text
+Compute worker 在 rank0 上算出 T12
+-> 写到 rank0 本地 C[4:8, 4:6]
+-> 把 locks[6] 标成 ready
+```
+
+到这里为止，compute worker 的责任已经结束。它只保证：
+
+- tile 已经被算出来
+- tile 已经放进本地 `C`
+- tile 对 comm worker 可见
+
+它并不负责 scatter。
+
+### 2.2 Comm Worker 路径
+
+原文第 4b 节代码：
+
+```python
+else:
+    comm_pid = pid - COMPUTE_SMS
+
+    for tile_id in range(comm_pid, total_tiles, COMM_SMS):
+        # --- 等待 compute worker 完成此 tile ---
+        tile_wait(locks_ptr, tile_id)  # acquire 语义
+
+        # --- 读取已完成的 tile 数据 ---
+        tile_m = tile_id // num_tiles_n
+        tile_n = tile_id % num_tiles_n
+        offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+        offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+
+        c_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+        c_mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
+        tile_data = tl.load(c_ptrs, mask=c_mask, other=0.0)
+
+        # --- scatter 到所有 peer ---
+        for peer in range(world_size):
+            if peer != rank:
+                scatter_tile_to_peer(
+                    C_ptr, tile_data, offs_m, offs_n,
+                    rank, peer, heap_bases,
+                    scatter_src_col_offset, scatter_cols,
+                    scatter_dst_leading_dim, scatter_dst_col_offset,
+                    c_mask,
+                )
+```
+
+下面按原顺序解释。
+
+#### 2.2.1 `comm_pid = pid - COMPUTE_SMS`
+
+这句的作用只是把 comm worker 的编号从 `0` 开始重新编号。它没有改变 tile 的逻辑，只是把：
+
+- 全局 `pid`
+
+映射成：
+
+- comm 池内部编号 `comm_pid`
+
+#### 2.2.2 `for tile_id in range(comm_pid, total_tiles, COMM_SMS)`
+
+这句和 compute worker 的那句是对称的：
+
+- 每个 comm worker 也按 round-robin 领一串 `tile_id`
+- 它不是只领取“本 rank 负责的 tile”
+- 它先按全局 `tile_id` 领任务，再在 scatter 阶段决定哪些列有效
+
+这个结论必须直接从源码读出来，不能替换成“owner-first”这类更直观但与当前代码不完全一致的表述。
+
+#### 2.2.3 `tile_wait(locks_ptr, tile_id)`
+
+这句的语义是：
+
+- comm worker 等待对应的 compute worker 完成当前 `tile_id`
+- 只有在 compute worker 已经对该 tile 执行完 `tl.store(...)` 之后，它才会返回
+
+所以如果当前 comm worker 轮到 `tile_id = 6`，它等待的就是 `T12` 这块 tile 的本地写回已经完成。
+
+#### 2.2.4 再次恢复 `tile_m / tile_n / offs_m / offs_n`
+
+原文代码：
+
+```python
+tile_m = tile_id // num_tiles_n
+tile_n = tile_id % num_tiles_n
+offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+offs_n = tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+```
+
+这和 compute worker 使用的是同一套坐标恢复逻辑。原因很直接：
+
+- compute worker 按这套坐标把 tile 写进了本地 `C`
+- comm worker 必须用完全相同的坐标把同一个 tile 从本地 `C` 读出来
+
+所以对 `tile_id = 6` 而言：
+
+- compute worker 写的是 `C[4:8, 4:6]`
+- comm worker 读的也必须是 `C[4:8, 4:6]`
+
+#### 2.2.5 `tile_data = tl.load(c_ptrs, ...)`
+
+这句的作用非常明确：
+
+- 从本地 `C` 中读出刚刚算好的 tile
+- 结果保存在寄存器里的 `tile_data`
+
+所以 comm worker 并不重新做 GEMM，它只是消费 compute worker 产出的 tile。
+
+#### 2.2.6 `for peer in range(world_size)`
+
+原文这里没有写任何“只对左半边 tile 才 scatter”的条件，而是：
+
+- 对所有 `peer`
+- 只跳过 `peer == rank`
+- 然后统一调用 `scatter_tile_to_peer(...)`
+
+这说明 comm worker 阶段并不是靠 `if tile_n ...` 这种条件提前裁掉 tile，而是把：
+
+- 当前 tile 的坐标 `offs_m / offs_n`
+- 当前 rank 的 scatter contract
+
+一起交给 `scatter_tile_to_peer()` 去做最后判断。
+
+---
+
+## 三、对第 5 节的解读：Scatter Helper
+
+原文第 5 节代码：
+
+```python
+@triton.jit
+def scatter_tile_to_peer(
+    C_ptr, tile_data, offs_m, offs_n,
+    rank, peer, heap_bases,
+    src_col_offset, valid_cols,
+    dst_leading_dim, dst_col_offset,
+    mask, CACHE_MODIFIER: tl.constexpr = ".wt",
+):
+    # (1) 指针翻译: 本地 C_ptr -> peer 地址空间
+    remote_C = translate_ptr(C_ptr, rank, peer, heap_bases)
+
+    # (2) 列映射: 本地列 -> peer 目标列
+    col_mask = (offs_n >= src_col_offset) & (offs_n < src_col_offset + valid_cols)
+    safe_local_cols = tl.where(col_mask, offs_n - src_col_offset, 0)
+    offsets = offs_m[:, None] * dst_leading_dim + (dst_col_offset + safe_local_cols[None, :])
+    final_mask = mask & col_mask[None, :]
+
+    # (3) 远端写入 (write-through 绕过 L2 污染)
+    tl.store(remote_C + offsets, tile_data, mask=final_mask, cache_modifier=".wt")
+```
+
+### 3.1 `remote_C = translate_ptr(...)`
+
+这句只是把本地 `C_ptr` 翻译成当前 rank 地址空间中对 peer 堆的映射地址。
+
+它并不决定 scatter 哪些列有效，只决定：
+
+- 写入的目标地址从“本地 C 基址”
+- 变成“peer 的 C 基址映射”
+
+### 3.2 `col_mask`
+
+真正决定“这个 tile 对当前 rank 是否属于有效 scatter 区间”的是这句：
+
+```python
+col_mask = (offs_n >= src_col_offset) & (offs_n < src_col_offset + valid_cols)
+```
+
+在 `full/full, world_size=2` 下：
+
+- `rank0` 的 contract 是：
+  - `src_col_offset = 0`
+  - `valid_cols = 4`
+- `rank1` 的 contract 是：
+  - `src_col_offset = 4`
+  - `valid_cols = 4`
+
+因此对 `rank0` 来说：
+
+- `T00` 的 `offs_n = [0, 1]`，有效
+- `T01` 的 `offs_n = [2, 3]`，有效
+- `T02` 的 `offs_n = [4, 5]`，无效
+- `T03` 的 `offs_n = [6, 7]`，无效
+
+所以不是 comm worker 前面只等待左半边 tile，而是：
+
+- comm worker 会按自己的 `tile_id` 序列消费 tile
+- 到了 `scatter_tile_to_peer()` 这一步，才由 `col_mask` 决定这块 tile 是否落在当前 rank 负责的列区间里
+
+### 3.3 `safe_local_cols / offsets / final_mask`
+
+原文代码：
+
+```python
+safe_local_cols = tl.where(col_mask, offs_n - src_col_offset, 0)
+offsets = offs_m[:, None] * dst_leading_dim + (dst_col_offset + safe_local_cols[None, :])
+final_mask = mask & col_mask[None, :]
+```
+
+这几句是在做“局部列坐标到远端目标列坐标”的映射。
+
+如果当前是 `rank0`，负责列 `[0, 4)`，那么：
+
+- 对 `T01`，`offs_n = [2, 3]`
+- `safe_local_cols = [2, 3]`
+- `final_mask = true`
+
+因此 `T01` 会真正落到远端对应位置。
+
+但对 `T02`：
+
+- `offs_n = [4, 5]`
+- `col_mask = false`
+- `final_mask = false`
+
+于是虽然 `tile_data` 已经从本地 `C` 中被读出来，这个 tile 最终并不会形成 rank0 负责的有效远端写入。
+
+### 3.4 `tl.store(remote_C + offsets, tile_data, mask=final_mask, ...)`
+
+这句是 scatter helper 的最后一步：
+
+- 把当前 tile 中属于本 rank scatter 区间的部分
+- 写到 peer 的远端 `C`
+
+如果 `final_mask` 全为 `false`，那么这次 store 对当前 rank 的 scatter 语义来说就是空操作。
