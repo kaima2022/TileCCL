@@ -1,16 +1,16 @@
-"""Tests for XTile runtime context construction and heap attachment."""
+"""Tests for TNCC runtime context construction and heap attachment."""
 
 from __future__ import annotations
 
 import pytest
 import torch
 
-import xtile
+import tncc
 
 
 def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) -> None:
-    """``xtile.init(..., heap_size=...)`` should return a usable single-GPU context."""
-    ctx = xtile.init(
+    """``tncc.init(..., heap_size=...)`` should return a usable single-GPU context."""
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
@@ -18,7 +18,7 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
         force_backend=True,
     )
     try:
-        assert xtile.current_context() is ctx
+        assert tncc.current_context() is ctx
         assert ctx.backend_name == device_info.backend
         assert ctx.has_heap
         assert ctx.heap is not None
@@ -108,8 +108,8 @@ def test_init_with_heap_size_attaches_single_gpu_heap(skip_no_gpu, device_info) 
 
 @pytest.mark.multigpu
 def test_init_local_returns_attached_contexts(skip_no_multigpu, device_info) -> None:
-    """``xtile.init_local`` should build one attached context per visible rank."""
-    contexts = xtile.init_local(
+    """``tncc.init_local`` should build one attached context per visible rank."""
+    contexts = tncc.init_local(
         world_size=2,
         heap_size=8 * 1024 * 1024,
         backend=device_info.backend,

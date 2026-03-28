@@ -1,6 +1,6 @@
 {
   "benchmark": "pattern_overlap",
-  "command": "/home/makai/XTile/tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json figures/data/pattern_overlap_latest.json",
+  "command": "tests/benchmarks/bench_patterns.py --output-json figures/data/pattern_overlap_latest.json",
   "environment": {
     "allocator_backend": "torch_bump",
     "b_layout": "shard",
@@ -17,7 +17,7 @@
     "warmup": 3,
     "world_size": 2
   },
-  "generated_at_utc": "2026-03-23T08:48:16.126349+00:00",
+  "generated_at_utc": "2026-03-28T17:55:10.594729+00:00",
   "runtime_metadata": {
     "backend": "cuda",
     "device": "cuda:0",
@@ -39,7 +39,7 @@
         "exportable_segments": [
           {
             "allocator_name": "torch_bump",
-            "base_ptr": 140394260070400,
+            "base_ptr": 139632171810816,
             "device": "cuda:0",
             "segment_id": "heap",
             "segment_kind": "device_heap",
@@ -92,7 +92,7 @@
         "segments": [
           {
             "allocator_name": "torch_bump",
-            "base_ptr": 140394260070400,
+            "base_ptr": 139632171810816,
             "device": "cuda:0",
             "segment_id": "heap",
             "segment_kind": "device_heap",
@@ -106,7 +106,7 @@
       "exportable_segments": [
         {
           "allocator_name": "torch_bump",
-          "base_ptr": 140394260070400,
+          "base_ptr": 139632171810816,
           "device": "cuda:0",
           "is_local_rank": true,
           "is_primary_segment": true,
@@ -125,7 +125,7 @@
         "mapping_mode": "none",
         "zero_copy_mapping_supported": false
       },
-      "local_base": 140394260070400,
+      "local_base": 139632171810816,
       "mode": "single_process",
       "peer_export_catalog": [
         {
@@ -137,7 +137,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140394260070400,
+              "base_ptr": 139632171810816,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -157,7 +157,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140394125852672,
+              "base_ptr": 139632037593088,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -172,7 +172,7 @@
       "peer_exports": [
         {
           "allocator_name": "torch_bump",
-          "base_ptr": 140394260070400,
+          "base_ptr": 139632171810816,
           "device": "cuda:0",
           "payload_type": "int",
           "peer_rank": 0,
@@ -183,7 +183,7 @@
         },
         {
           "allocator_name": "torch_bump",
-          "base_ptr": 140394125852672,
+          "base_ptr": 139632037593088,
           "device": "cuda:1",
           "payload_type": "int",
           "peer_rank": 1,
@@ -206,8 +206,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140394260070400,
-              "mapped_ptr": 140394260070400,
+              "exported_base_ptr": 139632171810816,
+              "mapped_ptr": 139632171810816,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -228,8 +228,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140394125852672,
-              "mapped_ptr": 140394125852672,
+              "exported_base_ptr": 139632037593088,
+              "mapped_ptr": 139632037593088,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -245,8 +245,8 @@
           "allocator_name": "torch_bump",
           "cleanup_kind": "none",
           "device": "cuda:0",
-          "exported_base_ptr": 140394260070400,
-          "mapped_ptr": 140394260070400,
+          "exported_base_ptr": 139632171810816,
+          "mapped_ptr": 139632171810816,
           "peer_rank": 0,
           "segment_id": "heap",
           "segment_kind": "device_heap",
@@ -258,8 +258,8 @@
           "allocator_name": "torch_bump",
           "cleanup_kind": "none",
           "device": "cuda:1",
-          "exported_base_ptr": 140394125852672,
-          "mapped_ptr": 140394125852672,
+          "exported_base_ptr": 139632037593088,
+          "mapped_ptr": 139632037593088,
           "peer_rank": 1,
           "segment_id": "heap",
           "segment_kind": "device_heap",
@@ -273,9 +273,9 @@
           "allocator_name": "torch_bump",
           "cleanup_kind": "none",
           "device": "cuda:0",
-          "exported_base_ptr": 140394260070400,
+          "exported_base_ptr": 139632171810816,
           "is_local_rank": true,
-          "mapped_ptr": 140394260070400,
+          "mapped_ptr": 139632171810816,
           "peer_rank": 0,
           "segment_id": "heap",
           "segment_kind": "device_heap",
@@ -287,9 +287,9 @@
           "allocator_name": "torch_bump",
           "cleanup_kind": "none",
           "device": "cuda:1",
-          "exported_base_ptr": 140394125852672,
+          "exported_base_ptr": 139632037593088,
           "is_local_rank": false,
-          "mapped_ptr": 140394125852672,
+          "mapped_ptr": 139632037593088,
           "peer_rank": 1,
           "segment_id": "heap",
           "segment_kind": "device_heap",
@@ -312,7 +312,7 @@
       "segments": [
         {
           "allocator_name": "torch_bump",
-          "base_ptr": 140394260070400,
+          "base_ptr": 139632171810816,
           "device": "cuda:0",
           "is_local_rank": true,
           "owner_rank": 0,
@@ -354,7 +354,7 @@
     },
     "contracts": {
       "allreduce.in_place": {
-        "detail": "Stable public in-place host contract: tensor.numel must be divisible by world_size, and the tensor must reside in the attached symmetric heap.",
+        "detail": "Stable public in-place host contract: contiguous tensor on the attached symmetric heap. The current public fast path does not require tensor.numel to be divisible by world_size.",
         "state": "supported"
       },
       "gemm_allgather.shard/full": {
@@ -480,7 +480,7 @@
       "M": 4096,
       "N": 4096,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.0843339151350444,
+      "best_speedup_vs_bulk": 1.111054924537109,
       "heap_size_bytes": 134217728,
       "local_N": 2048,
       "metadata": {
@@ -585,36 +585,36 @@
       "required_heap_bytes": 134217728,
       "results": [
         {
-          "max_ms": 2.0898692309856415,
-          "mean_ms": 2.0762506872415543,
-          "min_ms": 2.06901878118515,
+          "max_ms": 2.1436959505081177,
+          "mean_ms": 2.1353017538785934,
+          "min_ms": 2.128109335899353,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 1.9499026238918304,
-          "mean_ms": 1.9238367676734924,
-          "min_ms": 1.9081011414527893,
-          "overlap_efficiency": 0.07777485694943087,
+          "max_ms": 1.9567310810089111,
+          "mean_ms": 1.9311826676130295,
+          "min_ms": 1.9153952598571777,
+          "overlap_efficiency": 0.09995448657353923,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.0843339151350444
+          "speedup_vs_bulk": 1.111054924537109
         },
         {
-          "max_ms": 2.2274963557720184,
-          "mean_ms": 2.211177349090576,
-          "min_ms": 2.188492566347122,
-          "overlap_efficiency": -0.05774417624838413,
+          "max_ms": 2.3119375109672546,
+          "mean_ms": 2.2705189883708954,
+          "min_ms": 2.2478438913822174,
+          "overlap_efficiency": -0.0562633476875678,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 0.9454081832403072
+          "speedup_vs_bulk": 0.9467335983864793
         },
         {
-          "max_ms": 2.079363912343979,
-          "mean_ms": 2.0325008779764175,
-          "min_ms": 1.995965838432312,
-          "overlap_efficiency": 0.03530801335258682,
+          "max_ms": 2.2863149642944336,
+          "mean_ms": 2.2077199071645737,
+          "min_ms": 2.16800719499588,
+          "overlap_efficiency": -0.01874803066904729,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.036600297132448
+          "speedup_vs_bulk": 0.9815969895355431
         }
       ],
       "runtime_metadata": {
@@ -638,7 +638,7 @@
             "exportable_segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140394260070400,
+                "base_ptr": 139632171810816,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -691,7 +691,7 @@
             "segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140394260070400,
+                "base_ptr": 139632171810816,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -705,7 +705,7 @@
           "exportable_segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140394260070400,
+              "base_ptr": 139632171810816,
               "device": "cuda:0",
               "is_local_rank": true,
               "is_primary_segment": true,
@@ -724,7 +724,7 @@
             "mapping_mode": "none",
             "zero_copy_mapping_supported": false
           },
-          "local_base": 140394260070400,
+          "local_base": 139632171810816,
           "mode": "single_process",
           "peer_export_catalog": [
             {
@@ -736,7 +736,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140394260070400,
+                  "base_ptr": 139632171810816,
                   "device": "cuda:0",
                   "payload_type": "int",
                   "peer_rank": 0,
@@ -756,7 +756,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140394125852672,
+                  "base_ptr": 139632037593088,
                   "device": "cuda:1",
                   "payload_type": "int",
                   "peer_rank": 1,
@@ -771,7 +771,7 @@
           "peer_exports": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140394260070400,
+              "base_ptr": 139632171810816,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -782,7 +782,7 @@
             },
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140394125852672,
+              "base_ptr": 139632037593088,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -805,8 +805,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:0",
-                  "exported_base_ptr": 140394260070400,
-                  "mapped_ptr": 140394260070400,
+                  "exported_base_ptr": 139632171810816,
+                  "mapped_ptr": 139632171810816,
                   "peer_rank": 0,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -827,8 +827,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:1",
-                  "exported_base_ptr": 140394125852672,
-                  "mapped_ptr": 140394125852672,
+                  "exported_base_ptr": 139632037593088,
+                  "mapped_ptr": 139632037593088,
                   "peer_rank": 1,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -844,8 +844,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140394260070400,
-              "mapped_ptr": 140394260070400,
+              "exported_base_ptr": 139632171810816,
+              "mapped_ptr": 139632171810816,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -857,8 +857,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140394125852672,
-              "mapped_ptr": 140394125852672,
+              "exported_base_ptr": 139632037593088,
+              "mapped_ptr": 139632037593088,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -872,9 +872,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140394260070400,
+              "exported_base_ptr": 139632171810816,
               "is_local_rank": true,
-              "mapped_ptr": 140394260070400,
+              "mapped_ptr": 139632171810816,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -886,9 +886,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140394125852672,
+              "exported_base_ptr": 139632037593088,
               "is_local_rank": false,
-              "mapped_ptr": 140394125852672,
+              "mapped_ptr": 139632037593088,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -911,7 +911,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140394260070400,
+              "base_ptr": 139632171810816,
               "device": "cuda:0",
               "is_local_rank": true,
               "owner_rank": 0,
@@ -933,7 +933,7 @@
       "M": 8192,
       "N": 4608,
       "best_pattern": "wg_specialized",
-      "best_speedup_vs_bulk": 1.6348835237346406,
+      "best_speedup_vs_bulk": 1.6466471564235299,
       "heap_size_bytes": 939524096,
       "local_N": 2304,
       "metadata": {
@@ -1038,36 +1038,36 @@
       "required_heap_bytes": 939524096,
       "results": [
         {
-          "max_ms": 7.983218878507614,
-          "mean_ms": 7.936720177531242,
-          "min_ms": 7.900852710008621,
+          "max_ms": 7.979180663824081,
+          "mean_ms": 7.945916056632996,
+          "min_ms": 7.889624685049057,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 7.5667500495910645,
-          "mean_ms": 7.298281788825989,
-          "min_ms": 7.140535861253738,
-          "overlap_efficiency": 0.09623225196841478,
+          "max_ms": 7.525481283664703,
+          "mean_ms": 7.249271124601364,
+          "min_ms": 7.04684853553772,
+          "overlap_efficiency": 0.10682081634483942,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.10647896229757
+          "speedup_vs_bulk": 1.1195961776759018
         },
         {
-          "max_ms": 5.440313369035721,
-          "mean_ms": 5.384289100766182,
-          "min_ms": 5.317661911249161,
-          "overlap_efficiency": 0.3269508866412777,
+          "max_ms": 5.463365465402603,
+          "mean_ms": 5.303262546658516,
+          "min_ms": 5.16752153635025,
+          "overlap_efficiency": 0.34502314842139803,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.4857756739470203
+          "speedup_vs_bulk": 1.526771515038792
         },
         {
-          "max_ms": 5.134370177984238,
-          "mean_ms": 4.917340353131294,
-          "min_ms": 4.832670092582703,
-          "overlap_efficiency": 0.388335630347749,
+          "max_ms": 5.0731562077999115,
+          "mean_ms": 4.877841845154762,
+          "min_ms": 4.791326820850372,
+          "overlap_efficiency": 0.3927053551824842,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.6348835237346406
+          "speedup_vs_bulk": 1.6466471564235299
         }
       ],
       "runtime_metadata": {
@@ -1091,7 +1091,7 @@
             "exportable_segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -1144,7 +1144,7 @@
             "segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -1158,7 +1158,7 @@
           "exportable_segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "is_primary_segment": true,
@@ -1177,7 +1177,7 @@
             "mapping_mode": "none",
             "zero_copy_mapping_supported": false
           },
-          "local_base": 140392716566528,
+          "local_base": 139630393425920,
           "mode": "single_process",
           "peer_export_catalog": [
             {
@@ -1189,7 +1189,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140392716566528,
+                  "base_ptr": 139630393425920,
                   "device": "cuda:0",
                   "payload_type": "int",
                   "peer_rank": 0,
@@ -1209,7 +1209,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140391777042432,
+                  "base_ptr": 139629453901824,
                   "device": "cuda:1",
                   "payload_type": "int",
                   "peer_rank": 1,
@@ -1224,7 +1224,7 @@
           "peer_exports": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -1235,7 +1235,7 @@
             },
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140391777042432,
+              "base_ptr": 139629453901824,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -1258,8 +1258,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:0",
-                  "exported_base_ptr": 140392716566528,
-                  "mapped_ptr": 140392716566528,
+                  "exported_base_ptr": 139630393425920,
+                  "mapped_ptr": 139630393425920,
                   "peer_rank": 0,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -1280,8 +1280,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:1",
-                  "exported_base_ptr": 140391777042432,
-                  "mapped_ptr": 140391777042432,
+                  "exported_base_ptr": 139629453901824,
+                  "mapped_ptr": 139629453901824,
                   "peer_rank": 1,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -1297,8 +1297,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
-              "mapped_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1310,8 +1310,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
-              "mapped_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1325,9 +1325,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
               "is_local_rank": true,
-              "mapped_ptr": 140392716566528,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1339,9 +1339,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
               "is_local_rank": false,
-              "mapped_ptr": 140391777042432,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1364,7 +1364,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "owner_rank": 0,
@@ -1386,7 +1386,7 @@
       "M": 8192,
       "N": 3584,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.2055940432979204,
+      "best_speedup_vs_bulk": 1.2069239213037237,
       "heap_size_bytes": 402653184,
       "local_N": 1792,
       "metadata": {
@@ -1491,36 +1491,36 @@
       "required_heap_bytes": 402653184,
       "results": [
         {
-          "max_ms": 4.348237067461014,
-          "mean_ms": 4.301082715392113,
-          "min_ms": 4.265069961547852,
+          "max_ms": 4.303876310586929,
+          "mean_ms": 4.281887784600258,
+          "min_ms": 4.259824752807617,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 3.63197922706604,
-          "mean_ms": 3.5799436271190643,
-          "min_ms": 3.537733107805252,
-          "overlap_efficiency": 0.17053339342612783,
+          "max_ms": 3.6309659481048584,
+          "mean_ms": 3.569706529378891,
+          "min_ms": 3.529489040374756,
+          "overlap_efficiency": 0.17144736105669667,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.2055940432979204
+          "speedup_vs_bulk": 1.2069239213037237
         },
         {
-          "max_ms": 4.067711532115936,
-          "mean_ms": 4.017255827784538,
-          "min_ms": 3.9641596376895905,
-          "overlap_efficiency": 0.07055225976857282,
+          "max_ms": 4.076108336448669,
+          "mean_ms": 4.028506949543953,
+          "min_ms": 4.000820219516754,
+          "overlap_efficiency": 0.06080168746851733,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.075907721020448
+          "speedup_vs_bulk": 1.0647378585089602
         },
         {
-          "max_ms": 3.7068352103233337,
-          "mean_ms": 3.6675702780485153,
-          "min_ms": 3.6507733166217804,
-          "overlap_efficiency": 0.14402967605791273,
+          "max_ms": 3.833327442407608,
+          "mean_ms": 3.7015192210674286,
+          "min_ms": 3.6262162029743195,
+          "overlap_efficiency": 0.14874052023283146,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.1682648008106147
+          "speedup_vs_bulk": 1.174729942829552
         }
       ],
       "runtime_metadata": {
@@ -1544,7 +1544,7 @@
             "exportable_segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -1597,7 +1597,7 @@
             "segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -1611,7 +1611,7 @@
           "exportable_segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "is_primary_segment": true,
@@ -1630,7 +1630,7 @@
             "mapping_mode": "none",
             "zero_copy_mapping_supported": false
           },
-          "local_base": 140392716566528,
+          "local_base": 139630393425920,
           "mode": "single_process",
           "peer_export_catalog": [
             {
@@ -1642,7 +1642,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140392716566528,
+                  "base_ptr": 139630393425920,
                   "device": "cuda:0",
                   "payload_type": "int",
                   "peer_rank": 0,
@@ -1662,7 +1662,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140391777042432,
+                  "base_ptr": 139629453901824,
                   "device": "cuda:1",
                   "payload_type": "int",
                   "peer_rank": 1,
@@ -1677,7 +1677,7 @@
           "peer_exports": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -1688,7 +1688,7 @@
             },
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140391777042432,
+              "base_ptr": 139629453901824,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -1711,8 +1711,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:0",
-                  "exported_base_ptr": 140392716566528,
-                  "mapped_ptr": 140392716566528,
+                  "exported_base_ptr": 139630393425920,
+                  "mapped_ptr": 139630393425920,
                   "peer_rank": 0,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -1733,8 +1733,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:1",
-                  "exported_base_ptr": 140391777042432,
-                  "mapped_ptr": 140391777042432,
+                  "exported_base_ptr": 139629453901824,
+                  "mapped_ptr": 139629453901824,
                   "peer_rank": 1,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -1750,8 +1750,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
-              "mapped_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1763,8 +1763,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
-              "mapped_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1778,9 +1778,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
               "is_local_rank": true,
-              "mapped_ptr": 140392716566528,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1792,9 +1792,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
               "is_local_rank": false,
-              "mapped_ptr": 140391777042432,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -1817,7 +1817,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "owner_rank": 0,
@@ -1839,7 +1839,7 @@
       "M": 8192,
       "N": 8192,
       "best_pattern": "wg_specialized",
-      "best_speedup_vs_bulk": 1.590017505397958,
+      "best_speedup_vs_bulk": 1.6121078832355622,
       "heap_size_bytes": 939524096,
       "local_N": 4096,
       "metadata": {
@@ -1944,36 +1944,36 @@
       "required_heap_bytes": 939524096,
       "results": [
         {
-          "max_ms": 13.280332088470459,
-          "mean_ms": 13.021734356880188,
-          "min_ms": 12.87154108285904,
+          "max_ms": 13.022076338529587,
+          "mean_ms": 12.958667427301407,
+          "min_ms": 12.848015874624252,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 12.180309742689133,
-          "mean_ms": 11.379080638289452,
-          "min_ms": 10.81199198961258,
-          "overlap_efficiency": 0.1600079648573821,
+          "max_ms": 11.798650026321411,
+          "mean_ms": 11.48565225303173,
+          "min_ms": 11.211764067411423,
+          "overlap_efficiency": 0.12735443536029123,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.190487478646408
+          "speedup_vs_bulk": 1.1459406207064977
         },
         {
-          "max_ms": 8.804168552160263,
-          "mean_ms": 8.737985789775848,
-          "min_ms": 8.644349873065948,
-          "overlap_efficiency": 0.32841376044881043,
+          "max_ms": 8.760187774896622,
+          "mean_ms": 8.707588911056519,
+          "min_ms": 8.662164211273193,
+          "overlap_efficiency": 0.32579751645687294,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.4890120450774633
+          "speedup_vs_bulk": 1.4832339310658034
         },
         {
-          "max_ms": 8.538343012332916,
-          "mean_ms": 8.223635330796242,
-          "min_ms": 8.095219731330872,
-          "overlap_efficiency": 0.3710761066434204,
+          "max_ms": 8.398044854402542,
+          "mean_ms": 8.13596211373806,
+          "min_ms": 7.969699800014496,
+          "overlap_efficiency": 0.3796941194822757,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.590017505397958
+          "speedup_vs_bulk": 1.6121078832355622
         }
       ],
       "runtime_metadata": {
@@ -1997,7 +1997,7 @@
             "exportable_segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -2050,7 +2050,7 @@
             "segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -2064,7 +2064,7 @@
           "exportable_segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "is_primary_segment": true,
@@ -2083,7 +2083,7 @@
             "mapping_mode": "none",
             "zero_copy_mapping_supported": false
           },
-          "local_base": 140392716566528,
+          "local_base": 139630393425920,
           "mode": "single_process",
           "peer_export_catalog": [
             {
@@ -2095,7 +2095,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140392716566528,
+                  "base_ptr": 139630393425920,
                   "device": "cuda:0",
                   "payload_type": "int",
                   "peer_rank": 0,
@@ -2115,7 +2115,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140391777042432,
+                  "base_ptr": 139629453901824,
                   "device": "cuda:1",
                   "payload_type": "int",
                   "peer_rank": 1,
@@ -2130,7 +2130,7 @@
           "peer_exports": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -2141,7 +2141,7 @@
             },
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140391777042432,
+              "base_ptr": 139629453901824,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -2164,8 +2164,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:0",
-                  "exported_base_ptr": 140392716566528,
-                  "mapped_ptr": 140392716566528,
+                  "exported_base_ptr": 139630393425920,
+                  "mapped_ptr": 139630393425920,
                   "peer_rank": 0,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -2186,8 +2186,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:1",
-                  "exported_base_ptr": 140391777042432,
-                  "mapped_ptr": 140391777042432,
+                  "exported_base_ptr": 139629453901824,
+                  "mapped_ptr": 139629453901824,
                   "peer_rank": 1,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -2203,8 +2203,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
-              "mapped_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2216,8 +2216,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
-              "mapped_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2231,9 +2231,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
               "is_local_rank": true,
-              "mapped_ptr": 140392716566528,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2245,9 +2245,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
               "is_local_rank": false,
-              "mapped_ptr": 140391777042432,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2270,7 +2270,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "owner_rank": 0,
@@ -2292,7 +2292,7 @@
       "M": 4096,
       "N": 8192,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.1583953227054544,
+      "best_speedup_vs_bulk": 1.1575416080544976,
       "heap_size_bytes": 268435456,
       "local_N": 4096,
       "metadata": {
@@ -2397,36 +2397,36 @@
       "required_heap_bytes": 268435456,
       "results": [
         {
-          "max_ms": 4.404418170452118,
-          "mean_ms": 4.385361075401306,
-          "min_ms": 4.366569221019745,
+          "max_ms": 4.428960382938385,
+          "mean_ms": 4.392626136541367,
+          "min_ms": 4.3652355670928955,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 3.790237009525299,
-          "mean_ms": 3.7790007889270782,
-          "min_ms": 3.7694983184337616,
-          "overlap_efficiency": 0.13673684587703538,
+          "max_ms": 3.7845000624656677,
+          "mean_ms": 3.776698559522629,
+          "min_ms": 3.7711262702941895,
+          "overlap_efficiency": 0.13610016863176144,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.1583953227054544
+          "speedup_vs_bulk": 1.1575416080544976
         },
         {
-          "max_ms": 4.266694188117981,
-          "mean_ms": 4.242844879627228,
-          "min_ms": 4.217393696308136,
-          "overlap_efficiency": 0.03416309628014358,
+          "max_ms": 4.263769835233688,
+          "mean_ms": 4.2406197637319565,
+          "min_ms": 4.216935485601425,
+          "overlap_efficiency": 0.03397298478217825,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.0353714961072276
+          "speedup_vs_bulk": 1.0351677378033968
         },
         {
-          "max_ms": 4.120137542486191,
-          "mean_ms": 3.9885740727186203,
-          "min_ms": 3.9112046360969543,
-          "overlap_efficiency": 0.10428429319997068,
+          "max_ms": 4.093073308467865,
+          "mean_ms": 3.971536085009575,
+          "min_ms": 3.9009377360343933,
+          "overlap_efficiency": 0.10636260607757064,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.1164256609639338
+          "speedup_vs_bulk": 1.1190221076254596
         }
       ],
       "runtime_metadata": {
@@ -2450,7 +2450,7 @@
             "exportable_segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -2503,7 +2503,7 @@
             "segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -2517,7 +2517,7 @@
           "exportable_segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "is_primary_segment": true,
@@ -2536,7 +2536,7 @@
             "mapping_mode": "none",
             "zero_copy_mapping_supported": false
           },
-          "local_base": 140392716566528,
+          "local_base": 139630393425920,
           "mode": "single_process",
           "peer_export_catalog": [
             {
@@ -2548,7 +2548,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140392716566528,
+                  "base_ptr": 139630393425920,
                   "device": "cuda:0",
                   "payload_type": "int",
                   "peer_rank": 0,
@@ -2568,7 +2568,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140391777042432,
+                  "base_ptr": 139629453901824,
                   "device": "cuda:1",
                   "payload_type": "int",
                   "peer_rank": 1,
@@ -2583,7 +2583,7 @@
           "peer_exports": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -2594,7 +2594,7 @@
             },
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140391777042432,
+              "base_ptr": 139629453901824,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -2617,8 +2617,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:0",
-                  "exported_base_ptr": 140392716566528,
-                  "mapped_ptr": 140392716566528,
+                  "exported_base_ptr": 139630393425920,
+                  "mapped_ptr": 139630393425920,
                   "peer_rank": 0,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -2639,8 +2639,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:1",
-                  "exported_base_ptr": 140391777042432,
-                  "mapped_ptr": 140391777042432,
+                  "exported_base_ptr": 139629453901824,
+                  "mapped_ptr": 139629453901824,
                   "peer_rank": 1,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -2656,8 +2656,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
-              "mapped_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2669,8 +2669,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
-              "mapped_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2684,9 +2684,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
               "is_local_rank": true,
-              "mapped_ptr": 140392716566528,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2698,9 +2698,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
               "is_local_rank": false,
-              "mapped_ptr": 140391777042432,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -2723,7 +2723,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "owner_rank": 0,
@@ -2745,7 +2745,7 @@
       "M": 2048,
       "N": 16384,
       "best_pattern": "fused_sequential",
-      "best_speedup_vs_bulk": 1.1891147666128532,
+      "best_speedup_vs_bulk": 1.1814193766772918,
       "heap_size_bytes": 268435456,
       "local_N": 8192,
       "metadata": {
@@ -2850,36 +2850,36 @@
       "required_heap_bytes": 268435456,
       "results": [
         {
-          "max_ms": 5.924481898546219,
-          "mean_ms": 4.70309741795063,
-          "min_ms": 4.549428820610046,
+          "max_ms": 4.568528383970261,
+          "mean_ms": 4.549967870116234,
+          "min_ms": 4.524674266576767,
           "overlap_efficiency": 0.0,
           "pattern": "bulk_sync",
           "speedup_vs_bulk": 1.0
         },
         {
-          "max_ms": 3.848094493150711,
-          "mean_ms": 3.8360808044672012,
-          "min_ms": 3.8258954882621765,
-          "overlap_efficiency": 0.15903827950227145,
+          "max_ms": 4.2320601642131805,
+          "mean_ms": 3.8856323808431625,
+          "min_ms": 3.8298629224300385,
+          "overlap_efficiency": 0.15356052241798213,
           "pattern": "fused_sequential",
-          "speedup_vs_bulk": 1.1891147666128532
+          "speedup_vs_bulk": 1.1814193766772918
         },
         {
-          "max_ms": 4.3882690370082855,
-          "mean_ms": 4.363808780908585,
-          "min_ms": 4.341781139373779,
-          "overlap_efficiency": 0.04564258271182775,
+          "max_ms": 4.3996162712574005,
+          "mean_ms": 4.3724119663238525,
+          "min_ms": 4.3356455862522125,
+          "overlap_efficiency": 0.04177730134540003,
           "pattern": "producer_consumer",
-          "speedup_vs_bulk": 1.0478254602363988
+          "speedup_vs_bulk": 1.0435987390030081
         },
         {
-          "max_ms": 4.22341376543045,
-          "mean_ms": 4.146390408277512,
-          "min_ms": 4.050448536872864,
-          "overlap_efficiency": 0.10967976495789489,
+          "max_ms": 4.216127097606659,
+          "mean_ms": 4.109327122569084,
+          "min_ms": 4.051219671964645,
+          "overlap_efficiency": 0.10463838206199161,
           "pattern": "wg_specialized",
-          "speedup_vs_bulk": 1.1231913649055811
+          "speedup_vs_bulk": 1.1168671740731648
         }
       ],
       "runtime_metadata": {
@@ -2903,7 +2903,7 @@
             "exportable_segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -2956,7 +2956,7 @@
             "segments": [
               {
                 "allocator_name": "torch_bump",
-                "base_ptr": 140392716566528,
+                "base_ptr": 139630393425920,
                 "device": "cuda:0",
                 "segment_id": "heap",
                 "segment_kind": "device_heap",
@@ -2970,7 +2970,7 @@
           "exportable_segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "is_primary_segment": true,
@@ -2989,7 +2989,7 @@
             "mapping_mode": "none",
             "zero_copy_mapping_supported": false
           },
-          "local_base": 140392716566528,
+          "local_base": 139630393425920,
           "mode": "single_process",
           "peer_export_catalog": [
             {
@@ -3001,7 +3001,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140392716566528,
+                  "base_ptr": 139630393425920,
                   "device": "cuda:0",
                   "payload_type": "int",
                   "peer_rank": 0,
@@ -3021,7 +3021,7 @@
               "segments": [
                 {
                   "allocator_name": "torch_bump",
-                  "base_ptr": 140391777042432,
+                  "base_ptr": 139629453901824,
                   "device": "cuda:1",
                   "payload_type": "int",
                   "peer_rank": 1,
@@ -3036,7 +3036,7 @@
           "peer_exports": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "payload_type": "int",
               "peer_rank": 0,
@@ -3047,7 +3047,7 @@
             },
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140391777042432,
+              "base_ptr": 139629453901824,
               "device": "cuda:1",
               "payload_type": "int",
               "peer_rank": 1,
@@ -3070,8 +3070,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:0",
-                  "exported_base_ptr": 140392716566528,
-                  "mapped_ptr": 140392716566528,
+                  "exported_base_ptr": 139630393425920,
+                  "mapped_ptr": 139630393425920,
                   "peer_rank": 0,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -3092,8 +3092,8 @@
                   "allocator_name": "torch_bump",
                   "cleanup_kind": "none",
                   "device": "cuda:1",
-                  "exported_base_ptr": 140391777042432,
-                  "mapped_ptr": 140391777042432,
+                  "exported_base_ptr": 139629453901824,
+                  "mapped_ptr": 139629453901824,
                   "peer_rank": 1,
                   "segment_id": "heap",
                   "segment_kind": "device_heap",
@@ -3109,8 +3109,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
-              "mapped_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -3122,8 +3122,8 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
-              "mapped_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -3137,9 +3137,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:0",
-              "exported_base_ptr": 140392716566528,
+              "exported_base_ptr": 139630393425920,
               "is_local_rank": true,
-              "mapped_ptr": 140392716566528,
+              "mapped_ptr": 139630393425920,
               "peer_rank": 0,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -3151,9 +3151,9 @@
               "allocator_name": "torch_bump",
               "cleanup_kind": "none",
               "device": "cuda:1",
-              "exported_base_ptr": 140391777042432,
+              "exported_base_ptr": 139629453901824,
               "is_local_rank": false,
-              "mapped_ptr": 140391777042432,
+              "mapped_ptr": 139629453901824,
               "peer_rank": 1,
               "segment_id": "heap",
               "segment_kind": "device_heap",
@@ -3176,7 +3176,7 @@
           "segments": [
             {
               "allocator_name": "torch_bump",
-              "base_ptr": 140392716566528,
+              "base_ptr": 139630393425920,
               "device": "cuda:0",
               "is_local_rank": true,
               "owner_rank": 0,
@@ -3195,7 +3195,7 @@
     }
   ],
   "summary": {
-    "best_speedup_vs_bulk": 1.6348835237346406,
+    "best_speedup_vs_bulk": 1.6466471564235299,
     "size_count": 6
   }
 }

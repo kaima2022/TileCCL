@@ -1,4 +1,4 @@
-"""Tests for xtile.memory.symmetric_heap.SymmetricHeap.
+"""Tests for tncc.memory.symmetric_heap.SymmetricHeap.
 
 Comprehensive tests covering:
 - Constructor argument validation (no GPU needed for some)
@@ -24,7 +24,7 @@ import torch
 # Constants used by the SymmetricHeap implementation
 # ---------------------------------------------------------------------------
 
-_ALIGN = 256  # must match xtile.memory.symmetric_heap._ALIGN
+_ALIGN = 256  # must match tncc.memory.symmetric_heap._ALIGN
 
 
 def _round_up(value: int, alignment: int) -> int:
@@ -35,7 +35,7 @@ class _FakeValidationAllocator:
     """Minimal allocator stub for peer-state validation unit tests."""
 
     def __init__(self, *, base_ptr: int, size: int, device: str) -> None:
-        from xtile.memory.allocators import MemorySegmentDescriptor
+        from tncc.memory.allocators import MemorySegmentDescriptor
 
         self._name = "torch_bump"
         self._segment = MemorySegmentDescriptor(
@@ -86,7 +86,7 @@ def _make_peer_export(
     segment_kind: str = "device_heap",
     allocator_name: str = "torch_bump",
 ):
-    from xtile.memory.allocators import PeerMemoryExportDescriptor
+    from tncc.memory.allocators import PeerMemoryExportDescriptor
 
     return PeerMemoryExportDescriptor(
         peer_rank=rank,
@@ -114,7 +114,7 @@ def _make_peer_import(
     cleanup_kind: str = "ipc_handle",
     access_kind: str | None = None,
 ):
-    from xtile.memory.allocators import ImportedPeerMemory
+    from tncc.memory.allocators import ImportedPeerMemory
 
     if access_kind is None:
         if transport == "local_only":
@@ -144,7 +144,7 @@ def _make_peer_import(
 
 
 def _make_validation_heap():
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heap = SymmetricHeap.__new__(SymmetricHeap)
     heap._rank = 0
@@ -175,36 +175,36 @@ class TestSymmetricHeapUnit:
     def test_creation_rejects_zero_size(self) -> None:
         """size=0 raises ValueError."""
         with pytest.raises(ValueError, match="positive"):
-            from xtile.memory.symmetric_heap import SymmetricHeap
+            from tncc.memory.symmetric_heap import SymmetricHeap
             SymmetricHeap(size=0, rank=0, world_size=1)
 
     def test_creation_rejects_negative_size(self) -> None:
         """Negative size raises ValueError."""
         with pytest.raises(ValueError, match="positive"):
-            from xtile.memory.symmetric_heap import SymmetricHeap
+            from tncc.memory.symmetric_heap import SymmetricHeap
             SymmetricHeap(size=-1024, rank=0, world_size=1)
 
     def test_creation_rejects_rank_out_of_range(self) -> None:
         """rank >= world_size raises ValueError."""
         with pytest.raises(ValueError, match="rank="):
-            from xtile.memory.symmetric_heap import SymmetricHeap
+            from tncc.memory.symmetric_heap import SymmetricHeap
             SymmetricHeap(size=1024, rank=2, world_size=2)
 
     def test_creation_rejects_negative_rank(self) -> None:
         """Negative rank raises ValueError."""
         with pytest.raises(ValueError, match="rank="):
-            from xtile.memory.symmetric_heap import SymmetricHeap
+            from tncc.memory.symmetric_heap import SymmetricHeap
             SymmetricHeap(size=1024, rank=-1, world_size=1)
 
     def test_creation_rejects_zero_world_size(self) -> None:
         """world_size=0 raises ValueError."""
         with pytest.raises(ValueError, match="world_size"):
-            from xtile.memory.symmetric_heap import SymmetricHeap
+            from tncc.memory.symmetric_heap import SymmetricHeap
             SymmetricHeap(size=1024, rank=0, world_size=0)
 
     def test_creation_validates_args(self) -> None:
         """Various bad size/rank/world_size combinations raise ValueError."""
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
         bad_combos = [
             dict(size=0, rank=0, world_size=1),
             dict(size=-100, rank=0, world_size=1),
@@ -222,7 +222,7 @@ class TestSymmetricHeapUnit:
         monkeypatch,
     ) -> None:
         """Default multiprocess setup should no longer auto-fallback to unsafe transports."""
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         heap = SymmetricHeap.__new__(SymmetricHeap)
         heap._backend = MagicMock()
@@ -241,7 +241,7 @@ class TestSymmetricHeapUnit:
             side_effect=lambda: calls.append("peer_access_pointer_exchange")
         )
 
-        monkeypatch.delenv("XTILE_FORCE_MULTIPROCESS_TRANSPORT", raising=False)
+        monkeypatch.delenv("TNCC_FORCE_MULTIPROCESS_TRANSPORT", raising=False)
         heap._setup_multiprocess()
 
         assert calls == ["ctypes_ipc"]
@@ -251,7 +251,7 @@ class TestSymmetricHeapUnit:
         monkeypatch,
     ) -> None:
         """If the device-safe path fails, auto mode should fail closed instead of downgrading silently."""
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         heap = SymmetricHeap.__new__(SymmetricHeap)
         heap._backend = MagicMock()
@@ -265,7 +265,7 @@ class TestSymmetricHeapUnit:
         heap._setup_multiprocess_pytorch_ipc = MagicMock()
         heap._setup_multiprocess_peer_access_pointer_exchange = MagicMock()
 
-        monkeypatch.delenv("XTILE_FORCE_MULTIPROCESS_TRANSPORT", raising=False)
+        monkeypatch.delenv("TNCC_FORCE_MULTIPROCESS_TRANSPORT", raising=False)
         with pytest.raises(RuntimeError, match="All multiprocess transport strategies failed"):
             heap._setup_multiprocess()
 
@@ -277,7 +277,7 @@ class TestSymmetricHeapUnit:
         monkeypatch,
     ) -> None:
         """Forced diagnostics should still be able to target non-default transports."""
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         heap = SymmetricHeap.__new__(SymmetricHeap)
         heap._backend = MagicMock()
@@ -296,7 +296,7 @@ class TestSymmetricHeapUnit:
             side_effect=lambda: calls.append("peer_access_pointer_exchange")
         )
 
-        monkeypatch.setenv("XTILE_FORCE_MULTIPROCESS_TRANSPORT", "pytorch_ipc")
+        monkeypatch.setenv("TNCC_FORCE_MULTIPROCESS_TRANSPORT", "pytorch_ipc")
         heap._setup_multiprocess()
 
         assert calls == ["pytorch_ipc"]
@@ -628,7 +628,7 @@ class TestSymmetricHeapUnit:
         if not device_info.has_gpu:
             pytest.skip("No GPU available")
 
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         # Create a tiny heap (4096 bytes)
         heap = SymmetricHeap(size=4096, rank=0, world_size=1)
@@ -718,7 +718,7 @@ class TestSymmetricHeapUnit:
         if not device_info.has_gpu:
             pytest.skip("No GPU available")
 
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         with SymmetricHeap(size=4096, rank=0, world_size=1) as heap:
             assert not heap._cleaned_up
@@ -731,7 +731,7 @@ class TestSymmetricHeapUnit:
         if not device_info.has_gpu:
             pytest.skip("No GPU available")
 
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         heap = None
         with pytest.raises(RuntimeError, match="deliberate"):
@@ -747,7 +747,7 @@ class TestSymmetricHeapUnit:
         if not device_info.has_gpu:
             pytest.skip("No GPU available")
 
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         heap = SymmetricHeap(size=4096, rank=0, world_size=1)
         heap.cleanup()
@@ -1179,7 +1179,7 @@ class TestSymmetricHeapMultiGPU:
     """
 
     def _get_heap_cls(self):
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
         return SymmetricHeap
 
     def test_heap_bases_correct_world_size(self, skip_no_multigpu, device_info) -> None:

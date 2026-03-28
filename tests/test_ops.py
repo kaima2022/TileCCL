@@ -1,21 +1,21 @@
-"""Integration tests for high-level xtile.ops entrypoints."""
+"""Integration tests for high-level tncc.ops entrypoints."""
 
 from __future__ import annotations
 
 import pytest
 import torch
 
-import xtile
+import tncc
 
 
 def test_gemm_allscatter_high_level_api(skip_no_multigpu, device_info) -> None:
     """Single-GPU smoke test for the high-level API contract."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 256, 256, 256
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -26,7 +26,7 @@ def test_gemm_allscatter_high_level_api(skip_no_multigpu, device_info) -> None:
         B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = torch.zeros(M, N, device=ctx.device, dtype=torch.float16)
 
-        xtile.ops.gemm_allscatter(A, B, C, ctx=ctx, pattern="bulk_sync")
+        tncc.ops.gemm_allscatter(A, B, C, ctx=ctx, pattern="bulk_sync")
         torch.cuda.synchronize()
 
         ref = torch.matmul(A.float(), B.float()).half()
@@ -41,7 +41,7 @@ def test_build_gemm_allscatter_plan_requires_heap(
     device_info,
 ) -> None:
     """The current GEMM+allscatter runtime should fail early without a heap."""
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
@@ -52,7 +52,7 @@ def test_build_gemm_allscatter_plan_requires_heap(
     C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
 
     with pytest.raises(RuntimeError, match="No SymmetricHeap is attached"):
-        xtile.ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="bulk_sync")
+        tncc.ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="bulk_sync")
 
 
 def test_build_gemm_allscatter_plan_exposes_stable_metadata(
@@ -60,12 +60,12 @@ def test_build_gemm_allscatter_plan_exposes_stable_metadata(
     device_info,
 ) -> None:
     """Plan building should resolve contract + pattern once, up front."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 128, 256, 64
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -76,7 +76,7 @@ def test_build_gemm_allscatter_plan_exposes_stable_metadata(
         B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = torch.zeros(M, N, device=ctx.device, dtype=torch.float16)
 
-        plan = xtile.ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="bulk_sync")
+        plan = tncc.ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="bulk_sync")
         payload = plan.to_dict()
 
         assert plan.pattern_name == "bulk_sync"
@@ -93,17 +93,17 @@ def test_build_gemm_allscatter_plan_exposes_stable_metadata(
 def test_gemm_allscatter_sharded_requires_explicit_full_n() -> None:
     """The expert sharded API must stay explicit about the logical full shape."""
     with pytest.raises(TypeError):
-        xtile.ops.gemm_allscatter_sharded(None, None, None)  # type: ignore[misc]
+        tncc.ops.gemm_allscatter_sharded(None, None, None)  # type: ignore[misc]
 
 
 def test_gemm_allscatter_sharded_expert_api_smoke(skip_no_multigpu, device_info) -> None:
     """The expert shard/shard wrapper should execute through the same plan path."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 128, 256, 64
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -114,7 +114,7 @@ def test_gemm_allscatter_sharded_expert_api_smoke(skip_no_multigpu, device_info)
         B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = torch.zeros(M, N, device=ctx.device, dtype=torch.float16)
 
-        xtile.ops.gemm_allscatter_sharded(
+        tncc.ops.gemm_allscatter_sharded(
             A,
             B,
             C,
@@ -137,7 +137,7 @@ def test_gemm_allscatter_full_to_shard_wrapper_multigpu(
     device_info,
 ) -> None:
     """The high-level full/shard wrapper should return the rank-local shard."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     M, N, K = 128, 256, 64
@@ -145,7 +145,7 @@ def test_gemm_allscatter_full_to_shard_wrapper_multigpu(
     heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -161,7 +161,7 @@ def test_gemm_allscatter_full_to_shard_wrapper_multigpu(
             B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
             C = torch.zeros(M, shard_cols, device=ctx.device, dtype=torch.float16)
 
-            plan = xtile.ops.build_gemm_allscatter_plan(
+            plan = tncc.ops.build_gemm_allscatter_plan(
                 A,
                 B,
                 C,
@@ -173,7 +173,7 @@ def test_gemm_allscatter_full_to_shard_wrapper_multigpu(
             )
             payload = plan.to_dict()
 
-            xtile.ops.gemm_allscatter(
+            tncc.ops.gemm_allscatter(
                 A,
                 B,
                 C,
@@ -204,14 +204,14 @@ def test_build_gemm_allscatter_shard_to_full_plan_is_rejected(
     device_info,
 ) -> None:
     """The inverse mixed layout remains intentionally unsupported."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     M, N, K = 64, 128, 32
     shard_cols = N // world_size
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=world_size,
@@ -224,7 +224,7 @@ def test_build_gemm_allscatter_shard_to_full_plan_is_rejected(
         C = torch.zeros(M, N, device=ctx.device, dtype=torch.float16)
 
         with pytest.raises(ValueError, match="future gemm_allgather-style API"):
-            xtile.ops.build_gemm_allscatter_plan(
+            tncc.ops.build_gemm_allscatter_plan(
                 A,
                 B,
                 C,
@@ -241,12 +241,12 @@ def test_build_gemm_allscatter_shard_to_full_plan_is_rejected(
 
 def test_gemm_allgather_high_level_api(skip_no_multigpu, device_info) -> None:
     """Single-GPU smoke test for the high-level GEMM + allgather contract."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 128, 256, 64
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -257,7 +257,7 @@ def test_gemm_allgather_high_level_api(skip_no_multigpu, device_info) -> None:
         B_shard = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = ctx.zeros(M, N, dtype=torch.float16)
 
-        xtile.ops.gemm_allgather(A, B_shard, C, ctx=ctx)
+        tncc.ops.gemm_allgather(A, B_shard, C, ctx=ctx)
         torch.cuda.synchronize()
 
         ref = torch.matmul(A.float(), B_shard.float()).half()
@@ -272,7 +272,7 @@ def test_build_gemm_allgather_plan_requires_heap(
     device_info,
 ) -> None:
     """The current GEMM + allgather runtime should fail early without a heap."""
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
@@ -283,7 +283,7 @@ def test_build_gemm_allgather_plan_requires_heap(
     C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
 
     with pytest.raises(RuntimeError, match="No SymmetricHeap is attached"):
-        xtile.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
+        tncc.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
 
 
 def test_build_gemm_allgather_plan_requires_heap_backed_output(
@@ -291,11 +291,11 @@ def test_build_gemm_allgather_plan_requires_heap_backed_output(
     device_info,
 ) -> None:
     """Only the allgather output path is heap-backed; a plain device C must be rejected."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -307,7 +307,7 @@ def test_build_gemm_allgather_plan_requires_heap_backed_output(
         C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
 
         with pytest.raises(ValueError, match="C must reside in the attached symmetric heap"):
-            xtile.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
+            tncc.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -318,12 +318,12 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
     device_info,
 ) -> None:
     """Plan building should resolve GEMM + allgather metadata once, up front."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 128, 256, 64
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -334,7 +334,7 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
         B_shard = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = ctx.zeros(M, N, dtype=torch.float16)
 
-        plan = xtile.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
+        plan = tncc.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
         payload = plan.to_dict()
 
         assert plan.contract.full_N == N
@@ -353,7 +353,7 @@ def test_gemm_allgather_multigpu(
     device_info,
 ) -> None:
     """2-GPU single-process correctness should assemble full GEMM output shards."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     M, N, K = 64, 128, 32
@@ -369,7 +369,7 @@ def test_gemm_allgather_multigpu(
     heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -386,7 +386,7 @@ def test_gemm_allgather_multigpu(
             B_shard = B_shards_host[rank].to(device=ctx.device, dtype=torch.float16)
             C = ctx.zeros(M, N, dtype=torch.float16)
 
-            xtile.ops.gemm_allgather(A, B_shard, C, ctx=ctx)
+            tncc.ops.gemm_allgather(A, B_shard, C, ctx=ctx)
             outputs.append(C)
 
         for rank in range(world_size):
@@ -402,12 +402,12 @@ def test_gemm_allgather_multigpu(
 
 def test_gemm_reducescatter_high_level_api(skip_no_multigpu, device_info) -> None:
     """Single-GPU smoke test for the high-level GEMM + reduce-scatter contract."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 128, 256, 64
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -418,7 +418,7 @@ def test_gemm_reducescatter_high_level_api(skip_no_multigpu, device_info) -> Non
         B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = ctx.zeros(M, N, dtype=torch.float16)
 
-        xtile.ops.gemm_reducescatter(A, B, C, ctx=ctx)
+        tncc.ops.gemm_reducescatter(A, B, C, ctx=ctx)
         torch.cuda.synchronize()
 
         ref = torch.matmul(A.float(), B.float()).half()
@@ -433,7 +433,7 @@ def test_build_gemm_reducescatter_plan_requires_heap(
     device_info,
 ) -> None:
     """The current GEMM + reduce-scatter runtime should fail early without a heap."""
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
@@ -444,7 +444,7 @@ def test_build_gemm_reducescatter_plan_requires_heap(
     C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
 
     with pytest.raises(RuntimeError, match="No SymmetricHeap is attached"):
-        xtile.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+        tncc.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
 
 
 def test_build_gemm_reducescatter_plan_requires_heap_backed_output(
@@ -452,11 +452,11 @@ def test_build_gemm_reducescatter_plan_requires_heap_backed_output(
     device_info,
 ) -> None:
     """Only the reduce_scatter output path is heap-backed; a plain device C must be rejected."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -468,7 +468,7 @@ def test_build_gemm_reducescatter_plan_requires_heap_backed_output(
         C = torch.zeros(32, 32, device=ctx.device, dtype=torch.float16)
 
         with pytest.raises(ValueError, match="C must reside in the attached symmetric heap"):
-            xtile.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+            tncc.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -479,12 +479,12 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
     device_info,
 ) -> None:
     """Plan building should resolve GEMM + reduce-scatter metadata once, up front."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     M, N, K = 128, 256, 64
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -495,7 +495,7 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
         B = torch.randn(K, N, device=ctx.device, dtype=torch.float16)
         C = ctx.zeros(M, N, dtype=torch.float16)
 
-        plan = xtile.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+        plan = tncc.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
         payload = plan.to_dict()
 
         assert plan.contract.full_N == N
@@ -516,7 +516,7 @@ def test_gemm_reducescatter_multigpu(
     device_info,
 ) -> None:
     """2-GPU single-process correctness should match summed full GEMM shards."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     M, N, K = 64, 128, 32
@@ -537,7 +537,7 @@ def test_gemm_reducescatter_multigpu(
     heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -554,7 +554,7 @@ def test_gemm_reducescatter_multigpu(
             B = B_host[rank].to(device=ctx.device, dtype=torch.float16)
             C = ctx.zeros(M, shard_cols, dtype=torch.float16)
 
-            xtile.ops.gemm_reducescatter(A, B, C, ctx=ctx)
+            tncc.ops.gemm_reducescatter(A, B, C, ctx=ctx)
             outputs.append(C)
 
         for rank in range(world_size):
@@ -571,11 +571,11 @@ def test_gemm_reducescatter_multigpu(
 
 def test_build_allgather_plan_exposes_stable_metadata(skip_no_multigpu, device_info) -> None:
     """AllGatherPlan should capture the validated collective contract."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -585,7 +585,7 @@ def test_build_allgather_plan_exposes_stable_metadata(skip_no_multigpu, device_i
         src = ctx.zeros(32, dtype=torch.float32)
         output = ctx.zeros(32, dtype=torch.float32)
 
-        plan = xtile.ops.build_allgather_plan(src, output, ctx=ctx)
+        plan = tncc.ops.build_allgather_plan(src, output, ctx=ctx)
         payload = plan.to_dict()
 
         assert plan.block_size == 32
@@ -603,7 +603,7 @@ def test_build_allreduce_plan_requires_heap(
     device_info,
 ) -> None:
     """The current allreduce runtime should fail early without a heap."""
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
@@ -612,7 +612,7 @@ def test_build_allreduce_plan_requires_heap(
     tensor = torch.zeros(32, device=ctx.device, dtype=torch.float32)
 
     with pytest.raises(RuntimeError, match="No SymmetricHeap is attached"):
-        xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+        tncc.ops.build_allreduce_plan(tensor, ctx=ctx)
 
 
 def test_build_allreduce_plan_exposes_stable_metadata(
@@ -620,11 +620,11 @@ def test_build_allreduce_plan_exposes_stable_metadata(
     device_info,
 ) -> None:
     """AllReducePlan should capture the validated in-place collective contract."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -633,7 +633,7 @@ def test_build_allreduce_plan_exposes_stable_metadata(
         )
         tensor = ctx.zeros(32, dtype=torch.float32)
 
-        plan = xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+        plan = tncc.ops.build_allreduce_plan(tensor, ctx=ctx)
         payload = plan.to_dict()
 
         assert plan.block_size == 32
@@ -667,12 +667,12 @@ def test_allreduce_plan_execute_reuses_resolved_execution(
     monkeypatch,
 ) -> None:
     """AllReducePlan.execute should launch with the pre-resolved execution spec."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    import xtile.primitives.collectives as collectives
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    import tncc.primitives.collectives as collectives
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -681,7 +681,7 @@ def test_allreduce_plan_execute_reuses_resolved_execution(
         )
         tensor = ctx.zeros(32, dtype=torch.float32)
         tensor.fill_(1.0)
-        plan = xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+        plan = tncc.ops.build_allreduce_plan(tensor, ctx=ctx)
 
         def _unexpected_resolve(*args, **kwargs):
             raise AssertionError("plan.execute should not re-resolve allreduce execution")
@@ -699,14 +699,14 @@ def test_allreduce_plan_execute_reuses_resolved_execution(
 @pytest.mark.multigpu
 def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> None:
     """The high-level allreduce API should reduce in-place across local ranks."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     total_elements = 4097
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -723,7 +723,7 @@ def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
             tensor.fill_(float(rank + 1))
             tensors.append(tensor)
 
-        plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
+        plan = tncc.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
         assert plan.implementation == "device_staged_pipeline"
         assert plan.protocol == "slot_epoch_pipeline"
         assert plan.kernel_family == "ws2_specialized"
@@ -739,7 +739,7 @@ def test_allreduce_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
         assert plan.workspace_bytes > 0
 
         for rank in range(world_size):
-            xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])
+            tncc.ops.allreduce(tensors[rank], ctx=contexts[rank])
 
         for rank in range(world_size):
             torch.cuda.synchronize(rank)
@@ -759,14 +759,14 @@ def test_allreduce_high_level_api_small_message_uses_latency_regime(
     device_info,
 ) -> None:
     """Small allreduce payloads should stay on the single-CTA latency regime."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     total_elements = 256
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -783,7 +783,7 @@ def test_allreduce_high_level_api_small_message_uses_latency_regime(
             tensor.fill_(float(rank + 1))
             tensors.append(tensor)
 
-        plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
+        plan = tncc.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
         assert plan.implementation == "device_single_slot_staged"
         assert plan.protocol == "single_slot_epoch_staged"
         assert plan.kernel_family == "ws2_specialized"
@@ -796,7 +796,7 @@ def test_allreduce_high_level_api_small_message_uses_latency_regime(
         assert plan.grid_size == 1
 
         for rank in range(world_size):
-            xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])
+            tncc.ops.allreduce(tensors[rank], ctx=contexts[rank])
 
         for rank in range(world_size):
             torch.cuda.synchronize(rank)
@@ -816,14 +816,14 @@ def test_allreduce_high_level_api_bandwidth_message_uses_wider_pipeline(
     device_info,
 ) -> None:
     """Bandwidth-sized allreduce payloads should use the wider pipeline policy."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     total_elements = 65536
     heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -840,7 +840,7 @@ def test_allreduce_high_level_api_bandwidth_message_uses_wider_pipeline(
             tensor.fill_(float(rank + 1))
             tensors.append(tensor)
 
-        plan = xtile.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
+        plan = tncc.ops.build_allreduce_plan(tensors[0], ctx=contexts[0])
         assert plan.implementation == "device_staged_pipeline"
         assert plan.protocol == "slot_epoch_pipeline"
         assert plan.kernel_family == "ws2_specialized"
@@ -854,7 +854,7 @@ def test_allreduce_high_level_api_bandwidth_message_uses_wider_pipeline(
         assert plan.num_warps == 8
 
         for rank in range(world_size):
-            xtile.ops.allreduce(tensors[rank], ctx=contexts[rank])
+            tncc.ops.allreduce(tensors[rank], ctx=contexts[rank])
 
         for rank in range(world_size):
             torch.cuda.synchronize(rank)
@@ -874,14 +874,14 @@ def test_allreduce_plan_repeated_multigpu_runs_reuse_epochs_safely(
     device_info,
 ) -> None:
     """Repeated multigpu plan execution should safely reuse staged slots."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     total_elements = 4097
     heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -896,7 +896,7 @@ def test_allreduce_plan_repeated_multigpu_runs_reuse_epochs_safely(
             torch.cuda.set_device(rank)
             tensor = heaps[rank].allocate_tensor((total_elements,), torch.float32)
             tensors.append(tensor)
-            plans.append(xtile.ops.build_allreduce_plan(tensor, ctx=contexts[rank]))
+            plans.append(tncc.ops.build_allreduce_plan(tensor, ctx=contexts[rank]))
 
         test_inputs = (
             (1.0, 2.0, 3.0),
@@ -924,11 +924,11 @@ def test_context_as_symmetric_materializes_external_tensor(
     device_info,
 ) -> None:
     """Context helper should expose heap-backed external import."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -957,7 +957,7 @@ def test_build_allgather_plan_rejects_unvalidated_multiprocess_transport(
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -968,7 +968,7 @@ def test_build_allgather_plan_rejects_unvalidated_multiprocess_transport(
     output = torch.zeros(16, device=ctx.device, dtype=torch.float32)
 
     with pytest.raises(ValueError, match="remote dereference"):
-        xtile.ops.build_allgather_plan(src, output, ctx=ctx)
+        tncc.ops.build_allgather_plan(src, output, ctx=ctx)
 
 
 def test_build_allreduce_plan_rejects_unvalidated_multiprocess_transport(
@@ -981,7 +981,7 @@ def test_build_allreduce_plan_rejects_unvalidated_multiprocess_transport(
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -991,7 +991,7 @@ def test_build_allreduce_plan_rejects_unvalidated_multiprocess_transport(
     tensor = torch.zeros(16, device=ctx.device, dtype=torch.float32)
 
     with pytest.raises(ValueError, match="remote dereference"):
-        xtile.ops.build_allreduce_plan(tensor, ctx=ctx)
+        tncc.ops.build_allreduce_plan(tensor, ctx=ctx)
 
 
 def test_build_gemm_allscatter_plan_rejects_unvalidated_multiprocess_transport(
@@ -1004,7 +1004,7 @@ def test_build_gemm_allscatter_plan_rejects_unvalidated_multiprocess_transport(
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -1016,7 +1016,7 @@ def test_build_gemm_allscatter_plan_rejects_unvalidated_multiprocess_transport(
     C = torch.zeros(16, 16, device=ctx.device, dtype=torch.float16)
 
     with pytest.raises(ValueError, match="remote dereference"):
-        xtile.ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="bulk_sync")
+        tncc.ops.build_gemm_allscatter_plan(A, B, C, ctx=ctx, pattern="bulk_sync")
 
 
 def test_bulk_sync_pattern_rejects_unvalidated_multiprocess_transport(
@@ -1029,7 +1029,7 @@ def test_bulk_sync_pattern_rejects_unvalidated_multiprocess_transport(
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -1040,7 +1040,7 @@ def test_bulk_sync_pattern_rejects_unvalidated_multiprocess_transport(
     B = torch.randn(16, 16, device=ctx.device, dtype=torch.float16)
     C = torch.zeros(16, 16, device=ctx.device, dtype=torch.float16)
 
-    pattern = xtile.patterns.BulkSyncPattern(ctx)
+    pattern = tncc.patterns.BulkSyncPattern(ctx)
     with pytest.raises(ValueError, match="remote dereference"):
         pattern.execute(
             A,
@@ -1057,11 +1057,11 @@ def test_build_reduce_scatter_plan_exposes_stable_metadata(
     device_info,
 ) -> None:
     """ReduceScatterPlan should capture the validated collective contract."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -1071,7 +1071,7 @@ def test_build_reduce_scatter_plan_exposes_stable_metadata(
         src = ctx.zeros(32, dtype=torch.float32)
         output = ctx.zeros(32, dtype=torch.float32)
 
-        plan = xtile.ops.build_reduce_scatter_plan(src, output, ctx=ctx)
+        plan = tncc.ops.build_reduce_scatter_plan(src, output, ctx=ctx)
         payload = plan.to_dict()
 
         assert plan.block_size == 32
@@ -1090,11 +1090,11 @@ def test_build_reduce_scatter_plan_rejects_single_process_device_override(
     device_info,
 ) -> None:
     """High-level plan building should reject an unvalidated device override."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -1105,7 +1105,7 @@ def test_build_reduce_scatter_plan_rejects_single_process_device_override(
         output = ctx.zeros(32, dtype=torch.float32)
 
         with pytest.raises(ValueError, match="not validated for single-process symmetric heaps"):
-            xtile.ops.build_reduce_scatter_plan(
+            tncc.ops.build_reduce_scatter_plan(
                 src,
                 output,
                 ctx=ctx,
@@ -1127,7 +1127,7 @@ def test_resolve_reduce_scatter_implementation_rejects_multiprocess_by_default(
         mode = "multiprocess"
         transport_strategy = "ctypes_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=4,
@@ -1135,18 +1135,18 @@ def test_resolve_reduce_scatter_implementation_rejects_multiprocess_by_default(
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.delenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         raising=False,
     )
 
     with pytest.raises(ValueError, match="disabled by default"):
-        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+        tncc.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
             ctx,
             implementation="auto",
         )
 
     with pytest.raises(ValueError, match="disabled by default"):
-        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+        tncc.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
             ctx,
             implementation="device",
         )
@@ -1163,7 +1163,7 @@ def test_resolve_reduce_scatter_implementation_accepts_validated_surface_without
         mode = "multiprocess"
         transport_strategy = "ctypes_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -1171,12 +1171,12 @@ def test_resolve_reduce_scatter_implementation_accepts_validated_surface_without
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.delenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         raising=False,
     )
 
     assert (
-        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+        tncc.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
             ctx,
             implementation="auto",
         )
@@ -1195,7 +1195,7 @@ def test_resolve_reduce_scatter_implementation_allows_explicit_multiprocess_opt_
         mode = "multiprocess"
         transport_strategy = "ctypes_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=4,
@@ -1203,12 +1203,12 @@ def test_resolve_reduce_scatter_implementation_allows_explicit_multiprocess_opt_
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.setenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         "1",
     )
 
     assert (
-        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+        tncc.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
             ctx,
             implementation="auto",
         )
@@ -1227,7 +1227,7 @@ def test_resolve_reduce_scatter_implementation_rejects_unvalidated_transport_eve
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -1235,18 +1235,18 @@ def test_resolve_reduce_scatter_implementation_rejects_unvalidated_transport_eve
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.setenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         "1",
     )
 
     with pytest.raises(ValueError, match="transport-sensitive"):
-        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+        tncc.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
             ctx,
             implementation="auto",
         )
 
     with pytest.raises(ValueError, match="transport-sensitive"):
-        xtile.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
+        tncc.ops._resolve_reduce_scatter_implementation(  # type: ignore[attr-defined]
             ctx,
             implementation="device",
         )
@@ -1255,14 +1255,14 @@ def test_resolve_reduce_scatter_implementation_rejects_unvalidated_transport_eve
 @pytest.mark.multigpu
 def test_allgather_high_level_api_multigpu(skip_no_multigpu, device_info) -> None:
     """The high-level allgather API should wrap the collective launcher correctly."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     block_size = 128
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -1285,7 +1285,7 @@ def test_allgather_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
             output[rank].zero_()
 
         for rank in range(world_size):
-            xtile.ops.allgather(src[rank], output[rank], ctx=contexts[rank])
+            tncc.ops.allgather(src[rank], output[rank], ctx=contexts[rank])
 
         for rank in range(world_size):
             torch.cuda.synchronize(rank)
@@ -1299,7 +1299,7 @@ def test_allgather_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
 @pytest.mark.multigpu
 def test_reduce_scatter_high_level_api_multigpu(skip_no_multigpu, device_info) -> None:
     """The high-level reduce_scatter API should produce the reduced chunk."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     world_size = 2
     block_size = 128
@@ -1307,7 +1307,7 @@ def test_reduce_scatter_high_level_api_multigpu(skip_no_multigpu, device_info) -
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=world_size)
     try:
         contexts = [
-            xtile.init(
+            tncc.init(
                 backend=device_info.backend,
                 rank=rank,
                 world_size=world_size,
@@ -1331,7 +1331,7 @@ def test_reduce_scatter_high_level_api_multigpu(skip_no_multigpu, device_info) -
             output.append(out_rank)
 
         for rank in range(world_size):
-            xtile.ops.reduce_scatter(src[rank], output[rank], ctx=contexts[rank])
+            tncc.ops.reduce_scatter(src[rank], output[rank], ctx=contexts[rank])
 
         for rank in range(world_size):
             torch.cuda.synchronize(rank)

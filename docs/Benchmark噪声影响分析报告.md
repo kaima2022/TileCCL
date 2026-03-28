@@ -57,7 +57,7 @@
 - `SM` 压力几乎持续归因到同一个进程：`python -`，`pid=1054772`
 - 该进程属于当前用户 `makai`
 - 启动时间是 `2026-03-25`
-- 当前工作目录是 `/home/makai/XTile`
+- 当前工作目录是项目根目录下的 `TNCC` 工作树
 - 父进程已经退出，`PPID=1`
 - 进程命令行只有 `python -`，说明它是通过 stdin 启动的匿名 Python 任务
 - 该进程长期打开大量 `/dev/nvidia0`、`/dev/nvidia1`、`/dev/nvidiactl`、`/dev/nvidia-uvm`
@@ -110,23 +110,23 @@
 
 - `fig6 allreduce @ 256 KiB`：`NCCL` 基本稳定。
   - `NCCL latency spread = 1.17%`
-  - `XTile latency spread = 1546.61%`
-  - 3 轮里 `XTile median latency` 分别是 `7.78 ms / 8.74 ms / 142.97 ms`
+  - `TNCC latency spread = 1546.61%`
+  - 3 轮里 `TNCC median latency` 分别是 `7.78 ms / 8.74 ms / 142.97 ms`
   - 同一组里 `NCCL median latency` 只有 `2.355 ms ~ 2.383 ms`
 - `fig6 broadcast @ 4 KiB`：`NCCL` 明显抖动。
   - `NCCL latency spread = 58.92%`
-  - `XTile latency spread = 4.60%`
-- `fig6 scatter @ 4 KiB`：两边都抖，但 `XTile` 更大。
+  - `TNCC latency spread = 4.60%`
+- `fig6 scatter @ 4 KiB`：两边都抖，但 `TNCC` 更大。
   - `NCCL latency spread = 11.27%`
-  - `XTile latency spread = 94.88%`
+  - `TNCC latency spread = 94.88%`
 - `fig6 reduce_scatter @ 4 KiB`：两边都比较稳定。
   - `NCCL latency spread = 0.17%`
-  - `XTile latency spread = 6.23%`
+  - `TNCC latency spread = 6.23%`
 
-所以结论不是“只有 XTile 抖、NCCL 完全不抖”，也不是“只要是 NCCL 就完全可靠”。正确表述是：
+所以结论不是“只有 TNCC 抖、NCCL 完全不抖”，也不是“只要是 NCCL 就完全可靠”。正确表述是：
 
 - `NCCL` 也会受共享 GPU 影响
-- 但在本次实验里，`NCCL` 对 `allreduce` 和多数大消息 case 的抗扰动能力明显强于当前 `XTile`
+- 但在本次实验里，`NCCL` 对 `allreduce` 和多数大消息 case 的抗扰动能力明显强于当前 `TNCC`
 - `NCCL` 的抖动更容易出现在小消息、极短时、固定开销占主导的 case 上
 
 ## 为什么非 NVLink 任务也会影响通信
@@ -174,13 +174,13 @@
 但 collective 端到端延迟明显上升：
 
 - `allreduce @ 4 KiB`
-  - `XTile: 7.32 -> 23.43 ms`，约 `3.20x`
+  - `TNCC: 7.32 -> 23.43 ms`，约 `3.20x`
   - `NCCL: 2.40 -> 2.78 ms`，约 `1.16x`
 - `allreduce @ 256 KiB`
-  - `XTile: 20.01 -> 30.84 ms`，约 `1.54x`
+  - `TNCC: 20.01 -> 30.84 ms`，约 `1.54x`
   - `NCCL: 2.41 -> 2.80 ms`，约 `1.16x`
 - `broadcast @ 256 KiB`
-  - `XTile: 2.39 -> 2.95 ms`，约 `1.23x`
+  - `TNCC: 2.39 -> 2.95 ms`，约 `1.23x`
   - `NCCL: 2.40 -> 2.70 ms`，约 `1.12x`
 
 这说明：
@@ -190,9 +190,9 @@
 
 ### 3. 根因不是链路被抢，而是协议推进被拖慢
 
-纯 `P2P` 大吞吐面在 [bench_p2p_translate.py](/home/makai/XTile/tests/benchmarks/bench_p2p_translate.py#L50) 更接近长 steady-state 的单边 remote load/store，因此对 peer 的“协议配合推进”依赖小。
+纯 `P2P` 大吞吐面在 [bench_p2p_translate.py](../tests/benchmarks/bench_p2p_translate.py#L50) 更接近长 steady-state 的单边 remote load/store，因此对 peer 的“协议配合推进”依赖小。
 
-但 `allreduce` 在 [collectives.py](/home/makai/XTile/xtile/primitives/collectives.py#L621) 到 [collectives.py](/home/makai/XTile/xtile/primitives/collectives.py#L685) 以及 [collectives.py](/home/makai/XTile/xtile/primitives/collectives.py#L733) 到 [collectives.py](/home/makai/XTile/xtile/primitives/collectives.py#L782) 有显式：
+但 `allreduce` 在 [collectives.py](../tncc/primitives/collectives.py#L621) 到 [collectives.py](../tncc/primitives/collectives.py#L685) 以及 [collectives.py](../tncc/primitives/collectives.py#L733) 到 [collectives.py](../tncc/primitives/collectives.py#L782) 有显式：
 
 - staging
 - `published_epoch`
@@ -228,12 +228,12 @@
 - 小中尺寸配置波动很大：
   - `1024^3 bf16` 比值 spread `62.78%`
   - `2048^3 bf16` 比值 spread `51.80%`
-  - `2048^3 bf16` 的 `XTile TFLOPS spread = 147.04%`
+  - `2048^3 bf16` 的 `TNCC TFLOPS spread = 147.04%`
 
 代表性原始值：
 
-- `1024^3 bf16` 的 `XTile TFLOPS` 在 5 轮里是 `38.68 / 15.39 / 38.82 / 39.18 / 39.03`
-- `2048^3 bf16` 的 `XTile TFLOPS` 在 5 轮里是 `92.01 / 92.26 / 269.70 / 121.03 / 269.97`
+- `1024^3 bf16` 的 `TNCC TFLOPS` 在 5 轮里是 `38.68 / 15.39 / 38.82 / 39.18 / 39.03`
+- `2048^3 bf16` 的 `TNCC TFLOPS` 在 5 轮里是 `92.01 / 92.26 / 269.70 / 121.03 / 269.97`
 
 解释：
 
@@ -288,17 +288,17 @@
 
 #### `allreduce`
 
-`XTile` 明显受污染，`NCCL` 只有轻微波动。
+`TNCC` 明显受污染，`NCCL` 只有轻微波动。
 
 - `4 KiB`
   - `NCCL latency spread = 0.05%`
-  - `XTile latency spread = 67.37%`
+  - `TNCC latency spread = 67.37%`
 - `256 KiB`
   - `NCCL latency spread = 1.17%`
-  - `XTile latency spread = 1546.61%`
-  - 单轮组内最坏 slowdown factor：`XTile = 59.18x`，`NCCL = 1.02x`
+  - `TNCC latency spread = 1546.61%`
+  - 单轮组内最坏 slowdown factor：`TNCC = 59.18x`，`NCCL = 1.02x`
 
-这说明当前共享环境会把 `XTile allreduce` 的同步/分块协议代价极大放大，而 `NCCL` 在同一硬件上没有出现同数量级失真。
+这说明当前共享环境会把 `TNCC allreduce` 的同步/分块协议代价极大放大，而 `NCCL` 在同一硬件上没有出现同数量级失真。
 
 #### `allgather / scatter / broadcast`
 
@@ -306,10 +306,10 @@
 
 - `allgather`
   - `NCCL` 很稳定
-  - `XTile` 有可见波动，但不至于像 allreduce 那样崩
+  - `TNCC` 有可见波动，但不至于像 allreduce 那样崩
 - `scatter`
-  - `4 KiB` 波动很大，`XTile latency spread = 94.88%`
-  - `256 KiB` 反而比较稳定，`XTile latency spread = 2.15%`
+  - `4 KiB` 波动很大，`TNCC latency spread = 94.88%`
+  - `256 KiB` 反而比较稳定，`TNCC latency spread = 2.15%`
 - `broadcast`
   - `4 KiB` 是本次最能说明“`NCCL` 也会抖”的 case
   - `NCCL latency spread = 58.92%`
@@ -327,7 +327,7 @@
 
 - `4 KiB`：稳定
   - `NCCL latency spread = 0.17%`
-  - `XTile latency spread = 6.23%`
+  - `TNCC latency spread = 6.23%`
 - `256 KiB`：单点探针在 `180s` 内超时，没有拿到有效结果
 
 这意味着：
@@ -358,7 +358,7 @@
 
 - `bulk_sync scatter @ 4 KiB` latency spread `205.82%`
 - `bulk_sync broadcast @ 4 KiB` latency spread `221.00%`
-- 同时对应的 `xtile` device path 却几乎不动
+- 同时对应的 `tncc` device path 却几乎不动
 
 这说明 host-orchestrated、多阶段、同步密集的 baseline 对外部干扰极其敏感。
 
@@ -419,6 +419,6 @@
 
 共享 GPU 确实会影响我们，而且不是“所有实验一视同仁”。
 
-- `NCCL` 也会抖，但通常比当前 `XTile` 的脆弱 collective surface 更抗扰动
+- `NCCL` 也会抖，但通常比当前 `TNCC` 的脆弱 collective surface 更抗扰动
 - 真正被打穿的是 `fig6` 大消息 collective 和 host-orchestrated baseline
 - `fig2`、`fig3`、以及 `fig1` 的大尺寸部分，当前仍可用于有限结论

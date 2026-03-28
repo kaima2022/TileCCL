@@ -1,4 +1,4 @@
-"""P2P bandwidth benchmark for XTile.
+"""P2P bandwidth benchmark for TNCC.
 
 Measures normalized bandwidth (% of theoretical peak) for:
 1. tile_remote_load: remote GPU -> local registers
@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 import torch
 
-from xtile.utils.profiling import (
+from tncc.utils.profiling import (
     TileProfiler,
     bandwidth_to_normalized,
     format_benchmark_table,
@@ -66,7 +66,7 @@ def _detect_peak_bandwidth() -> float:
     Falls back to conservative defaults if detection fails.
     """
     try:
-        from xtile.utils.topology import TopologyDetector
+        from tncc.utils.topology import TopologyDetector
         detector = TopologyDetector()
         info = detector.detect()
         if info.peak_bandwidth_gbps > 0:
@@ -408,7 +408,7 @@ if __name__ == "__main__":
     peak_bw = _detect_peak_bandwidth()
 
     print("=" * 72)
-    print("  XTile P2P Bandwidth Benchmark")
+    print("  TNCC P2P Bandwidth Benchmark")
     print("=" * 72)
     print(f"  GPUs detected    : {num_gpus}")
     print(f"  Peak BW (est.)   : {peak_bw:.1f} GB/s")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""XTile Phase 6 — CUDA IPC diagnostic script.
+"""TNCC Phase 6 — CUDA IPC diagnostic script.
 
 Tests four approaches to identify the root cause of P1-002:
   1. Current Array-based ctypes signature (expected: fail)
@@ -52,7 +52,7 @@ def _load_cudart():
 # Approach 1: Array-based (current code)
 # ---------------------------------------------------------------------------
 def test_array_approach(lib):
-    """Test IPC with ctypes Array (c_char * 64) — current XTile code."""
+    """Test IPC with ctypes Array (c_char * 64) — current TNCC code."""
     print("\n--- Test 1: Array-based ctypes (current code) ---")
 
     # Set signatures — Array type
@@ -279,7 +279,7 @@ def check_system_params():
 # ---------------------------------------------------------------------------
 def main():
     print("=" * 70)
-    print("  XTile CUDA IPC Diagnostic (P1-002)")
+    print("  TNCC CUDA IPC Diagnostic (P1-002)")
     print("=" * 70)
 
     if torch.cuda.device_count() < 2:

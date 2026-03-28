@@ -14,7 +14,7 @@ import sys
 
 import torch
 
-from xtile.utils.benchmark_results import write_json
+from tncc.utils.benchmark_results import write_json
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:

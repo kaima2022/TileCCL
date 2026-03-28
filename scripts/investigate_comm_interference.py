@@ -38,8 +38,8 @@ if str(REPO_ROOT) not in sys.path:
 import torch
 
 from tests.benchmarks.bench_p2p_translate import benchmark_p2p
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.utils.benchmark_results import write_json
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.utils.benchmark_results import write_json
 
 
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "figures" / "data" / "comm_interference_study"
@@ -248,12 +248,12 @@ def _extract_collective_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         cases[key] = {
             "collective": case["collective"],
             "size_bytes": case["size_bytes"],
-            "xtile_median_ms": case["xtile"]["median_ms"],
-            "xtile_median_bandwidth_gbps": case["xtile"]["median_bandwidth_gbps"],
+            "tncc_median_ms": case["tncc"]["median_ms"],
+            "tncc_median_bandwidth_gbps": case["tncc"]["median_bandwidth_gbps"],
             "nccl_median_ms": case["nccl"]["median_ms"],
             "nccl_median_bandwidth_gbps": case["nccl"]["median_bandwidth_gbps"],
-            "xtile_vs_nccl_bandwidth_ratio": case["xtile_vs_nccl_bandwidth_ratio"],
-            "xtile_correct": case["xtile"]["correct_all_ranks"],
+            "tncc_vs_nccl_bandwidth_ratio": case["tncc_vs_nccl_bandwidth_ratio"],
+            "tncc_correct": case["tncc"]["correct_all_ranks"],
             "nccl_correct": case["nccl"]["correct_all_ranks"],
         }
     return cases
@@ -388,9 +388,9 @@ def main(argv: list[str] | None = None) -> None:
         aggregate_cases: dict[str, dict[str, Any]] = {}
         case_keys = sorted(samples[0]["collective_probe"]) if samples else []
         for key in case_keys:
-            xtile_ms = [sample["collective_probe"][key]["xtile_median_ms"] for sample in samples]
-            xtile_bw = [
-                sample["collective_probe"][key]["xtile_median_bandwidth_gbps"]
+            tncc_ms = [sample["collective_probe"][key]["tncc_median_ms"] for sample in samples]
+            tncc_bw = [
+                sample["collective_probe"][key]["tncc_median_bandwidth_gbps"]
                 for sample in samples
             ]
             nccl_ms = [sample["collective_probe"][key]["nccl_median_ms"] for sample in samples]
@@ -401,14 +401,14 @@ def main(argv: list[str] | None = None) -> None:
             aggregate_cases[key] = {
                 "collective": samples[0]["collective_probe"][key]["collective"],
                 "size_bytes": samples[0]["collective_probe"][key]["size_bytes"],
-                "xtile_median_ms": _median(xtile_ms),
-                "xtile_spread_pct": _spread_pct(xtile_ms),
-                "xtile_median_bandwidth_gbps": _median(xtile_bw),
+                "tncc_median_ms": _median(tncc_ms),
+                "tncc_spread_pct": _spread_pct(tncc_ms),
+                "tncc_median_bandwidth_gbps": _median(tncc_bw),
                 "nccl_median_ms": _median(nccl_ms),
                 "nccl_spread_pct": _spread_pct(nccl_ms),
                 "nccl_median_bandwidth_gbps": _median(nccl_bw),
-                "xtile_vs_nccl_bandwidth_ratio": _median(
-                    [sample["collective_probe"][key]["xtile_vs_nccl_bandwidth_ratio"] for sample in samples]
+                "tncc_vs_nccl_bandwidth_ratio": _median(
+                    [sample["collective_probe"][key]["tncc_vs_nccl_bandwidth_ratio"] for sample in samples]
                 ),
             }
 

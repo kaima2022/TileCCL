@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from xtile.patterns.contracts import resolve_pattern_execution
+from tncc.patterns.contracts import resolve_pattern_execution
 
 
 def test_resolve_full_layout_contract() -> None:

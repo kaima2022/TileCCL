@@ -1,8 +1,8 @@
-# XTile
+# TNCC (Tile Native Collective Communication)
 
-**Cross-platform tile communication library with full compiler visibility.**
+**Tile Native Collective Communication with full compiler visibility.**
 
-XTile combines the best ideas from [Iris](https://github.com/ROCm/iris), TileScale, TileLink, and [ThunderKittens](https://github.com/HazyResearch/ThunderKittens) to provide a unified tile communication library for GPU-accelerated distributed computing.
+TNCC (Tile Native Collective Communication) combines the best ideas from [Iris](https://github.com/ROCm/iris), TileScale, TileLink, and [ThunderKittens](https://github.com/HazyResearch/ThunderKittens) to provide a unified tile communication library for GPU-accelerated distributed computing.
 
 ## Key Features
 
@@ -15,7 +15,7 @@ XTile combines the best ideas from [Iris](https://github.com/ROCm/iris), TileSca
 ## Architecture
 
 ```
-User API          xtile.init / xtile.Tile / xtile.SymmetricHeap
+User API          tncc.init / tncc.Tile / tncc.SymmetricHeap
 Pattern Library   BulkSync / FusedSequential / ProducerConsumer / WGSpecialized
 Core Primitives   compute (tile_dot) / memory (tile_load) / communication (tile_remote_store)
 Synchronization   acquire/release semantics / tile_signal / tile_wait
@@ -31,10 +31,10 @@ pip install -e ".[dev]"
 
 ```python
 import torch
-import xtile
+import tncc
 
 # Single GPU / distributed rank-local initialization
-ctx = xtile.init(backend="auto", heap_size=1 << 30)
+ctx = tncc.init(backend="auto", heap_size=1 << 30)
 
 # Tensors now come directly from the attached symmetric heap
 A = ctx.randn(8192, 8192, dtype=torch.float16)
@@ -42,7 +42,7 @@ B = ctx.randn(8192, 8192, dtype=torch.float16)
 C = ctx.zeros(8192, 8192, dtype=torch.float16)
 
 # Use patterns for fused compute-communication
-from xtile.patterns import auto_select
+from tncc.patterns import auto_select
 pattern = auto_select("gemm_allscatter", M=8192, N=8192, K=8192, world_size=ctx.world_size, ctx=ctx)
 pattern.execute(A, B, C)
 ```
@@ -50,7 +50,7 @@ pattern.execute(A, B, C)
 For single-process multi-GPU experiments, use:
 
 ```python
-contexts = xtile.init_local(world_size=2, heap_size=1 << 30)
+contexts = tncc.init_local(world_size=2, heap_size=1 << 30)
 ctx0 = contexts[0]
 ctx1 = contexts[1]
 ```
@@ -58,8 +58,8 @@ ctx1 = contexts[1]
 Pattern benchmark now auto-sizes the symmetric heap from the tested shape:
 
 ```bash
-xtile bench pattern --quick --warmup 2 --iters 5
-xtile bench pattern --heap-size-mb 1024
+tncc bench pattern --quick --warmup 2 --iters 5
+tncc bench pattern --heap-size-mb 1024
 ```
 
 ## Development

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""XTile — publication-quality figures showing the latest validated status.
+"""TNCC — publication-quality figures showing the latest validated status.
 
 Generates 7 figures in Nature/Science style:
-  1. GEMM: XTile vs cuBLAS (official helper, median of 3 repeats)
+  1. GEMM: TNCC vs cuBLAS (official helper, median of 3 repeats)
   2. P2P bandwidth vs transfer size (saturation curve)
   3. Pattern speedup vs bulk_sync (full 6-size rerun)
   4. 6-layer architecture diagram
   5. Roofline model (GEMM position analysis)
-  6. Communication-only collectives: XTile vs NCCL
+  6. Communication-only collectives: TNCC vs NCCL
   7. Communication-only speedup vs bulk_sync baseline
 
 Output: figures/ directory — PDF (vector) + PNG (300 DPI)
@@ -69,6 +69,13 @@ COLLECTIVE_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "collective_comm_on
 COLLECTIVE_BULK_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "collective_bulk_sync_latest.json"
 
 
+def _first_present(mapping, *keys, default=None):
+    for key in keys:
+        if key in mapping:
+            return mapping[key]
+    return default
+
+
 # ---------------------------------------------------------------------------
 # Data sources
 # ---------------------------------------------------------------------------
@@ -88,13 +95,13 @@ _FALLBACK_GEMM_BARS = {
         "8192³\nbf16",
     ],
     "cublas_tflops": [72.21, 72.07, 258.42, 257.78, 440.23, 440.26, 459.40, 481.79],
-    "xtile_tflops": [38.34, 37.82, 235.15, 237.25, 428.27, 405.22, 382.96, 398.68],
+    "tncc_tflops": [38.34, 37.82, 235.15, 237.25, 428.27, 405.22, 382.96, 398.68],
 }
 
 _FALLBACK_GEMM_ROOFLINE = {
     "sizes": [1024, 2048, 4096, 8192],
     "cublas_tflops": [72.21, 258.42, 440.23, 459.40],
-    "xtile_tflops": [38.34, 235.15, 428.27, 382.96],
+    "tncc_tflops": [38.34, 235.15, 428.27, 382.96],
 }
 
 # Fig 2 fallback provenance:
@@ -156,7 +163,10 @@ def _load_gemm_bars():
             for item in ordered
         ],
         "cublas_tflops": [float(item["torch_tflops"]) for item in ordered],
-        "xtile_tflops": [float(item["xtile_tflops"]) for item in ordered],
+        "tncc_tflops": [
+            float(_first_present(item, "tncc_tflops", "xtile_tflops"))
+            for item in ordered
+        ],
     }, payload.get("environment", {})
 
 
@@ -175,7 +185,10 @@ def _load_gemm_roofline_points():
     return {
         "sizes": [int(item["M"]) for item in ordered],
         "cublas_tflops": [float(item["torch_tflops"]) for item in ordered],
-        "xtile_tflops": [float(item["xtile_tflops"]) for item in ordered],
+        "tncc_tflops": [
+            float(_first_present(item, "tncc_tflops", "xtile_tflops"))
+            for item in ordered
+        ],
     }
 
 
@@ -252,35 +265,43 @@ def _load_collective_comm_only():
         if not isinstance(case, dict):
             continue
         collective = case.get("collective")
-        xtile = case.get("xtile")
+        tncc = case.get("tncc") or case.get("xtile")
         nccl = case.get("nccl")
         if not isinstance(collective, str):
             continue
-        if not isinstance(xtile, dict) or not isinstance(nccl, dict):
+        if not isinstance(tncc, dict) or not isinstance(nccl, dict):
             continue
         bucket = per_collective.setdefault(
             collective,
             {
                 "size_bytes": [],
                 "size_mib": [],
-                "xtile_ms": [],
+                "tncc_ms": [],
                 "nccl_ms": [],
-                "xtile_bw": [],
+                "tncc_bw": [],
                 "nccl_bw": [],
                 "latency_ratio": [],
                 "bandwidth_ratio": [],
             },
         )
-        xtile_ms = float(xtile["median_ms"])
+        tncc_ms = float(tncc["median_ms"])
         nccl_ms = float(nccl["median_ms"])
         bucket["size_bytes"].append(int(case["size_bytes"]))
         bucket["size_mib"].append(float(case["size_mib"]))
-        bucket["xtile_ms"].append(xtile_ms)
+        bucket["tncc_ms"].append(tncc_ms)
         bucket["nccl_ms"].append(nccl_ms)
-        bucket["xtile_bw"].append(float(xtile["median_bandwidth_gbps"]))
+        bucket["tncc_bw"].append(float(tncc["median_bandwidth_gbps"]))
         bucket["nccl_bw"].append(float(nccl["median_bandwidth_gbps"]))
-        bucket["latency_ratio"].append(xtile_ms / max(nccl_ms, 1e-9))
-        bucket["bandwidth_ratio"].append(float(case["xtile_vs_nccl_bandwidth_ratio"]))
+        bucket["latency_ratio"].append(tncc_ms / max(nccl_ms, 1e-9))
+        bucket["bandwidth_ratio"].append(
+            float(
+                _first_present(
+                    case,
+                    "tncc_vs_nccl_bandwidth_ratio",
+                    "xtile_vs_nccl_bandwidth_ratio",
+                )
+            )
+        )
 
     for bucket in per_collective.values():
         order = np.argsort(bucket["size_bytes"])
@@ -429,13 +450,13 @@ def _metric_limits(
 
 
 # ===================================================================
-# Figure 1: GEMM — XTile vs cuBLAS (current state)
+# Figure 1: GEMM — TNCC vs cuBLAS (current state)
 # ===================================================================
 def fig1_gemm_performance():
     sizes = GEMM_BARS["sizes"]
     cublas = GEMM_BARS["cublas_tflops"]
-    xtile = GEMM_BARS["xtile_tflops"]
-    ratio = [(x / c * 100.0) if c > 0 else 0.0 for c, x in zip(cublas, xtile)]
+    tncc = GEMM_BARS["tncc_tflops"]
+    ratio = [(x / c * 100.0) if c > 0 else 0.0 for c, x in zip(cublas, tncc)]
 
     x = np.arange(len(sizes))
     w = 0.35
@@ -444,20 +465,20 @@ def fig1_gemm_performance():
 
     ax.bar(x - w / 2, cublas, w, label="cuBLAS (torch.matmul)", color=COLORS[0],
            edgecolor="white", linewidth=0.5)
-    ax.bar(x + w / 2, xtile, w, label="XTile", color=COLORS[1],
+    ax.bar(x + w / 2, tncc, w, label="TNCC", color=COLORS[1],
            edgecolor="white", linewidth=0.5)
 
-    # Annotate ratio above XTile bars
-    max_bar = max(max(cublas), max(xtile), 1.0)
+    # Annotate ratio above TNCC bars
+    max_bar = max(max(cublas), max(tncc), 1.0)
     label_offset = max_bar * 0.03
     for i, r in enumerate(ratio):
         color = COLORS[2] if r >= 90 else "#888888"
         weight = "bold" if r >= 90 else "normal"
-        ax.text(x[i] + w / 2, xtile[i] + label_offset, f"{r:.0f}%",
+        ax.text(x[i] + w / 2, tncc[i] + label_offset, f"{r:.0f}%",
                 ha="center", va="bottom", fontsize=7, color=color, fontweight=weight)
 
     ax.set_ylabel("TFLOPS")
-    ax.set_title(f"GEMM Performance: XTile vs cuBLAS ({_gemm_aggregation_label()})")
+    ax.set_title(f"GEMM Performance: TNCC vs cuBLAS ({_gemm_aggregation_label()})")
     ax.set_xticks(x)
     ax.set_xticklabels(sizes, fontsize=8)
     ax.set_ylim(0, max_bar * 1.22)
@@ -494,7 +515,7 @@ def fig2_p2p_bandwidth():
     ax.text(1.1, 305, "NV12 Peak (300 GB/s)", fontsize=7, color="red", va="bottom")
 
     ax.axhline(P2P_CURVE["best_read_gbps"], color=COLORS[0], linestyle=":", linewidth=0.8, alpha=0.5)
-    ax.text(50, 240, f"XTile ceiling\n({ceiling_pct:.1f}%)", fontsize=7, color=COLORS[0], ha="center")
+    ax.text(50, 240, f"TNCC ceiling\n({ceiling_pct:.1f}%)", fontsize=7, color=COLORS[0], ha="center")
 
     ax.annotate(
         "Launch latency\ndominated",
@@ -615,7 +636,7 @@ def fig3_pattern_overlap():
 def fig4_architecture():
     # Fig 4 is a schematic architecture diagram, not a benchmark plot.
     layers = [
-        ("User API",        "init(), XTileContext, SymmetricHeap"),
+        ("User API",        "init(), TNCCContext, SymmetricHeap"),
         ("Pattern Library", "BulkSync / FusedSeq / PC / WGSpec"),
         ("Core Primitives", "compute / memory / communication"),
         ("Synchronization", "atomic_* + tile_signal/wait"),
@@ -663,7 +684,7 @@ def fig4_architecture():
                 arrowprops=dict(arrowstyle="->", color="#7F8C8D", lw=1.2),
             )
 
-    ax.set_title("XTile 6-Layer Architecture", fontsize=13, pad=12)
+    ax.set_title("TNCC 6-Layer Architecture", fontsize=13, pad=12)
     fig.tight_layout()
     _save(fig, "fig4_architecture")
 
@@ -686,7 +707,7 @@ def fig5_roofline():
         intensity.append(flops / bytes_moved)
 
     cublas_tflops = GEMM_ROOFLINE["cublas_tflops"]
-    xtile_tflops = GEMM_ROOFLINE["xtile_tflops"]
+    tncc_tflops = GEMM_ROOFLINE["tncc_tflops"]
 
     fig, ax = plt.subplots(figsize=(3.5, 3))
 
@@ -699,12 +720,12 @@ def fig5_roofline():
 
     ax.scatter(intensity, cublas_tflops, marker="o", s=50, color=COLORS[0],
                zorder=5, label="cuBLAS", edgecolors="white", linewidth=0.5)
-    ax.scatter(intensity, xtile_tflops, marker="^", s=50, color=COLORS[1],
-               zorder=5, label="XTile", edgecolors="white", linewidth=0.5)
+    ax.scatter(intensity, tncc_tflops, marker="^", s=50, color=COLORS[1],
+               zorder=5, label="TNCC", edgecolors="white", linewidth=0.5)
 
     ratio_by_size = {
         n: (xt / cu * 100.0) if cu > 0 else 0.0
-        for n, cu, xt in zip(sizes, cublas_tflops, xtile_tflops)
+        for n, cu, xt in zip(sizes, cublas_tflops, tncc_tflops)
     }
     best_size = max(ratio_by_size, key=ratio_by_size.get) if ratio_by_size else None
 
@@ -712,7 +733,7 @@ def fig5_roofline():
         ax.annotate(f"{n}", (intensity[i], cublas_tflops[i]),
                     textcoords="offset points", xytext=(5, 5), fontsize=6, color=COLORS[0])
         suffix = f"\n({ratio_by_size[n]:.1f}%)" if n == best_size else ""
-        ax.annotate(f"{n}{suffix}", (intensity[i], xtile_tflops[i]),
+        ax.annotate(f"{n}{suffix}", (intensity[i], tncc_tflops[i]),
                     textcoords="offset points", xytext=(5, -10), fontsize=6, color=COLORS[1])
 
     ax.set_xscale("log")
@@ -772,7 +793,7 @@ def fig6_collective_comm_only():
 
     small_x = np.arange(len(small_sizes))
     small_labels = [_format_message_size_mib(size / (1024.0 * 1024.0)) for size in small_sizes]
-    latency_ylim = _metric_limits(("xtile_ms", "nccl_ms"), max_bytes=COLLECTIVE_LATENCY_MAX_BYTES)
+    latency_ylim = _metric_limits(("tncc_ms", "nccl_ms"), max_bytes=COLLECTIVE_LATENCY_MAX_BYTES)
     latency_center = 0.5 * (latency_ylim[0] + latency_ylim[1])
     latency_span = max(latency_ylim[1] - latency_ylim[0], 0.20)
     latency_ylim = (
@@ -793,7 +814,7 @@ def fig6_collective_comm_only():
             ax.set_axis_off()
             continue
 
-        xtile_ms = [point["xtile_ms"] for point in small_points]
+        tncc_ms = [point["tncc_ms"] for point in small_points]
         nccl_ms = [point["nccl_ms"] for point in small_points]
 
         ax.plot(
@@ -807,18 +828,18 @@ def fig6_collective_comm_only():
         )
         ax.plot(
             small_x,
-            xtile_ms,
+            tncc_ms,
             "o-",
             color=COLORS[1],
             linewidth=1.55,
             markersize=4.5,
-            label="XTile",
+            label="TNCC",
         )
 
         if legend_handles is None:
             legend_handles, legend_labels = ax.get_legend_handles_labels()
 
-        mean_delta_pct = (float(np.mean(xtile_ms)) / max(float(np.mean(nccl_ms)), 1e-9) - 1.0) * 100.0
+        mean_delta_pct = (float(np.mean(tncc_ms)) / max(float(np.mean(nccl_ms)), 1e-9) - 1.0) * 100.0
         delta_direction = "higher" if mean_delta_pct >= 0 else "lower"
         ax.text(
             0.04,
@@ -852,13 +873,13 @@ def fig6_collective_comm_only():
         point = _collective_point_at_size(series, anchor_size) if series else None
         if point is None:
             continue
-        anchor_points.append((title, point["xtile_bw"], point["nccl_bw"]))
+        anchor_points.append((title, point["tncc_bw"], point["nccl_bw"]))
 
     if anchor_points:
         x = np.arange(len(anchor_points))
         width = 0.34
         anchor_labels = []
-        xtile_bw = [item[1] for item in anchor_points]
+        tncc_bw = [item[1] for item in anchor_points]
         nccl_bw = [item[2] for item in anchor_points]
         for title, _, _ in anchor_points:
             anchor_labels.append("Reduce\nScatter" if title == "ReduceScatter" else title)
@@ -873,19 +894,19 @@ def fig6_collective_comm_only():
         )
         anchor_ax.bar(
             x + width / 2,
-            xtile_bw,
+            tncc_bw,
             width,
             color=COLORS[1],
             edgecolor="white",
             linewidth=0.5,
-            label="XTile",
+            label="TNCC",
         )
         anchor_ax.set_title("Bandwidth at 256 KiB")
         anchor_ax.set_ylabel("Bandwidth (GB/s)")
         anchor_ax.set_xticks(x)
         anchor_ax.set_xticklabels(anchor_labels, fontsize=9)
         anchor_ax.set_xlabel("Collective")
-        anchor_ax.set_ylim(0.0, max(max(xtile_bw), max(nccl_bw)) * 1.18)
+        anchor_ax.set_ylim(0.0, max(max(tncc_bw), max(nccl_bw)) * 1.18)
         anchor_ax.grid(True, axis="y", alpha=0.25)
         anchor_ax.grid(False, axis="x")
         anchor_ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:.3f}"))
@@ -898,8 +919,8 @@ def fig6_collective_comm_only():
             y_offset = max(anchor_ax.get_ylim()[1] * 0.02, 0.0015)
             anchor_ax.text(
                 x[reduce_scatter_idx] + width / 2,
-                xtile_bw[reduce_scatter_idx] + y_offset,
-                f"{xtile_bw[reduce_scatter_idx]:.5f}",
+                tncc_bw[reduce_scatter_idx] + y_offset,
+                f"{tncc_bw[reduce_scatter_idx]:.5f}",
                 ha="center",
                 va="bottom",
                 fontsize=8,
@@ -926,12 +947,12 @@ def fig6_collective_comm_only():
             )
             sweep_ax.plot(
                 sweep_x,
-                [point["xtile_bw"] for point in sweep_points],
+                [point["tncc_bw"] for point in sweep_points],
                 "o-",
                 color=COLORS[1],
                 linewidth=1.55,
                 markersize=4.8,
-                label="XTile",
+                label="TNCC",
             )
             sweep_ax.set_xticks(sweep_x)
             sweep_ax.set_xticklabels(sweep_labels, fontsize=9)
@@ -1049,7 +1070,7 @@ def fig7_collective_bulk_sync():
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_ylabel("Speedup vs bulk_sync")
     ax.set_xlabel("Communication-only Collective")
-    ax.set_title("Communication-only XTile Speedup vs bulk_sync", fontsize=13)
+    ax.set_title("Communication-only TNCC Speedup vs bulk_sync", fontsize=13)
 
     if best_collective is not None and best_size is not None:
         best_idx = collective_order.index(best_collective)
@@ -1086,7 +1107,7 @@ def fig7_collective_bulk_sync():
 # Main
 # ===================================================================
 def main():
-    print("Generating XTile figures (current state)...")
+    print("Generating TNCC figures (current state)...")
     print(f"Output directory: {OUTDIR}\n")
 
     fig1_gemm_performance()

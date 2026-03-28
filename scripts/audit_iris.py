@@ -2,7 +2,7 @@
 """Iris source code audit script.
 
 Systematically audit the Iris codebase (github.com/ROCm/iris) to identify
-core functions and patterns that XTile should reference or port.
+core functions and patterns that TNCC should reference or port.
 
 Usage:
     python scripts/audit_iris.py [--repo-url URL] [--output-dir DIR]
@@ -235,7 +235,7 @@ def _extract_api_call(line: str, prefixes: list[str]) -> str:
 
 
 def identify_key_functions(report: AuditReport) -> dict[str, str]:
-    """Identify key functions for XTile to reference."""
+    """Identify key functions for TNCC to reference."""
     key_funcs = {}
 
     for func in report.triton_functions:
@@ -244,7 +244,7 @@ def identify_key_functions(report: AuditReport) -> dict[str, str]:
         if "translate" in name_lower or "xlat" in name_lower:
             key_funcs[func.name] = (
                 f"Pointer translation function at {func.file}:{func.line} "
-                f"({func.num_lines} lines). CRITICAL for XTile port."
+                f"({func.num_lines} lines). CRITICAL for TNCC port."
             )
 
         if any(kw in name_lower for kw in ["load", "store", "get", "put", "copy"]):
@@ -315,10 +315,10 @@ def generate_markdown_summary(report: AuditReport, output_path: Path):
             )
         lines.append("")
 
-    # Key functions for XTile
+    # Key functions for TNCC
     if report.key_functions:
         lines.extend([
-            "## Key Functions for XTile",
+            "## Key Functions for TNCC",
             "",
         ])
         for name, desc in report.key_functions.items():
@@ -369,7 +369,7 @@ def generate_markdown_summary(report: AuditReport, output_path: Path):
 
     # Recommendations
     lines.extend([
-        "## Recommendations for XTile",
+        "## Recommendations for TNCC",
         "",
         "### Must Port",
         "1. Pointer translation function (`__translate` or equivalent)",
@@ -383,10 +383,10 @@ def generate_markdown_summary(report: AuditReport, output_path: Path):
         "3. Overlap pattern implementations (bulk-sync, fused, WG-specialized)",
         "",
         "### Key Differences from Iris",
-        "1. XTile adds NVIDIA backend (CUDA IPC vs HIP IPC)",
-        "2. XTile adds Pattern Library abstraction",
-        "3. XTile adds tile_signal/tile_wait (TileLink-inspired)",
-        "4. XTile adds Auto-Select engine",
+        "1. TNCC adds NVIDIA backend (CUDA IPC vs HIP IPC)",
+        "2. TNCC adds Pattern Library abstraction",
+        "3. TNCC adds tile_signal/tile_wait (TileLink-inspired)",
+        "4. TNCC adds Auto-Select engine",
         "",
     ])
 
@@ -396,7 +396,7 @@ def generate_markdown_summary(report: AuditReport, output_path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Audit Iris source code for XTile development")
+    parser = argparse.ArgumentParser(description="Audit Iris source code for TNCC development")
     parser.add_argument(
         "--repo-url",
         default="https://github.com/ROCm/iris.git",

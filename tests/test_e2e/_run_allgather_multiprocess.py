@@ -13,7 +13,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 @dataclass(frozen=True)
@@ -117,10 +117,10 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import xtile
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives.collectives import _allgather_kernel
-    from xtile.primitives import allgather as primitive_allgather
+    import tncc
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives.collectives import _allgather_kernel
+    from tncc.primitives import allgather as primitive_allgather
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,
@@ -186,7 +186,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
                 iters=config.iters,
             )
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=world_size,
@@ -198,7 +198,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_first_chunk = None
         if config.launcher in {"ops", "all"}:
             high_level_timing = _timed_collective(
-                lambda: xtile.ops.allgather(
+                lambda: tncc.ops.allgather(
                     src_ops,
                     dst_ops,
                     ctx=ctx,
@@ -338,7 +338,7 @@ def main() -> None:
         launcher=args.launcher,
     )
 
-    store_fd, store_path = tempfile.mkstemp(prefix="xtile_ag_store_")
+    store_fd, store_path = tempfile.mkstemp(prefix="tncc_ag_store_")
     os.close(store_fd)
     os.unlink(store_path)
 

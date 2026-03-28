@@ -730,7 +730,7 @@
       }
     }
   ],
-  "command": "/home/makai/XTile/tests/benchmarks/bench_gemm_allscatter_multiprocess_auto_patterns.py --contracts full/full,full/shard --dtype float16 --warmup 1 --iters 2 --timeout-sec 240 --output-json docs/generated/gemm_allscatter_multiprocess_auto_patterns.json",
+  "command": "/home/makai/TNCC/tests/benchmarks/bench_gemm_allscatter_multiprocess_auto_patterns.py --contracts full/full,full/shard --dtype float16 --warmup 1 --iters 2 --timeout-sec 240 --output-json docs/generated/gemm_allscatter_multiprocess_auto_patterns.json",
   "environment": {
     "dtype": "float16",
     "gpu_name": "NVIDIA H100 PCIe",

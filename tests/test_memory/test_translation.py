@@ -1,4 +1,4 @@
-"""Tests for xtile.memory.translation.PointerTranslator.
+"""Tests for tncc.memory.translation.PointerTranslator.
 
 Host-side pointer translation tests that do NOT require a GPU.
 Uses synthetic heap_bases tensors to verify translation arithmetic,
@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from xtile.memory.translation import PointerTranslator
+from tncc.memory.translation import PointerTranslator
 
 
 # ---------------------------------------------------------------------------

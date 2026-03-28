@@ -7,7 +7,7 @@ import sys
 
 import torch
 
-from xtile.backends.cuda import CUDA_IPC_HANDLE_SIZE, CUDABackend
+from tncc.backends.cuda import CUDA_IPC_HANDLE_SIZE, CUDABackend
 
 
 def test_cuda_ipc_handle_has_full_64_bytes(skip_no_gpu, device_info) -> None:
@@ -34,7 +34,7 @@ def test_cuda_ipc_open_handle_fails_cleanly_in_subprocess(
 
     code = """
 import torch
-from xtile.backends.cuda import CUDABackend
+from tncc.backends.cuda import CUDABackend
 
 torch.cuda.set_device(0)
 tensor = torch.empty(1, device='cuda:0', dtype=torch.uint8)

@@ -1,1361 +1,16 @@
 {
-  "bandwidth_definition": {
-    "allgather": "(world_size-1) * rank_local_input_bytes / latency",
-    "allreduce": "2*(world_size-1)/world_size * rank_local_bytes / latency",
-    "broadcast": "(world_size-1) * tensor_bytes / latency",
-    "reduce_scatter": "(world_size-1) * rank_local_output_bytes / latency",
-    "scatter": "(world_size-1) * rank_local_output_bytes / latency"
-  },
+  "schema_version": 1,
   "benchmark": "collective_comm_only",
-  "cases": [
-    {
-      "collective": "allreduce",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.401532,
-          2.401772,
-          2.401393,
-          2.40229,
-          2.402477
-        ],
-        "best_bandwidth_gbps": 0.0017056766635032247,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.402477,
-        "mean_ms": 2.4018928,
-        "median_bandwidth_gbps": 0.0017054075074569943,
-        "median_ms": 2.401772,
-        "min_ms": 2.401393,
-        "rank_times_ms": [
-          [
-            2.398571,
-            2.401772,
-            2.397551,
-            2.401927,
-            2.402477
-          ],
-          [
-            2.401532,
-            2.401289,
-            2.401393,
-            2.40229,
-            2.401497
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.407522,
-          2.408401,
-          2.408117,
-          2.408836,
-          2.409362
-        ],
-        "best_bandwidth_gbps": 0.0017013344010978924,
-        "chunk_elems": 1024,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "grid_size": 1,
-        "implementation": "device_staged_pipeline",
-        "max_ms": 2.409362,
-        "mean_ms": 2.4084475999999997,
-        "median_bandwidth_gbps": 0.0017007134609228279,
-        "median_ms": 2.408401,
-        "min_ms": 2.407522,
-        "num_chunks": 1,
-        "num_warps": 4,
-        "pipeline_slots": 1,
-        "protocol": "slot_epoch_pipeline",
-        "rank_times_ms": [
-          [
-            2.403658,
-            2.408401,
-            2.408117,
-            2.408836,
-            2.409362
-          ],
-          [
-            2.407522,
-            2.407761,
-            2.406026,
-            2.408803,
-            2.408287
-          ]
-        ],
-        "workspace_bytes": 4104
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9972475513836773
-    },
-    {
-      "collective": "allreduce",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.401007,
-          2.402435,
-          2.403391,
-          2.402876,
-          2.403741
-        ],
-        "best_bandwidth_gbps": 0.006823803512442904,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.403741,
-        "mean_ms": 2.40269,
-        "median_bandwidth_gbps": 0.006818495835823404,
-        "median_ms": 2.402876,
-        "min_ms": 2.401007,
-        "rank_times_ms": [
-          [
-            2.13163,
-            2.402054,
-            2.403391,
-            2.402876,
-            2.403741
-          ],
-          [
-            2.401007,
-            2.402435,
-            2.402201,
-            2.402667,
-            2.402202
-          ]
-        ]
-      },
-      "size_bytes": 16384,
-      "size_mib": 0.015625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.410904,
-          2.413779,
-          2.413294,
-          2.413809,
-          2.414991
-        ],
-        "best_bandwidth_gbps": 0.006795791122334195,
-        "chunk_elems": 4096,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "grid_size": 1,
-        "implementation": "device_staged_pipeline",
-        "max_ms": 2.414991,
-        "mean_ms": 2.4133554000000004,
-        "median_bandwidth_gbps": 0.006787696802399889,
-        "median_ms": 2.413779,
-        "min_ms": 2.410904,
-        "num_chunks": 1,
-        "num_warps": 8,
-        "pipeline_slots": 1,
-        "protocol": "slot_epoch_pipeline",
-        "rank_times_ms": [
-          [
-            2.410904,
-            2.413779,
-            2.413294,
-            2.413809,
-            2.414991
-          ],
-          [
-            2.41087,
-            2.412798,
-            2.413131,
-            2.412668,
-            2.413753
-          ]
-        ],
-        "workspace_bytes": 16392
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9954830164650535
-    },
-    {
-      "collective": "allreduce",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.404182,
-          2.404193,
-          2.40379,
-          2.403071,
-          2.403537
-        ],
-        "best_bandwidth_gbps": 0.027271770164094194,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.404193,
-        "mean_ms": 2.4037546,
-        "median_bandwidth_gbps": 0.02726361287799683,
-        "median_ms": 2.40379,
-        "min_ms": 2.403071,
-        "rank_times_ms": [
-          [
-            2.404182,
-            2.404044,
-            2.40379,
-            2.402065,
-            2.402964
-          ],
-          [
-            2.402841,
-            2.404193,
-            2.402585,
-            2.403071,
-            2.403537
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.414956,
-          2.414717,
-          2.414196,
-          2.413763,
-          2.414398
-        ],
-        "best_bandwidth_gbps": 0.02715096718277644,
-        "chunk_elems": 4096,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "grid_size": 4,
-        "implementation": "device_staged_pipeline",
-        "max_ms": 2.414956,
-        "mean_ms": 2.414406,
-        "median_bandwidth_gbps": 0.027143826328550637,
-        "median_ms": 2.414398,
-        "min_ms": 2.413763,
-        "num_chunks": 4,
-        "num_warps": 8,
-        "pipeline_slots": 4,
-        "protocol": "slot_epoch_pipeline",
-        "rank_times_ms": [
-          [
-            2.414956,
-            2.414717,
-            2.414196,
-            2.409857,
-            2.413997
-          ],
-          [
-            2.413323,
-            2.414318,
-            2.413513,
-            2.413763,
-            2.414398
-          ]
-        ],
-        "workspace_bytes": 65568
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9956063581894948
-    },
-    {
-      "collective": "allreduce",
-      "nccl": {
-        "best_bandwidth_gbps": 0.055672,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 4.708723,
-        "mean_ms": 4.708723,
-        "median_bandwidth_gbps": 0.055672,
-        "median_ms": 4.708723,
-        "min_ms": 4.708723
-      },
-      "size_bytes": 262144,
-      "size_mib": 0.25,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.017474,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 15.002277,
-        "mean_ms": 15.002277,
-        "median_bandwidth_gbps": 0.017474,
-        "median_ms": 15.002277,
-        "min_ms": 15.002277
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.3138741198448053
-    },
-    {
-      "collective": "allreduce",
-      "nccl": {
-        "best_bandwidth_gbps": 0.222301,
-        "correct_all_ranks": true,
-        "effective_bytes": 1048576.0,
-        "max_ms": 4.716911,
-        "mean_ms": 4.716911,
-        "median_bandwidth_gbps": 0.222301,
-        "median_ms": 4.716911,
-        "min_ms": 4.716911
-      },
-      "size_bytes": 1048576,
-      "size_mib": 1.0,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.003116,
-        "correct_all_ranks": true,
-        "effective_bytes": 1048576.0,
-        "max_ms": 336.53375,
-        "mean_ms": 336.53375,
-        "median_bandwidth_gbps": 0.003116,
-        "median_ms": 336.53375,
-        "min_ms": 336.53375
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.014017030962523784
-    },
-    {
-      "collective": "allreduce",
-      "nccl": {
-        "best_bandwidth_gbps": 0.443484,
-        "correct_all_ranks": true,
-        "effective_bytes": 2097152.0,
-        "max_ms": 4.728812,
-        "mean_ms": 4.728812,
-        "median_bandwidth_gbps": 0.443484,
-        "median_ms": 4.728812,
-        "min_ms": 4.728812
-      },
-      "size_bytes": 2097152,
-      "size_mib": 2.0,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.005804,
-        "correct_all_ranks": true,
-        "effective_bytes": 2097152.0,
-        "max_ms": 361.337307,
-        "mean_ms": 361.337307,
-        "median_bandwidth_gbps": 0.005804,
-        "median_ms": 361.337307,
-        "min_ms": 361.337307
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.01308728161557125
-    },
-    {
-      "collective": "allgather",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400978,
-          2.402823,
-          2.401967,
-          2.402271,
-          2.402868
-        ],
-        "best_bandwidth_gbps": 0.0017059714832872274,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.402868,
-        "mean_ms": 2.4021814,
-        "median_bandwidth_gbps": 0.0017050532600193736,
-        "median_ms": 2.402271,
-        "min_ms": 2.400978,
-        "rank_times_ms": [
-          [
-            2.397667,
-            2.4027,
-            2.401967,
-            2.402271,
-            2.400515
-          ],
-          [
-            2.400978,
-            2.402823,
-            2.401166,
-            2.400959,
-            2.402868
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.395902,
-          2.396589,
-          2.396379,
-          2.395804,
-          2.396891
-        ],
-        "best_bandwidth_gbps": 0.0017096557147412727,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.396891,
-        "mean_ms": 2.396313,
-        "median_bandwidth_gbps": 0.0017092454908009126,
-        "median_ms": 2.396379,
-        "min_ms": 2.395804,
-        "rank_times_ms": [
-          [
-            0.05745,
-            0.061426,
-            0.053743,
-            0.05406,
-            0.053213
-          ],
-          [
-            2.395902,
-            2.396589,
-            2.396379,
-            2.395804,
-            2.396891
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0024587095780757
-    },
-    {
-      "collective": "allgather",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.401529,
-          2.402629,
-          2.402581,
-          2.403125,
-          2.403721
-        ],
-        "best_bandwidth_gbps": 0.0068223202801215395,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.403721,
-        "mean_ms": 2.4027170000000004,
-        "median_bandwidth_gbps": 0.006819196804833371,
-        "median_ms": 2.402629,
-        "min_ms": 2.401529,
-        "rank_times_ms": [
-          [
-            2.401529,
-            2.402629,
-            2.402455,
-            2.403125,
-            2.403721
-          ],
-          [
-            2.401003,
-            2.402222,
-            2.402581,
-            2.402524,
-            2.402995
-          ]
-        ]
-      },
-      "size_bytes": 16384,
-      "size_mib": 0.015625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.397027,
-          2.397017,
-          2.397668,
-          2.396825,
-          2.397687
-        ],
-        "best_bandwidth_gbps": 0.006835709741011545,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.397687,
-        "mean_ms": 2.3972447999999997,
-        "median_bandwidth_gbps": 0.006835133688523325,
-        "median_ms": 2.397027,
-        "min_ms": 2.396825,
-        "rank_times_ms": [
-          [
-            0.061925,
-            0.05715,
-            0.05368,
-            0.052631,
-            0.053479
-          ],
-          [
-            2.397027,
-            2.397017,
-            2.397668,
-            2.396825,
-            2.397687
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0023370617018499
-    },
-    {
-      "collective": "allgather",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.40241,
-          2.402137,
-          2.403566,
-          2.403269,
-          2.404193
-        ],
-        "best_bandwidth_gbps": 0.02728237398616315,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.404193,
-        "mean_ms": 2.403115,
-        "median_bandwidth_gbps": 0.027269523303467068,
-        "median_ms": 2.403269,
-        "min_ms": 2.402137,
-        "rank_times_ms": [
-          [
-            2.402123,
-            2.402129,
-            2.403566,
-            2.402005,
-            2.404193
-          ],
-          [
-            2.40241,
-            2.402137,
-            2.402304,
-            2.403269,
-            2.402628
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.399944,
-          2.400723,
-          2.400162,
-          2.401781,
-          2.400026
-        ],
-        "best_bandwidth_gbps": 0.02730730383708953,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.401781,
-        "mean_ms": 2.4005272,
-        "median_bandwidth_gbps": 0.02730482359107427,
-        "median_ms": 2.400162,
-        "min_ms": 2.399944,
-        "rank_times_ms": [
-          [
-            0.061807,
-            0.057137,
-            0.05707,
-            0.05848,
-            0.056605
-          ],
-          [
-            2.399944,
-            2.400723,
-            2.400162,
-            2.401781,
-            2.400026
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0012944959548564
-    },
-    {
-      "collective": "allgather",
-      "nccl": {
-        "best_bandwidth_gbps": 0.037793,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 6.936381,
-        "mean_ms": 6.936381,
-        "median_bandwidth_gbps": 0.037793,
-        "median_ms": 6.936381,
-        "min_ms": 6.936381
-      },
-      "size_bytes": 262144,
-      "size_mib": 0.25,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.055604,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 4.714472,
-        "mean_ms": 4.714472,
-        "median_bandwidth_gbps": 0.055604,
-        "median_ms": 4.714472,
-        "min_ms": 4.714472
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.4712777498478555
-    },
-    {
-      "collective": "scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400772,
-          2.603425,
-          2.401149,
-          2.400216,
-          2.400925
-        ],
-        "best_bandwidth_gbps": 0.0017065130804894224,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.603425,
-        "mean_ms": 2.4412974,
-        "median_bandwidth_gbps": 0.0017060091423097348,
-        "median_ms": 2.400925,
-        "min_ms": 2.400216,
-        "rank_times_ms": [
-          [
-            0.059126,
-            0.059266,
-            0.073242,
-            0.058721,
-            0.062005
-          ],
-          [
-            2.400772,
-            2.603425,
-            2.401149,
-            2.400216,
-            2.400925
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.394796,
-          2.395079,
-          2.396567,
-          2.396561,
-          2.395886
-        ],
-        "best_bandwidth_gbps": 0.001710375330508319,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.396567,
-        "mean_ms": 2.3957778000000003,
-        "median_bandwidth_gbps": 0.0017095972012023944,
-        "median_ms": 2.395886,
-        "min_ms": 2.394796,
-        "rank_times_ms": [
-          [
-            0.06452,
-            0.06348,
-            0.060105,
-            0.060603,
-            0.058858
-          ],
-          [
-            2.394796,
-            2.395079,
-            2.396567,
-            2.396561,
-            2.395886
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0021031885490377
-    },
-    {
-      "collective": "scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.403481,
-          2.402882,
-          2.403392,
-          2.403731,
-          2.403307
-        ],
-        "best_bandwidth_gbps": 0.006818478810028957,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.403731,
-        "mean_ms": 2.4033586,
-        "median_bandwidth_gbps": 0.006817031928208131,
-        "median_ms": 2.403392,
-        "min_ms": 2.402882,
-        "rank_times_ms": [
-          [
-            0.085819,
-            0.069746,
-            0.075509,
-            0.07277,
-            0.052052
-          ],
-          [
-            2.403481,
-            2.402882,
-            2.403392,
-            2.403731,
-            2.403307
-          ]
-        ]
-      },
-      "size_bytes": 16384,
-      "size_mib": 0.015625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.394042,
-          2.396926,
-          2.395408,
-          2.396242,
-          2.395102
-        ],
-        "best_bandwidth_gbps": 0.0068436560427929,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.396926,
-        "mean_ms": 2.395544,
-        "median_bandwidth_gbps": 0.006839753394828771,
-        "median_ms": 2.395408,
-        "min_ms": 2.394042,
-        "rank_times_ms": [
-          [
-            0.215642,
-            0.173653,
-            0.145542,
-            0.117774,
-            0.11905
-          ],
-          [
-            2.394042,
-            2.396926,
-            2.395408,
-            2.396242,
-            2.395102
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.003333043890644
-    },
-    {
-      "collective": "scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.403577,
-          2.406606,
-          2.403934,
-          2.405483,
-          2.406285
-        ],
-        "best_bandwidth_gbps": 0.027266028922726417,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.406606,
-        "mean_ms": 2.405177,
-        "median_bandwidth_gbps": 0.027244424508508273,
-        "median_ms": 2.405483,
-        "min_ms": 2.403577,
-        "rank_times_ms": [
-          [
-            0.08694,
-            0.055615,
-            0.070214,
-            0.063844,
-            0.052458
-          ],
-          [
-            2.403577,
-            2.406606,
-            2.403934,
-            2.405483,
-            2.406285
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.397907,
-          2.395646,
-          2.397498,
-          2.397922,
-          2.396948
-        ],
-        "best_bandwidth_gbps": 0.027356295546170004,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.397922,
-        "mean_ms": 2.3971842,
-        "median_bandwidth_gbps": 0.027335163574693285,
-        "median_ms": 2.397498,
-        "min_ms": 2.395646,
-        "rank_times_ms": [
-          [
-            0.066604,
-            0.066131,
-            0.060492,
-            0.06111,
-            0.062499
-          ],
-          [
-            2.397907,
-            2.395646,
-            2.397498,
-            2.397922,
-            2.396948
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0033305554373768
-    },
-    {
-      "collective": "scatter",
-      "nccl": {
-        "best_bandwidth_gbps": 0.03780247993693626,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 6.9345715,
-        "mean_ms": 6.9345715,
-        "median_bandwidth_gbps": 0.03780247993693626,
-        "median_ms": 6.9345715,
-        "min_ms": 6.9345715
-      },
-      "size_bytes": 262144,
-      "size_mib": 0.25,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.055420205339573064,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 4.730116,
-        "mean_ms": 4.730116,
-        "median_bandwidth_gbps": 0.055420205339573064,
-        "median_ms": 4.730116,
-        "min_ms": 4.730116
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.466046815765195
-    },
-    {
-      "collective": "reduce_scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400195,
-          2.401128,
-          2.400585,
-          2.402202,
-          2.40655
-        ],
-        "best_bandwidth_gbps": 0.0017065280112657515,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.40655,
-        "mean_ms": 2.4021319999999995,
-        "median_bandwidth_gbps": 0.0017058649101588921,
-        "median_ms": 2.401128,
-        "min_ms": 2.400195,
-        "rank_times_ms": [
-          [
-            2.400195,
-            2.401067,
-            2.400585,
-            2.402202,
-            2.40655
-          ],
-          [
-            2.399741,
-            2.401128,
-            2.400039,
-            2.401099,
-            2.405805
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.395688,
-          2.39686,
-          2.397226,
-          2.397279,
-          2.396655
-        ],
-        "best_bandwidth_gbps": 0.0017097384968326427,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.397279,
-        "mean_ms": 2.3967416,
-        "median_bandwidth_gbps": 0.001708902480745642,
-        "median_ms": 2.39686,
-        "min_ms": 2.395688,
-        "rank_times_ms": [
-          [
-            0.063228,
-            0.061367,
-            0.058813,
-            0.056686,
-            0.057525
-          ],
-          [
-            2.395688,
-            2.39686,
-            2.397226,
-            2.397279,
-            2.396655
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0017806630341362
-    },
-    {
-      "collective": "reduce_scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400635,
-          2.402253,
-          2.403257,
-          2.401688,
-          2.403266
-        ],
-        "best_bandwidth_gbps": 0.006824860922214331,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.403266,
-        "mean_ms": 2.4022198,
-        "median_bandwidth_gbps": 0.006820264143701767,
-        "median_ms": 2.402253,
-        "min_ms": 2.400635,
-        "rank_times_ms": [
-          [
-            2.400476,
-            2.402253,
-            2.403257,
-            2.401688,
-            2.403266
-          ],
-          [
-            2.400635,
-            2.40192,
-            2.402565,
-            2.401044,
-            2.402041
-          ]
-        ]
-      },
-      "size_bytes": 16384,
-      "size_mib": 0.015625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.398309,
-          2.3981,
-          2.399772,
-          2.399505,
-          2.399357
-        ],
-        "best_bandwidth_gbps": 0.006832075393019474,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.399772,
-        "mean_ms": 2.3990085999999997,
-        "median_bandwidth_gbps": 0.006828496134589391,
-        "median_ms": 2.399357,
-        "min_ms": 2.3981,
-        "rank_times_ms": [
-          [
-            0.069624,
-            0.066432,
-            0.063635,
-            0.061753,
-            0.06349
-          ],
-          [
-            2.398309,
-            2.3981,
-            2.399772,
-            2.399505,
-            2.399357
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0012069900394145
-    },
-    {
-      "collective": "reduce_scatter",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.403333,
-          2.40322,
-          2.403118,
-          2.402552,
-          2.401578
-        ],
-        "best_bandwidth_gbps": 0.027288724330419414,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.403333,
-        "mean_ms": 2.4027602000000003,
-        "median_bandwidth_gbps": 0.02727123678487698,
-        "median_ms": 2.403118,
-        "min_ms": 2.401578,
-        "rank_times_ms": [
-          [
-            2.403333,
-            2.403036,
-            2.403118,
-            2.401961,
-            2.401178
-          ],
-          [
-            2.40128,
-            2.40322,
-            2.401537,
-            2.402552,
-            2.401578
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.404108,
-          2.405009,
-          2.404358,
-          2.404176,
-          2.405255
-        ],
-        "best_bandwidth_gbps": 0.027260006621998678,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.405255,
-        "mean_ms": 2.4045812,
-        "median_bandwidth_gbps": 0.027257172184841024,
-        "median_ms": 2.404358,
-        "min_ms": 2.404108,
-        "rank_times_ms": [
-          [
-            0.123424,
-            0.106993,
-            0.09497,
-            0.080258,
-            0.083324
-          ],
-          [
-            2.404108,
-            2.405009,
-            2.404358,
-            2.404176,
-            2.405255
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.9994842698133971
-    },
-    {
-      "collective": "reduce_scatter",
-      "nccl": {
-        "best_bandwidth_gbps": 0.10901862279483318,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 2.40458,
-        "mean_ms": 2.40458,
-        "median_bandwidth_gbps": 0.10901862279483318,
-        "median_ms": 2.40458,
-        "min_ms": 2.40458
-      },
-      "size_bytes": 262144,
-      "size_mib": 0.25,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.0005590254954557086,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 468.930312,
-        "mean_ms": 468.930312,
-        "median_bandwidth_gbps": 0.0005590254954557086,
-        "median_ms": 468.930312,
-        "min_ms": 468.930312
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 0.005127798179103423
-    },
-    {
-      "collective": "broadcast",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.400227,
-          2.400942,
-          2.400678,
-          2.400037,
-          2.400566
-        ],
-        "best_bandwidth_gbps": 0.0017066403559611787,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.400942,
-        "mean_ms": 2.40049,
-        "median_bandwidth_gbps": 0.0017062642726756942,
-        "median_ms": 2.400566,
-        "min_ms": 2.400037,
-        "rank_times_ms": [
-          [
-            0.036306,
-            0.034807,
-            0.034771,
-            0.034562,
-            0.050998
-          ],
-          [
-            2.400227,
-            2.400942,
-            2.400678,
-            2.400037,
-            2.400566
-          ]
-        ]
-      },
-      "size_bytes": 4096,
-      "size_mib": 0.00390625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.395306,
-          2.396788,
-          2.397429,
-          2.395236,
-          2.396588
-        ],
-        "best_bandwidth_gbps": 0.0017100611380256475,
-        "correct_all_ranks": true,
-        "effective_bytes": 4096.0,
-        "max_ms": 2.397429,
-        "mean_ms": 2.3962694,
-        "median_bandwidth_gbps": 0.0017090964320942942,
-        "median_ms": 2.396588,
-        "min_ms": 2.395236,
-        "rank_times_ms": [
-          [
-            0.061245,
-            0.066278,
-            0.058709,
-            0.052603,
-            0.059933
-          ],
-          [
-            2.395306,
-            2.396788,
-            2.397429,
-            2.395236,
-            2.396588
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0016598597673025
-    },
-    {
-      "collective": "broadcast",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.398244,
-          2.401836,
-          2.401674,
-          2.401775,
-          2.401744
-        ],
-        "best_bandwidth_gbps": 0.0068316651683481755,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.401836,
-        "mean_ms": 2.4010545999999997,
-        "median_bandwidth_gbps": 0.0068217095577213895,
-        "median_ms": 2.401744,
-        "min_ms": 2.398244,
-        "rank_times_ms": [
-          [
-            0.03729,
-            0.03754,
-            0.036081,
-            0.041345,
-            0.0473
-          ],
-          [
-            2.398244,
-            2.401836,
-            2.401674,
-            2.401775,
-            2.401744
-          ]
-        ]
-      },
-      "size_bytes": 16384,
-      "size_mib": 0.015625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.397768,
-          2.377864,
-          2.400685,
-          2.396636,
-          2.396113
-        ],
-        "best_bandwidth_gbps": 0.006890217438844273,
-        "correct_all_ranks": true,
-        "effective_bytes": 16384.0,
-        "max_ms": 2.400685,
-        "mean_ms": 2.3938132,
-        "median_bandwidth_gbps": 0.006836248808746927,
-        "median_ms": 2.396636,
-        "min_ms": 2.377864,
-        "rank_times_ms": [
-          [
-            0.061834,
-            0.058341,
-            0.054021,
-            0.053451,
-            0.052395
-          ],
-          [
-            2.397768,
-            2.377864,
-            2.400685,
-            2.396636,
-            2.396113
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0021313207345628
-    },
-    {
-      "collective": "broadcast",
-      "nccl": {
-        "aggregate_times_ms": [
-          2.402086,
-          2.401779,
-          2.402119,
-          2.400945,
-          2.401457
-        ],
-        "best_bandwidth_gbps": 0.02729591889860034,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.402119,
-        "mean_ms": 2.4016772000000004,
-        "median_bandwidth_gbps": 0.02728644059257742,
-        "median_ms": 2.401779,
-        "min_ms": 2.400945,
-        "rank_times_ms": [
-          [
-            0.037251,
-            0.037801,
-            0.036216,
-            0.035393,
-            0.035619
-          ],
-          [
-            2.402086,
-            2.401779,
-            2.402119,
-            2.400945,
-            2.401457
-          ]
-        ]
-      },
-      "size_bytes": 65536,
-      "size_mib": 0.0625,
-      "world_size": 2,
-      "xtile": {
-        "aggregate_times_ms": [
-          2.39441,
-          2.394471,
-          2.393612,
-          2.394749,
-          2.395944
-        ],
-        "best_bandwidth_gbps": 0.027379541880638965,
-        "correct_all_ranks": true,
-        "effective_bytes": 65536.0,
-        "max_ms": 2.395944,
-        "mean_ms": 2.3946372,
-        "median_bandwidth_gbps": 0.027369719658329544,
-        "median_ms": 2.394471,
-        "min_ms": 2.393612,
-        "rank_times_ms": [
-          [
-            0.055741,
-            0.053055,
-            0.052907,
-            0.052099,
-            0.051076
-          ],
-          [
-            2.39441,
-            2.394471,
-            2.393612,
-            2.394749,
-            2.395944
-          ]
-        ]
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.003052031116685
-    },
-    {
-      "collective": "broadcast",
-      "nccl": {
-        "best_bandwidth_gbps": 0.10914871629178162,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 2.401714,
-        "mean_ms": 2.401714,
-        "median_bandwidth_gbps": 0.10914871629178162,
-        "median_ms": 2.401714,
-        "min_ms": 2.401714
-      },
-      "size_bytes": 262144,
-      "size_mib": 0.25,
-      "world_size": 2,
-      "xtile": {
-        "best_bandwidth_gbps": 0.10958665884095924,
-        "correct_all_ranks": true,
-        "effective_bytes": 262144.0,
-        "max_ms": 2.392116,
-        "mean_ms": 2.392116,
-        "median_bandwidth_gbps": 0.10958665884095924,
-        "median_ms": 2.392116,
-        "min_ms": 2.392116
-      },
-      "xtile_vs_nccl_bandwidth_ratio": 1.0040123472273086
-    }
-  ],
-  "command": "fig6 mixed-source dataset: small-message steady host-wall + unified 256 KiB anchors + allreduce 1/2 MiB sweep",
+  "generated_at_utc": "2026-03-28T18:32:09.304583+00:00",
+  "command": "merged from per-collective reruns for figure regeneration",
   "environment": {
     "collectives": [
-      "allreduce",
-      "allgather",
-      "scatter",
-      "reduce_scatter",
-      "broadcast"
+      "allreduce"
     ],
     "dtype": "float32",
     "gpu_name": "NVIDIA H100 PCIe",
-    "iters": 5,
+    "iters": 3,
     "latency_measurement": "host_wall_end_to_end_with_cuda_completion",
-    "measurement_strategy": {
-      "allreduce_large_sweep": {
-        "collection_mode": "per_op_anchor_run",
-        "sizes_bytes": [
-          262144,
-          1048576,
-          2097152
-        ],
-        "timing_mode": "host_wall_end_to_end_with_cuda_completion"
-      },
-      "bandwidth_view_common_anchor": {
-        "collection_mode": "per_op_anchor_run",
-        "size_bytes": 262144,
-        "timing_mode": "host_wall_end_to_end_with_cuda_completion"
-      },
-      "latency_view": {
-        "iters": 5,
-        "sizes_bytes": [
-          4096,
-          16384,
-          65536
-        ],
-        "timing_mode": "host_wall_end_to_end_with_cuda_completion",
-        "warmup": 3
-      }
-    },
     "message_sizes_bytes": [
       4096,
       16384,
@@ -1364,1337 +19,21 @@
       1048576,
       2097152
     ],
+    "sampling_policy": {
+      "base_iters": 3,
+      "base_warmup": 1,
+      "large_message_iters_cap": 2,
+      "large_message_threshold_bytes": 262144,
+      "large_message_warmup_cap": 1,
+      "mode": "size_adaptive",
+      "very_large_message_iters_cap": 1,
+      "very_large_message_threshold_bytes": 1048576,
+      "very_large_message_warmup_cap": 0
+    },
+    "timing_mode": "host_wall",
     "transport_strategy": "ctypes_ipc",
     "visible_gpus": 2,
-    "warmup": 3,
-    "world_size": 2
-  },
-  "generated_at_utc": "2026-03-25T18:15:00+00:00",
-  "rank_payloads": [
-    {
-      "dtype": "float32",
-      "force_transport": "auto",
-      "heap_mode": "multiprocess",
-      "iters": 5,
-      "rank": 0,
-      "results": [
-        {
-          "block_elements": 1024,
-          "collective": "allreduce",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.401858,
-              2.400856,
-              2.400633,
-              2.402201,
-              2.402122
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "chunk_elems": 1024,
-            "correct": true,
-            "grid_size": 1,
-            "implementation": "device_staged_pipeline",
-            "num_chunks": 1,
-            "num_warps": 4,
-            "pipeline_slots": 1,
-            "protocol": "slot_epoch_pipeline",
-            "times_ms": [
-              2.40674,
-              2.407717,
-              2.389452,
-              2.409311,
-              2.408374
-            ],
-            "workspace_bytes": 4104
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "allreduce",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.400981,
-              2.404041,
-              2.401857,
-              2.403234,
-              2.40203
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "chunk_elems": 4096,
-            "correct": true,
-            "grid_size": 4,
-            "implementation": "device_staged_pipeline",
-            "num_chunks": 4,
-            "num_warps": 8,
-            "pipeline_slots": 4,
-            "protocol": "slot_epoch_pipeline",
-            "times_ms": [
-              2.410627,
-              2.414794,
-              2.414743,
-              2.414637,
-              2.416036
-            ],
-            "workspace_bytes": 65568
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "allgather",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.401413,
-              2.40267,
-              2.400923,
-              2.402135,
-              2.402064
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.066128,
-              0.055099,
-              0.052707,
-              0.056863,
-              0.050408
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "allgather",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.402684,
-              2.403487,
-              2.401751,
-              2.401571,
-              2.401513
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.064023,
-              0.065999,
-              0.058276,
-              0.065004,
-              0.060287
-            ]
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              0.060226,
-              0.054962,
-              0.057191,
-              0.055569,
-              0.06424
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.072065,
-              0.06455,
-              0.068724,
-              0.06141,
-              0.068924
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              0.054167,
-              0.052759,
-              0.055021,
-              0.052101,
-              0.053969
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.159713,
-              0.123746,
-              0.105515,
-              0.089608,
-              0.087294
-            ]
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "reduce_scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.403746,
-              2.402552,
-              2.401174,
-              2.402068,
-              2.402425
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.140233,
-              0.118904,
-              0.107241,
-              0.096318,
-              0.082571
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "reduce_scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.398256,
-              2.4024,
-              2.40356,
-              2.402122,
-              2.403694
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.069772,
-              0.066726,
-              0.068118,
-              0.062939,
-              0.077507
-            ]
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "broadcast",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              0.035079,
-              0.063084,
-              0.035406,
-              0.050698,
-              0.035308
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.056604,
-              0.057028,
-              0.052775,
-              0.055408,
-              0.052511
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "broadcast",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              0.037726,
-              0.035056,
-              0.035567,
-              0.049419,
-              0.051265
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              0.058576,
-              0.058223,
-              0.057326,
-              0.054218,
-              0.053103
-            ]
-          }
-        }
-      ],
-      "root": 0,
-      "runtime_metadata": {
-        "backend": "cuda",
-        "device": "cuda:0",
-        "has_heap": true,
-        "heap": {
-          "allocator": {
-            "bytes_allocated": 856848,
-            "bytes_free": 536014064,
-            "capabilities": {
-              "dmabuf_mapping": false,
-              "external_import_copy": true,
-              "external_mapping": false,
-              "fd_passing": false,
-              "multi_segment": false,
-              "peer_export": true,
-              "peer_import": true
-            },
-            "device": "cuda:0",
-            "exportable_segments": [
-              {
-                "allocator_name": "torch_bump",
-                "base_ptr": 140412144582656,
-                "device": "cuda:0",
-                "segment_id": "heap",
-                "segment_kind": "device_heap",
-                "size_bytes": 536870912
-              }
-            ],
-            "external_mapping_mode": "none",
-            "external_memory_interface": {
-              "allocator_name": "torch_bump",
-              "copy_import_supported": true,
-              "dmabuf_mapping": false,
-              "fd_passing": false,
-              "import_mode": "copy",
-              "mapping_mode": "none",
-              "zero_copy_mapping_supported": false
-            },
-            "external_tensor_import_mode": "copy",
-            "memory_model": {
-              "allocator_name": "torch_bump",
-              "external_mapping_mode": "none",
-              "external_tensor_import_mode": "copy",
-              "local_segment_layout": "single_contiguous_device_heap",
-              "peer_import_model": "per_rank_transport_resolved_imports",
-              "peer_mapping_model": "rank_ordered_import_table"
-            },
-            "name": "torch_bump",
-            "peer_import_access_kinds": [
-              "local",
-              "peer_direct",
-              "mapped_remote",
-              "remote_pointer"
-            ],
-            "peer_transport_modes": [
-              "ctypes_ipc",
-              "pytorch_ipc",
-              "peer_access_pointer_exchange"
-            ],
-            "segment_count": 1,
-            "segment_layout": {
-              "allocator_name": "torch_bump",
-              "exportable_segment_count": 1,
-              "exportable_segment_ids": [
-                "heap"
-              ],
-              "layout_kind": "single_exportable_segment",
-              "multi_segment": false,
-              "primary_segment_id": "heap",
-              "segment_count": 1
-            },
-            "segments": [
-              {
-                "allocator_name": "torch_bump",
-                "base_ptr": 140412144582656,
-                "device": "cuda:0",
-                "segment_id": "heap",
-                "segment_kind": "device_heap",
-                "size_bytes": 536870912
-              }
-            ],
-            "size_bytes": 536870912
-          },
-          "backend": "cuda",
-          "device": "cuda:0",
-          "exportable_segments": [
-            {
-              "allocator_name": "torch_bump",
-              "base_ptr": 140412144582656,
-              "device": "cuda:0",
-              "is_local_rank": true,
-              "is_primary_segment": true,
-              "owner_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912
-            }
-          ],
-          "external_memory_interface": {
-            "allocator_name": "torch_bump",
-            "copy_import_supported": true,
-            "dmabuf_mapping": false,
-            "fd_passing": false,
-            "import_mode": "copy",
-            "mapping_mode": "none",
-            "zero_copy_mapping_supported": false
-          },
-          "local_base": 140412144582656,
-          "mode": "multiprocess",
-          "peer_export_catalog": [
-            {
-              "peer_rank": 0,
-              "segment_count": 1,
-              "segment_ids": [
-                "heap"
-              ],
-              "segments": [
-                {
-                  "allocator_name": "torch_bump",
-                  "base_ptr": 140412144582656,
-                  "device": "cuda:0",
-                  "payload_type": "bytes",
-                  "peer_rank": 0,
-                  "segment_id": "heap",
-                  "segment_kind": "device_heap",
-                  "size_bytes": 536870912,
-                  "transport": "ctypes_ipc"
-                }
-              ]
-            },
-            {
-              "peer_rank": 1,
-              "segment_count": 1,
-              "segment_ids": [
-                "heap"
-              ],
-              "segments": [
-                {
-                  "allocator_name": "torch_bump",
-                  "base_ptr": 139979963498496,
-                  "device": "cuda:1",
-                  "payload_type": "bytes",
-                  "peer_rank": 1,
-                  "segment_id": "heap",
-                  "segment_kind": "device_heap",
-                  "size_bytes": 536870912,
-                  "transport": "ctypes_ipc"
-                }
-              ]
-            }
-          ],
-          "peer_exports": [
-            {
-              "allocator_name": "torch_bump",
-              "base_ptr": 140412144582656,
-              "device": "cuda:0",
-              "payload_type": "bytes",
-              "peer_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            },
-            {
-              "allocator_name": "torch_bump",
-              "base_ptr": 139979963498496,
-              "device": "cuda:1",
-              "payload_type": "bytes",
-              "peer_rank": 1,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ],
-          "peer_import_catalog": [
-            {
-              "peer_rank": 0,
-              "segment_count": 1,
-              "segment_ids": [
-                "heap"
-              ],
-              "segments": [
-                {
-                  "access_kind": "local",
-                  "allocator_name": "torch_bump",
-                  "cleanup_kind": "none",
-                  "device": "cuda:0",
-                  "exported_base_ptr": 140412144582656,
-                  "mapped_ptr": 140412144582656,
-                  "peer_rank": 0,
-                  "segment_id": "heap",
-                  "segment_kind": "device_heap",
-                  "size_bytes": 536870912,
-                  "transport": "ctypes_ipc"
-                }
-              ]
-            },
-            {
-              "peer_rank": 1,
-              "segment_count": 1,
-              "segment_ids": [
-                "heap"
-              ],
-              "segments": [
-                {
-                  "access_kind": "mapped_remote",
-                  "allocator_name": "torch_bump",
-                  "cleanup_kind": "ipc_handle",
-                  "device": "cuda:1",
-                  "exported_base_ptr": 139979963498496,
-                  "mapped_ptr": 140410533969920,
-                  "peer_rank": 1,
-                  "segment_id": "heap",
-                  "segment_kind": "device_heap",
-                  "size_bytes": 536870912,
-                  "transport": "ctypes_ipc"
-                }
-              ]
-            }
-          ],
-          "peer_imports": [
-            {
-              "access_kind": "local",
-              "allocator_name": "torch_bump",
-              "cleanup_kind": "none",
-              "device": "cuda:0",
-              "exported_base_ptr": 140412144582656,
-              "mapped_ptr": 140412144582656,
-              "peer_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            },
-            {
-              "access_kind": "mapped_remote",
-              "allocator_name": "torch_bump",
-              "cleanup_kind": "ipc_handle",
-              "device": "cuda:1",
-              "exported_base_ptr": 139979963498496,
-              "mapped_ptr": 140410533969920,
-              "peer_rank": 1,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ],
-          "peer_memory_map": [
-            {
-              "access_kind": "local",
-              "allocator_name": "torch_bump",
-              "cleanup_kind": "none",
-              "device": "cuda:0",
-              "exported_base_ptr": 140412144582656,
-              "is_local_rank": true,
-              "mapped_ptr": 140412144582656,
-              "peer_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            },
-            {
-              "access_kind": "mapped_remote",
-              "allocator_name": "torch_bump",
-              "cleanup_kind": "ipc_handle",
-              "device": "cuda:1",
-              "exported_base_ptr": 139979963498496,
-              "is_local_rank": false,
-              "mapped_ptr": 140410533969920,
-              "peer_rank": 1,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ],
-          "rank": 0,
-          "segment_layout": {
-            "allocator_name": "torch_bump",
-            "exportable_segment_count": 1,
-            "exportable_segment_ids": [
-              "heap"
-            ],
-            "layout_kind": "single_exportable_segment",
-            "multi_segment": false,
-            "primary_segment_id": "heap",
-            "segment_count": 1
-          },
-          "segments": [
-            {
-              "allocator_name": "torch_bump",
-              "base_ptr": 140412144582656,
-              "device": "cuda:0",
-              "is_local_rank": true,
-              "owner_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912
-            }
-          ],
-          "size_bytes": 536870912,
-          "transport_strategy": "ctypes_ipc",
-          "world_size": 2
-        },
-        "rank": 0,
-        "world_size": 2
-      },
-      "runtime_support": {
-        "collectives": {
-          "collectives.allgather_launcher": {
-            "detail": "Current public multiprocess surface is validated for allgather: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "collectives.allreduce_launcher": {
-            "detail": "Current public multiprocess surface is validated for allreduce: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "collectives.reduce_scatter_launcher": {
-            "detail": "Multiprocess device reduce_scatter is validated on the current public surface: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          }
-        },
-        "context": {
-          "backend": "cuda",
-          "device": "cuda:0",
-          "has_heap": true,
-          "heap_mode": "multiprocess",
-          "rank": 0,
-          "transport_strategy": "ctypes_ipc",
-          "world_size": 2
-        },
-        "contracts": {
-          "allreduce.in_place": {
-            "detail": "Stable public in-place host contract: contiguous tensor on the attached symmetric heap. The current public fast path does not require tensor.numel to be divisible by world_size.",
-            "state": "supported"
-          },
-          "gemm_allgather.shard/full": {
-            "detail": "Stable public host contract: A(M,K) full LHS, B(K,N/world_size) rank-local RHS shard, C(M,N) full output. Runtime availability inherits the validated allgather path for the current heap mode/transport.",
-            "state": "supported"
-          },
-          "gemm_allscatter.full/full": {
-            "detail": "Stable public contract for full RHS and full output buffers.",
-            "state": "supported"
-          },
-          "gemm_allscatter.full/shard": {
-            "detail": "High-level wrapper materializes a heap-backed full output, then returns the rank-local shard.",
-            "state": "supported"
-          },
-          "gemm_allscatter.shard/full": {
-            "detail": "Rejected intentionally: current shard/shard gemm_allscatter execution is a peer-scatter contract, not a stable local-shard basis for full-output assembly.",
-            "state": "unsupported"
-          },
-          "gemm_allscatter.shard/shard": {
-            "detail": "Expert contract available via gemm_allscatter_sharded(...).",
-            "state": "supported"
-          },
-          "gemm_reducescatter.full/shard": {
-            "detail": "Stable public host contract: A(M,K) local contribution, B(K,N) full RHS, C(M,N/world_size) rank-local shard. Runtime availability inherits the validated reduce_scatter path for the current heap mode/transport.",
-            "state": "supported"
-          }
-        },
-        "execution_paths": {
-          "reduce_scatter.device": {
-            "detail": "Validated on the current public multiprocess surface: world_size=2, transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "reduce_scatter.reference": {
-            "detail": "Reference path is only defined for single-process peer-buffer access.",
-            "state": "unsupported"
-          }
-        },
-        "memory": {
-          "symmetric_heap.allocator_memory_model": {
-            "detail": "Heap exposes the allocator memory-model descriptor, including local segment layout, peer import/mapping model, and current external import/mapping modes.",
-            "state": "supported"
-          },
-          "symmetric_heap.current_runtime": {
-            "detail": "Attached heap mode='multiprocess', transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "symmetric_heap.device_remote_access": {
-            "detail": "Real 2-GPU minimal Triton remote-load/store diagnostics pass on the current public multiprocess surface.",
-            "state": "supported"
-          },
-          "symmetric_heap.exportable_segment_metadata": {
-            "detail": "Heap exposes the current exportable segment descriptors separately from the full allocator-owned segment catalog.",
-            "state": "supported"
-          },
-          "symmetric_heap.external_import": {
-            "detail": "Heap exposes import_external_tensor()/as_symmetric() via the active allocator.",
-            "state": "supported"
-          },
-          "symmetric_heap.external_mapping": {
-            "detail": "The active allocator does not yet implement zero-copy external mapping (FD passing / DMA-BUF import-map).",
-            "state": "unsupported"
-          },
-          "symmetric_heap.external_memory_interface": {
-            "detail": "Heap exposes the allocator's structured external-memory interface descriptor, including import mode, mapping mode, and zero-copy capability flags.",
-            "state": "supported"
-          },
-          "symmetric_heap.peer_import_metadata": {
-            "detail": "Heap exposes structured peer-import records for the active transport strategy.",
-            "state": "supported"
-          },
-          "symmetric_heap.peer_mapping_metadata": {
-            "detail": "Heap exposes allocator-owned peer export descriptors, peer-import records, plus structured peer mapping metadata.",
-            "state": "supported"
-          },
-          "symmetric_heap.peer_segment_catalog": {
-            "detail": "Heap exposes segment-scoped peer export/import catalogs keyed by peer rank and segment id, in addition to the flat per-record metadata.",
-            "state": "supported"
-          },
-          "symmetric_heap.segment_layout": {
-            "detail": "Heap exposes the allocator's exportable segment-layout descriptor, including primary segment id and exportable segment ids.",
-            "state": "supported"
-          },
-          "symmetric_heap.segment_metadata": {
-            "detail": "Heap exposes allocator-owned local segment metadata for the active heap backend.",
-            "state": "supported"
-          },
-          "symmetric_heap_allocator_first_import_map": {
-            "detail": "Allocator-backed heap runtime is implemented with a torch_bump backend, allocator-owned local segment metadata, peer export/import descriptors, and copy-based external import/as_symmetric materialization. Canonical segmented peer import/map is still not implemented.",
-            "state": "partial"
-          }
-        },
-        "ops": {
-          "allgather": {
-            "detail": "Current public multiprocess surface is validated for allgather: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "allreduce": {
-            "detail": "Current public multiprocess surface is validated for allreduce: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "gemm_allgather": {
-            "detail": "Host GEMM + allgather contract is validated on the current public multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "gemm_allscatter": {
-            "detail": "Current 2-GPU ctypes_ipc correctness matrix passes for the public full/full and full/shard contracts, including representative auto-selected pattern coverage.",
-            "state": "supported"
-          },
-          "gemm_reducescatter": {
-            "detail": "Host GEMM + packed reduce_scatter contract is validated on the current public multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          },
-          "reduce_scatter": {
-            "detail": "Multiprocess device reduce_scatter is validated on the current public surface: world_size=2 with transport_strategy='ctypes_ipc'.",
-            "state": "supported"
-          }
-        }
-      },
-      "transport_strategy": "ctypes_ipc",
-      "warmup": 3,
-      "world_size": 2
-    },
-    {
-      "dtype": "float32",
-      "force_transport": "auto",
-      "heap_mode": "multiprocess",
-      "iters": 5,
-      "rank": 1,
-      "results": [
-        {
-          "block_elements": 1024,
-          "collective": "allreduce",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.401975,
-              2.400246,
-              2.400473,
-              2.402413,
-              2.402433
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "chunk_elems": 1024,
-            "correct": true,
-            "grid_size": 1,
-            "implementation": "device_staged_pipeline",
-            "num_chunks": 1,
-            "num_warps": 4,
-            "pipeline_slots": 1,
-            "protocol": "slot_epoch_pipeline",
-            "times_ms": [
-              2.405782,
-              2.408211,
-              2.406104,
-              2.408132,
-              2.407133
-            ],
-            "workspace_bytes": 4104
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "allreduce",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.398892,
-              2.401659,
-              2.401761,
-              2.402509,
-              2.402254
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "chunk_elems": 4096,
-            "correct": true,
-            "grid_size": 4,
-            "implementation": "device_staged_pipeline",
-            "num_chunks": 4,
-            "num_warps": 8,
-            "pipeline_slots": 4,
-            "protocol": "slot_epoch_pipeline",
-            "times_ms": [
-              2.391837,
-              2.411859,
-              2.412227,
-              2.411395,
-              2.413232
-            ],
-            "workspace_bytes": 65568
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "allgather",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.399929,
-              2.398557,
-              2.400114,
-              2.400339,
-              2.402075
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.393531,
-              2.394826,
-              2.707114,
-              2.393499,
-              2.396237
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "allgather",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.400949,
-              2.401064,
-              2.401011,
-              2.399847,
-              2.40161
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.398344,
-              2.398474,
-              2.399368,
-              2.397186,
-              2.398141
-            ]
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.400083,
-              2.399698,
-              2.401245,
-              2.399464,
-              2.400657
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.395271,
-              2.395784,
-              2.395334,
-              2.39524,
-              2.396443
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.40571,
-              2.404465,
-              2.404133,
-              2.405323,
-              2.404044
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.385422,
-              2.390198,
-              2.390783,
-              2.394132,
-              2.39412
-            ]
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "reduce_scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.400761,
-              2.400848,
-              2.399515,
-              2.399641,
-              2.400879
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.394776,
-              2.392652,
-              2.395242,
-              2.396931,
-              2.394231
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "reduce_scatter",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.397429,
-              2.401777,
-              2.402477,
-              2.400206,
-              2.400944
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.40383,
-              2.401881,
-              2.40285,
-              2.404164,
-              2.402354
-            ]
-          }
-        },
-        {
-          "block_elements": 1024,
-          "collective": "broadcast",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.400081,
-              2.39992,
-              2.399639,
-              2.400159,
-              2.399942
-            ]
-          },
-          "size_bytes": 4096,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.393301,
-              2.394779,
-              2.394738,
-              2.39667,
-              2.391064
-            ]
-          }
-        },
-        {
-          "block_elements": 16384,
-          "collective": "broadcast",
-          "nccl": {
-            "correct": true,
-            "times_ms": [
-              2.401653,
-              2.400884,
-              2.402455,
-              2.401608,
-              2.400733
-            ]
-          },
-          "size_bytes": 65536,
-          "xtile": {
-            "correct": true,
-            "times_ms": [
-              2.394495,
-              2.394139,
-              2.393377,
-              2.394683,
-              2.394751
-            ]
-          }
-        }
-      ],
-      "root": 0,
-      "runtime_metadata": null,
-      "runtime_support": null,
-      "transport_strategy": "ctypes_ipc",
-      "warmup": 3,
-      "world_size": 2
-    }
-  ],
-  "runtime_metadata": {
-    "backend": "cuda",
-    "device": "cuda:0",
-    "has_heap": true,
-    "heap": {
-      "allocator": {
-        "bytes_allocated": 856848,
-        "bytes_free": 536014064,
-        "capabilities": {
-          "dmabuf_mapping": false,
-          "external_import_copy": true,
-          "external_mapping": false,
-          "fd_passing": false,
-          "multi_segment": false,
-          "peer_export": true,
-          "peer_import": true
-        },
-        "device": "cuda:0",
-        "exportable_segments": [
-          {
-            "allocator_name": "torch_bump",
-            "base_ptr": 140412144582656,
-            "device": "cuda:0",
-            "segment_id": "heap",
-            "segment_kind": "device_heap",
-            "size_bytes": 536870912
-          }
-        ],
-        "external_mapping_mode": "none",
-        "external_memory_interface": {
-          "allocator_name": "torch_bump",
-          "copy_import_supported": true,
-          "dmabuf_mapping": false,
-          "fd_passing": false,
-          "import_mode": "copy",
-          "mapping_mode": "none",
-          "zero_copy_mapping_supported": false
-        },
-        "external_tensor_import_mode": "copy",
-        "memory_model": {
-          "allocator_name": "torch_bump",
-          "external_mapping_mode": "none",
-          "external_tensor_import_mode": "copy",
-          "local_segment_layout": "single_contiguous_device_heap",
-          "peer_import_model": "per_rank_transport_resolved_imports",
-          "peer_mapping_model": "rank_ordered_import_table"
-        },
-        "name": "torch_bump",
-        "peer_import_access_kinds": [
-          "local",
-          "peer_direct",
-          "mapped_remote",
-          "remote_pointer"
-        ],
-        "peer_transport_modes": [
-          "ctypes_ipc",
-          "pytorch_ipc",
-          "peer_access_pointer_exchange"
-        ],
-        "segment_count": 1,
-        "segment_layout": {
-          "allocator_name": "torch_bump",
-          "exportable_segment_count": 1,
-          "exportable_segment_ids": [
-            "heap"
-          ],
-          "layout_kind": "single_exportable_segment",
-          "multi_segment": false,
-          "primary_segment_id": "heap",
-          "segment_count": 1
-        },
-        "segments": [
-          {
-            "allocator_name": "torch_bump",
-            "base_ptr": 140412144582656,
-            "device": "cuda:0",
-            "segment_id": "heap",
-            "segment_kind": "device_heap",
-            "size_bytes": 536870912
-          }
-        ],
-        "size_bytes": 536870912
-      },
-      "backend": "cuda",
-      "device": "cuda:0",
-      "exportable_segments": [
-        {
-          "allocator_name": "torch_bump",
-          "base_ptr": 140412144582656,
-          "device": "cuda:0",
-          "is_local_rank": true,
-          "is_primary_segment": true,
-          "owner_rank": 0,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912
-        }
-      ],
-      "external_memory_interface": {
-        "allocator_name": "torch_bump",
-        "copy_import_supported": true,
-        "dmabuf_mapping": false,
-        "fd_passing": false,
-        "import_mode": "copy",
-        "mapping_mode": "none",
-        "zero_copy_mapping_supported": false
-      },
-      "local_base": 140412144582656,
-      "mode": "multiprocess",
-      "peer_export_catalog": [
-        {
-          "peer_rank": 0,
-          "segment_count": 1,
-          "segment_ids": [
-            "heap"
-          ],
-          "segments": [
-            {
-              "allocator_name": "torch_bump",
-              "base_ptr": 140412144582656,
-              "device": "cuda:0",
-              "payload_type": "bytes",
-              "peer_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ]
-        },
-        {
-          "peer_rank": 1,
-          "segment_count": 1,
-          "segment_ids": [
-            "heap"
-          ],
-          "segments": [
-            {
-              "allocator_name": "torch_bump",
-              "base_ptr": 139979963498496,
-              "device": "cuda:1",
-              "payload_type": "bytes",
-              "peer_rank": 1,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ]
-        }
-      ],
-      "peer_exports": [
-        {
-          "allocator_name": "torch_bump",
-          "base_ptr": 140412144582656,
-          "device": "cuda:0",
-          "payload_type": "bytes",
-          "peer_rank": 0,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912,
-          "transport": "ctypes_ipc"
-        },
-        {
-          "allocator_name": "torch_bump",
-          "base_ptr": 139979963498496,
-          "device": "cuda:1",
-          "payload_type": "bytes",
-          "peer_rank": 1,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912,
-          "transport": "ctypes_ipc"
-        }
-      ],
-      "peer_import_catalog": [
-        {
-          "peer_rank": 0,
-          "segment_count": 1,
-          "segment_ids": [
-            "heap"
-          ],
-          "segments": [
-            {
-              "access_kind": "local",
-              "allocator_name": "torch_bump",
-              "cleanup_kind": "none",
-              "device": "cuda:0",
-              "exported_base_ptr": 140412144582656,
-              "mapped_ptr": 140412144582656,
-              "peer_rank": 0,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ]
-        },
-        {
-          "peer_rank": 1,
-          "segment_count": 1,
-          "segment_ids": [
-            "heap"
-          ],
-          "segments": [
-            {
-              "access_kind": "mapped_remote",
-              "allocator_name": "torch_bump",
-              "cleanup_kind": "ipc_handle",
-              "device": "cuda:1",
-              "exported_base_ptr": 139979963498496,
-              "mapped_ptr": 140410533969920,
-              "peer_rank": 1,
-              "segment_id": "heap",
-              "segment_kind": "device_heap",
-              "size_bytes": 536870912,
-              "transport": "ctypes_ipc"
-            }
-          ]
-        }
-      ],
-      "peer_imports": [
-        {
-          "access_kind": "local",
-          "allocator_name": "torch_bump",
-          "cleanup_kind": "none",
-          "device": "cuda:0",
-          "exported_base_ptr": 140412144582656,
-          "mapped_ptr": 140412144582656,
-          "peer_rank": 0,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912,
-          "transport": "ctypes_ipc"
-        },
-        {
-          "access_kind": "mapped_remote",
-          "allocator_name": "torch_bump",
-          "cleanup_kind": "ipc_handle",
-          "device": "cuda:1",
-          "exported_base_ptr": 139979963498496,
-          "mapped_ptr": 140410533969920,
-          "peer_rank": 1,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912,
-          "transport": "ctypes_ipc"
-        }
-      ],
-      "peer_memory_map": [
-        {
-          "access_kind": "local",
-          "allocator_name": "torch_bump",
-          "cleanup_kind": "none",
-          "device": "cuda:0",
-          "exported_base_ptr": 140412144582656,
-          "is_local_rank": true,
-          "mapped_ptr": 140412144582656,
-          "peer_rank": 0,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912,
-          "transport": "ctypes_ipc"
-        },
-        {
-          "access_kind": "mapped_remote",
-          "allocator_name": "torch_bump",
-          "cleanup_kind": "ipc_handle",
-          "device": "cuda:1",
-          "exported_base_ptr": 139979963498496,
-          "is_local_rank": false,
-          "mapped_ptr": 140410533969920,
-          "peer_rank": 1,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912,
-          "transport": "ctypes_ipc"
-        }
-      ],
-      "rank": 0,
-      "segment_layout": {
-        "allocator_name": "torch_bump",
-        "exportable_segment_count": 1,
-        "exportable_segment_ids": [
-          "heap"
-        ],
-        "layout_kind": "single_exportable_segment",
-        "multi_segment": false,
-        "primary_segment_id": "heap",
-        "segment_count": 1
-      },
-      "segments": [
-        {
-          "allocator_name": "torch_bump",
-          "base_ptr": 140412144582656,
-          "device": "cuda:0",
-          "is_local_rank": true,
-          "owner_rank": 0,
-          "segment_id": "heap",
-          "segment_kind": "device_heap",
-          "size_bytes": 536870912
-        }
-      ],
-      "size_bytes": 536870912,
-      "transport_strategy": "ctypes_ipc",
-      "world_size": 2
-    },
-    "rank": 0,
+    "warmup": 1,
     "world_size": 2
   },
   "runtime_support": {
@@ -2842,40 +181,1684 @@
       }
     }
   },
-  "schema_version": 1,
-  "summary": {
-    "best_xtile_vs_nccl_case": {
-      "collective": "allgather",
-      "ratio": 1.4712777498478555,
-      "size_bytes": 262144,
-      "size_mib": 0.25
+  "runtime_metadata": {
+    "backend": "cuda",
+    "device": "cuda:0",
+    "has_heap": true,
+    "heap": {
+      "allocator": {
+        "bytes_allocated": 26041152,
+        "bytes_free": 510829760,
+        "capabilities": {
+          "dmabuf_mapping": false,
+          "external_import_copy": true,
+          "external_mapping": false,
+          "fd_passing": false,
+          "multi_segment": false,
+          "peer_export": true,
+          "peer_import": true
+        },
+        "device": "cuda:0",
+        "exportable_segments": [
+          {
+            "allocator_name": "torch_bump",
+            "base_ptr": 140507170734080,
+            "device": "cuda:0",
+            "segment_id": "heap",
+            "segment_kind": "device_heap",
+            "size_bytes": 536870912
+          }
+        ],
+        "external_mapping_mode": "none",
+        "external_memory_interface": {
+          "allocator_name": "torch_bump",
+          "copy_import_supported": true,
+          "dmabuf_mapping": false,
+          "fd_passing": false,
+          "import_mode": "copy",
+          "mapping_mode": "none",
+          "zero_copy_mapping_supported": false
+        },
+        "external_tensor_import_mode": "copy",
+        "memory_model": {
+          "allocator_name": "torch_bump",
+          "external_mapping_mode": "none",
+          "external_tensor_import_mode": "copy",
+          "local_segment_layout": "single_contiguous_device_heap",
+          "peer_import_model": "per_rank_transport_resolved_imports",
+          "peer_mapping_model": "rank_ordered_import_table"
+        },
+        "name": "torch_bump",
+        "peer_import_access_kinds": [
+          "local",
+          "peer_direct",
+          "mapped_remote",
+          "remote_pointer"
+        ],
+        "peer_transport_modes": [
+          "ctypes_ipc",
+          "pytorch_ipc",
+          "peer_access_pointer_exchange"
+        ],
+        "segment_count": 1,
+        "segment_layout": {
+          "allocator_name": "torch_bump",
+          "exportable_segment_count": 1,
+          "exportable_segment_ids": [
+            "heap"
+          ],
+          "layout_kind": "single_exportable_segment",
+          "multi_segment": false,
+          "primary_segment_id": "heap",
+          "segment_count": 1
+        },
+        "segments": [
+          {
+            "allocator_name": "torch_bump",
+            "base_ptr": 140507170734080,
+            "device": "cuda:0",
+            "segment_id": "heap",
+            "segment_kind": "device_heap",
+            "size_bytes": 536870912
+          }
+        ],
+        "size_bytes": 536870912
+      },
+      "backend": "cuda",
+      "device": "cuda:0",
+      "exportable_segments": [
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140507170734080,
+          "device": "cuda:0",
+          "is_local_rank": true,
+          "is_primary_segment": true,
+          "owner_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912
+        }
+      ],
+      "external_memory_interface": {
+        "allocator_name": "torch_bump",
+        "copy_import_supported": true,
+        "dmabuf_mapping": false,
+        "fd_passing": false,
+        "import_mode": "copy",
+        "mapping_mode": "none",
+        "zero_copy_mapping_supported": false
+      },
+      "local_base": 140507170734080,
+      "mode": "multiprocess",
+      "peer_export_catalog": [
+        {
+          "peer_rank": 0,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "allocator_name": "torch_bump",
+              "base_ptr": 140507170734080,
+              "device": "cuda:0",
+              "payload_type": "bytes",
+              "peer_rank": 0,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 536870912,
+              "transport": "ctypes_ipc"
+            }
+          ]
+        },
+        {
+          "peer_rank": 1,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "allocator_name": "torch_bump",
+              "base_ptr": 140454020513792,
+              "device": "cuda:1",
+              "payload_type": "bytes",
+              "peer_rank": 1,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 536870912,
+              "transport": "ctypes_ipc"
+            }
+          ]
+        }
+      ],
+      "peer_exports": [
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140507170734080,
+          "device": "cuda:0",
+          "payload_type": "bytes",
+          "peer_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912,
+          "transport": "ctypes_ipc"
+        },
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140454020513792,
+          "device": "cuda:1",
+          "payload_type": "bytes",
+          "peer_rank": 1,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912,
+          "transport": "ctypes_ipc"
+        }
+      ],
+      "peer_import_catalog": [
+        {
+          "peer_rank": 0,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "access_kind": "local",
+              "allocator_name": "torch_bump",
+              "cleanup_kind": "none",
+              "device": "cuda:0",
+              "exported_base_ptr": 140507170734080,
+              "mapped_ptr": 140507170734080,
+              "peer_rank": 0,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 536870912,
+              "transport": "ctypes_ipc"
+            }
+          ]
+        },
+        {
+          "peer_rank": 1,
+          "segment_count": 1,
+          "segment_ids": [
+            "heap"
+          ],
+          "segments": [
+            {
+              "access_kind": "mapped_remote",
+              "allocator_name": "torch_bump",
+              "cleanup_kind": "ipc_handle",
+              "device": "cuda:1",
+              "exported_base_ptr": 140454020513792,
+              "mapped_ptr": 140505560121344,
+              "peer_rank": 1,
+              "segment_id": "heap",
+              "segment_kind": "device_heap",
+              "size_bytes": 536870912,
+              "transport": "ctypes_ipc"
+            }
+          ]
+        }
+      ],
+      "peer_imports": [
+        {
+          "access_kind": "local",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "none",
+          "device": "cuda:0",
+          "exported_base_ptr": 140507170734080,
+          "mapped_ptr": 140507170734080,
+          "peer_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912,
+          "transport": "ctypes_ipc"
+        },
+        {
+          "access_kind": "mapped_remote",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "ipc_handle",
+          "device": "cuda:1",
+          "exported_base_ptr": 140454020513792,
+          "mapped_ptr": 140505560121344,
+          "peer_rank": 1,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912,
+          "transport": "ctypes_ipc"
+        }
+      ],
+      "peer_memory_map": [
+        {
+          "access_kind": "local",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "none",
+          "device": "cuda:0",
+          "exported_base_ptr": 140507170734080,
+          "is_local_rank": true,
+          "mapped_ptr": 140507170734080,
+          "peer_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912,
+          "transport": "ctypes_ipc"
+        },
+        {
+          "access_kind": "mapped_remote",
+          "allocator_name": "torch_bump",
+          "cleanup_kind": "ipc_handle",
+          "device": "cuda:1",
+          "exported_base_ptr": 140454020513792,
+          "is_local_rank": false,
+          "mapped_ptr": 140505560121344,
+          "peer_rank": 1,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912,
+          "transport": "ctypes_ipc"
+        }
+      ],
+      "rank": 0,
+      "segment_layout": {
+        "allocator_name": "torch_bump",
+        "exportable_segment_count": 1,
+        "exportable_segment_ids": [
+          "heap"
+        ],
+        "layout_kind": "single_exportable_segment",
+        "multi_segment": false,
+        "primary_segment_id": "heap",
+        "segment_count": 1
+      },
+      "segments": [
+        {
+          "allocator_name": "torch_bump",
+          "base_ptr": 140507170734080,
+          "device": "cuda:0",
+          "is_local_rank": true,
+          "owner_rank": 0,
+          "segment_id": "heap",
+          "segment_kind": "device_heap",
+          "size_bytes": 536870912
+        }
+      ],
+      "size_bytes": 536870912,
+      "transport_strategy": "ctypes_ipc",
+      "world_size": 2
     },
-    "peak_by_collective": {
+    "rank": 0,
+    "world_size": 2
+  },
+  "cases": [
+    {
+      "collective": "allgather",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.037811,
+          0.033123,
+          0.031498
+        ],
+        "best_bandwidth_gbps": 0.13004000253984382,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.037811,
+        "mean_ms": 0.034144,
+        "median_bandwidth_gbps": 0.1236602964707303,
+        "median_ms": 0.033123,
+        "min_ms": 0.031498,
+        "rank_times_ms": [
+          [
+            0.037811,
+            0.032577,
+            0.031375
+          ],
+          [
+            0.037385,
+            0.033123,
+            0.031498
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.18368,
+          0.068833,
+          0.063924
+        ],
+        "best_bandwidth_gbps": 0.0640760903572993,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.18368,
+        "mean_ms": 0.10547899999999999,
+        "median_bandwidth_gbps": 0.05950634143506747,
+        "median_ms": 0.068833,
+        "min_ms": 0.063924,
+        "rank_times_ms": [
+          [
+            0.171279,
+            0.067085,
+            0.059375
+          ],
+          [
+            0.18368,
+            0.068833,
+            0.063924
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.48120814144378415,
+      "world_size": 2
+    },
+    {
+      "collective": "allgather",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.040739,
+          0.034818,
+          0.039053
+        ],
+        "best_bandwidth_gbps": 0.47056120397495543,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.040739,
+        "mean_ms": 0.03820333333333333,
+        "median_bandwidth_gbps": 0.4195324302870458,
+        "median_ms": 0.039053,
+        "min_ms": 0.034818,
+        "rank_times_ms": [
+          [
+            0.040739,
+            0.034818,
+            0.037366
+          ],
+          [
+            0.036651,
+            0.033165,
+            0.039053
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.153661,
+          0.068011,
+          0.058196
+        ],
+        "best_bandwidth_gbps": 0.2815313767269228,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.153661,
+        "mean_ms": 0.09328933333333334,
+        "median_bandwidth_gbps": 0.2409022069959271,
+        "median_ms": 0.068011,
+        "min_ms": 0.058196,
+        "rank_times_ms": [
+          [
+            0.153661,
+            0.066381,
+            0.058026
+          ],
+          [
+            0.151543,
+            0.068011,
+            0.058196
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.5742159356574671,
+      "world_size": 2
+    },
+    {
+      "collective": "allgather",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.055332,
+          0.035647,
+          0.034921
+        ],
+        "best_bandwidth_gbps": 1.876693107299333,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.055332,
+        "mean_ms": 0.04196666666666667,
+        "median_bandwidth_gbps": 1.8384716806463377,
+        "median_ms": 0.035647,
+        "min_ms": 0.034921,
+        "rank_times_ms": [
+          [
+            0.049717,
+            0.033846,
+            0.033825
+          ],
+          [
+            0.055332,
+            0.035647,
+            0.034921
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.197189,
+          0.068333,
+          0.06204
+        ],
+        "best_bandwidth_gbps": 1.0563507414571245,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.197189,
+        "mean_ms": 0.10918733333333334,
+        "median_bandwidth_gbps": 0.9590680930150878,
+        "median_ms": 0.068333,
+        "min_ms": 0.06204,
+        "rank_times_ms": [
+          [
+            0.197189,
+            0.068333,
+            0.059009
+          ],
+          [
+            0.151066,
+            0.067334,
+            0.06204
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.5216659593461431,
+      "world_size": 2
+    },
+    {
+      "collective": "allgather",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.050215,
+          0.045745
+        ],
+        "best_bandwidth_gbps": 5.7305497868619515,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.050215,
+        "mean_ms": 0.04798,
+        "median_bandwidth_gbps": 5.463609837432262,
+        "median_ms": 0.04798,
+        "min_ms": 0.045745,
+        "rank_times_ms": [
+          [
+            0.045848,
+            0.042215
+          ],
+          [
+            0.050215,
+            0.045745
+          ]
+        ]
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.210128,
+          0.143832
+        ],
+        "best_bandwidth_gbps": 1.8225707770176318,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.210128,
+        "mean_ms": 0.17698,
+        "median_bandwidth_gbps": 1.4812069160357104,
+        "median_ms": 0.17698,
+        "min_ms": 0.143832,
+        "rank_times_ms": [
+          [
+            0.210128,
+            0.136068
+          ],
+          [
+            0.203084,
+            0.143832
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.2711040795570122,
+      "world_size": 2
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.084443,
+          0.071966,
+          0.070283
+        ],
+        "best_bandwidth_gbps": 0.05827867336340224,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.084443,
+        "mean_ms": 0.075564,
+        "median_bandwidth_gbps": 0.05691576577828419,
+        "median_ms": 0.071966,
+        "min_ms": 0.070283,
+        "rank_times_ms": [
+          [
+            0.084443,
+            0.071966,
+            0.070283
+          ],
+          [
+            0.072713,
+            0.062581,
+            0.060046
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "tncc": {
+        "aggregate_times_ms": [
+          18.294173,
+          0.3707,
+          0.242233
+        ],
+        "best_bandwidth_gbps": 0.016909339355083743,
+        "chunk_elems": 1024,
+        "correct_all_ranks": true,
+        "cta_policy": "single_cta",
+        "effective_bytes": 4096.0,
+        "epoch_policy": "per_call_monotonic_epoch",
+        "grid_size": 1,
+        "implementation": "device_single_slot_staged",
+        "kernel_family": "ws2_specialized",
+        "max_ms": 18.294173,
+        "mean_ms": 6.302368666666666,
+        "median_bandwidth_gbps": 0.01104936606420286,
+        "median_ms": 0.3707,
+        "message_bytes": 4096,
+        "message_regime": "latency",
+        "min_ms": 0.242233,
+        "num_chunks": 1,
+        "num_warps": 2,
+        "pipeline_slots": 1,
+        "protocol": "single_slot_epoch_staged",
+        "rank_times_ms": [
+          [
+            18.294173,
+            0.36599,
+            0.240898
+          ],
+          [
+            18.261557,
+            0.3707,
+            0.242233
+          ]
+        ],
+        "reuse_handshake": "ws2_epoch_ack",
+        "workspace_bytes": 4104
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.1941354194766658,
+      "world_size": 2
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.127653,
+          0.118434,
+          0.108285
+        ],
+        "best_bandwidth_gbps": 0.15130442812947312,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.127653,
+        "mean_ms": 0.118124,
+        "median_bandwidth_gbps": 0.1383386527517436,
+        "median_ms": 0.118434,
+        "min_ms": 0.108285,
+        "rank_times_ms": [
+          [
+            0.127653,
+            0.118434,
+            0.108285
+          ],
+          [
+            0.109812,
+            0.105041,
+            0.093568
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "tncc": {
+        "aggregate_times_ms": [
+          158.775366,
+          0.561634,
+          0.410682
+        ],
+        "best_bandwidth_gbps": 0.03989461432446516,
+        "chunk_elems": 4096,
+        "correct_all_ranks": true,
+        "cta_policy": "single_cta",
+        "effective_bytes": 16384.0,
+        "epoch_policy": "per_call_monotonic_epoch",
+        "grid_size": 1,
+        "implementation": "device_staged_pipeline",
+        "kernel_family": "ws2_specialized",
+        "max_ms": 158.775366,
+        "mean_ms": 53.24922733333333,
+        "median_bandwidth_gbps": 0.029172023061281905,
+        "median_ms": 0.561634,
+        "message_bytes": 16384,
+        "message_regime": "throughput",
+        "min_ms": 0.410682,
+        "num_chunks": 1,
+        "num_warps": 4,
+        "pipeline_slots": 1,
+        "protocol": "slot_epoch_pipeline",
+        "rank_times_ms": [
+          [
+            158.77135,
+            0.552953,
+            0.404095
+          ],
+          [
+            158.775366,
+            0.561634,
+            0.410682
+          ]
+        ],
+        "reuse_handshake": "ws2_epoch_ack",
+        "workspace_bytes": 16392
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.21087398554930792,
+      "world_size": 2
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.124452,
+          0.11378,
+          0.113284
+        ],
+        "best_bandwidth_gbps": 0.5785106458105294,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.124452,
+        "mean_ms": 0.117172,
+        "median_bandwidth_gbps": 0.5759887502197223,
+        "median_ms": 0.11378,
+        "min_ms": 0.113284,
+        "rank_times_ms": [
+          [
+            0.124452,
+            0.11378,
+            0.113284
+          ],
+          [
+            0.109147,
+            0.099677,
+            0.095147
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "tncc": {
+        "aggregate_times_ms": [
+          149.759833,
+          0.597319,
+          0.429177
+        ],
+        "best_bandwidth_gbps": 0.15270156602054633,
+        "chunk_elems": 4096,
+        "correct_all_ranks": true,
+        "cta_policy": "multi_cta_pipeline",
+        "effective_bytes": 65536.0,
+        "epoch_policy": "per_chunk_slot_epoch",
+        "grid_size": 4,
+        "implementation": "device_staged_pipeline",
+        "kernel_family": "ws2_specialized",
+        "max_ms": 149.759833,
+        "mean_ms": 50.26210966666667,
+        "median_bandwidth_gbps": 0.10971691843052037,
+        "median_ms": 0.597319,
+        "message_bytes": 65536,
+        "message_regime": "throughput",
+        "min_ms": 0.429177,
+        "num_chunks": 4,
+        "num_warps": 4,
+        "pipeline_slots": 4,
+        "protocol": "slot_epoch_pipeline",
+        "rank_times_ms": [
+          [
+            149.719463,
+            0.583303,
+            0.418824
+          ],
+          [
+            149.759833,
+            0.597319,
+            0.429177
+          ]
+        ],
+        "reuse_handshake": "ws2_epoch_ack",
+        "workspace_bytes": 65568
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.19048448149146432,
+      "world_size": 2
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.145585,
+          0.11738
+        ],
+        "best_bandwidth_gbps": 2.23329357641847,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.145585,
+        "mean_ms": 0.1314825,
+        "median_bandwidth_gbps": 1.9937558230182724,
+        "median_ms": 0.1314825,
+        "min_ms": 0.11738,
+        "rank_times_ms": [
+          [
+            0.145585,
+            0.11738
+          ],
+          [
+            0.112576,
+            0.10685
+          ]
+        ]
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "tncc": {
+        "aggregate_times_ms": [
+          7.551146,
+          0.58767
+        ],
+        "best_bandwidth_gbps": 0.4460734766110232,
+        "chunk_elems": 4096,
+        "correct_all_ranks": true,
+        "cta_policy": "multi_cta_pipeline",
+        "effective_bytes": 262144.0,
+        "epoch_policy": "per_chunk_slot_epoch",
+        "grid_size": 16,
+        "implementation": "device_staged_pipeline",
+        "kernel_family": "ws2_specialized",
+        "max_ms": 7.551146,
+        "mean_ms": 4.069408,
+        "median_bandwidth_gbps": 0.06441821513104609,
+        "median_ms": 4.069408,
+        "message_bytes": 262144,
+        "message_regime": "bandwidth",
+        "min_ms": 0.58767,
+        "num_chunks": 16,
+        "num_warps": 8,
+        "pipeline_slots": 16,
+        "protocol": "slot_epoch_pipeline",
+        "rank_times_ms": [
+          [
+            7.551146,
+            0.568171
+          ],
+          [
+            7.538052,
+            0.58767
+          ]
+        ],
+        "reuse_handshake": "ws2_epoch_ack",
+        "workspace_bytes": 262272
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.03230998218905551,
+      "world_size": 2
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.17881
+        ],
+        "best_bandwidth_gbps": 5.864191040769533,
+        "correct_all_ranks": true,
+        "effective_bytes": 1048576.0,
+        "max_ms": 0.17881,
+        "mean_ms": 0.17881,
+        "median_bandwidth_gbps": 5.864191040769533,
+        "median_ms": 0.17881,
+        "min_ms": 0.17881,
+        "rank_times_ms": [
+          [
+            0.17881
+          ],
+          [
+            0.168648
+          ]
+        ]
+      },
+      "size_bytes": 1048576,
+      "size_mib": 1.0,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.868486
+        ],
+        "best_bandwidth_gbps": 1.2073608555578328,
+        "chunk_elems": 4096,
+        "correct_all_ranks": true,
+        "cta_policy": "multi_cta_pipeline",
+        "effective_bytes": 1048576.0,
+        "epoch_policy": "per_chunk_slot_epoch",
+        "grid_size": 16,
+        "implementation": "device_staged_pipeline",
+        "kernel_family": "ws2_specialized",
+        "max_ms": 0.868486,
+        "mean_ms": 0.868486,
+        "median_bandwidth_gbps": 1.2073608555578328,
+        "median_ms": 0.868486,
+        "message_bytes": 1048576,
+        "message_regime": "bandwidth",
+        "min_ms": 0.868486,
+        "num_chunks": 64,
+        "num_warps": 8,
+        "pipeline_slots": 16,
+        "protocol": "slot_epoch_pipeline",
+        "rank_times_ms": [
+          [
+            0.806274
+          ],
+          [
+            0.868486
+          ]
+        ],
+        "reuse_handshake": "ws2_epoch_ack",
+        "workspace_bytes": 262272
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.2058870263884507,
+      "world_size": 2
+    },
+    {
+      "collective": "allreduce",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.186812
+        ],
+        "best_bandwidth_gbps": 11.226002612251888,
+        "correct_all_ranks": true,
+        "effective_bytes": 2097152.0,
+        "max_ms": 0.186812,
+        "mean_ms": 0.186812,
+        "median_bandwidth_gbps": 11.226002612251888,
+        "median_ms": 0.186812,
+        "min_ms": 0.186812,
+        "rank_times_ms": [
+          [
+            0.174016
+          ],
+          [
+            0.186812
+          ]
+        ]
+      },
+      "size_bytes": 2097152,
+      "size_mib": 2.0,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.896696
+        ],
+        "best_bandwidth_gbps": 2.338754717317798,
+        "chunk_elems": 4096,
+        "correct_all_ranks": true,
+        "cta_policy": "multi_cta_pipeline",
+        "effective_bytes": 2097152.0,
+        "epoch_policy": "per_chunk_slot_epoch",
+        "grid_size": 16,
+        "implementation": "device_staged_pipeline",
+        "kernel_family": "ws2_specialized",
+        "max_ms": 0.896696,
+        "mean_ms": 0.896696,
+        "median_bandwidth_gbps": 2.338754717317798,
+        "median_ms": 0.896696,
+        "message_bytes": 2097152,
+        "message_regime": "bandwidth",
+        "min_ms": 0.896696,
+        "num_chunks": 128,
+        "num_warps": 8,
+        "pipeline_slots": 16,
+        "protocol": "slot_epoch_pipeline",
+        "rank_times_ms": [
+          [
+            0.813289
+          ],
+          [
+            0.896696
+          ]
+        ],
+        "reuse_handshake": "ws2_epoch_ack",
+        "workspace_bytes": 262272
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.20833370506838442,
+      "world_size": 2
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.045097,
+          0.037319,
+          0.035804
+        ],
+        "best_bandwidth_gbps": 0.11440062562842139,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.045097,
+        "mean_ms": 0.039406666666666666,
+        "median_bandwidth_gbps": 0.10975642434148826,
+        "median_ms": 0.037319,
+        "min_ms": 0.035804,
+        "rank_times_ms": [
+          [
+            0.042528,
+            0.037319,
+            0.035804
+          ],
+          [
+            0.045097,
+            0.036639,
+            0.034381
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.157722,
+          0.067125,
+          0.058433
+        ],
+        "best_bandwidth_gbps": 0.0700973764824671,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.157722,
+        "mean_ms": 0.09442666666666667,
+        "median_bandwidth_gbps": 0.06102048417132215,
+        "median_ms": 0.067125,
+        "min_ms": 0.058433,
+        "rank_times_ms": [
+          [
+            0.153429,
+            0.067125,
+            0.055827
+          ],
+          [
+            0.157722,
+            0.066701,
+            0.058433
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.5559627560521414,
+      "world_size": 2
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.038885,
+          0.039196,
+          0.043168
+        ],
+        "best_bandwidth_gbps": 0.42134499164202127,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.043168,
+        "mean_ms": 0.04041633333333334,
+        "median_bandwidth_gbps": 0.4180018369221349,
+        "median_ms": 0.039196,
+        "min_ms": 0.038885,
+        "rank_times_ms": [
+          [
+            0.038885,
+            0.037735,
+            0.043168
+          ],
+          [
+            0.038456,
+            0.039196,
+            0.036735
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.198936,
+          0.070997,
+          0.058552
+        ],
+        "best_bandwidth_gbps": 0.2798196474928269,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.198936,
+        "mean_ms": 0.109495,
+        "median_bandwidth_gbps": 0.23077031423862976,
+        "median_ms": 0.070997,
+        "min_ms": 0.058552,
+        "rank_times_ms": [
+          [
+            0.198936,
+            0.070997,
+            0.056328
+          ],
+          [
+            0.191111,
+            0.070211,
+            0.058552
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.5520796653379719,
+      "world_size": 2
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.043854,
+          0.045214,
+          0.039167
+        ],
+        "best_bandwidth_gbps": 1.6732453340822633,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.045214,
+        "mean_ms": 0.042745,
+        "median_bandwidth_gbps": 1.4944132804305197,
+        "median_ms": 0.043854,
+        "min_ms": 0.039167,
+        "rank_times_ms": [
+          [
+            0.043854,
+            0.045214,
+            0.039167
+          ],
+          [
+            0.040802,
+            0.042573,
+            0.035919
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.425471,
+          0.071161,
+          0.058563
+        ],
+        "best_bandwidth_gbps": 1.1190683537387087,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.425471,
+        "mean_ms": 0.185065,
+        "median_bandwidth_gbps": 0.9209538932842427,
+        "median_ms": 0.071161,
+        "min_ms": 0.058563,
+        "rank_times_ms": [
+          [
+            0.425471,
+            0.071161,
+            0.058563
+          ],
+          [
+            0.233423,
+            0.066169,
+            0.057528
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.6162645269178341,
+      "world_size": 2
+    },
+    {
+      "collective": "broadcast",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.052184,
+          0.047648
+        ],
+        "best_bandwidth_gbps": 5.501678979180658,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.052184,
+        "mean_ms": 0.049916,
+        "median_bandwidth_gbps": 5.251702860806154,
+        "median_ms": 0.049916,
+        "min_ms": 0.047648,
+        "rank_times_ms": [
+          [
+            0.052184,
+            0.047648
+          ],
+          [
+            0.047524,
+            0.041752
+          ]
+        ]
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.675066,
+          0.108558
+        ],
+        "best_bandwidth_gbps": 2.4147828810405496,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.675066,
+        "mean_ms": 0.39181200000000005,
+        "median_bandwidth_gbps": 0.6690555674660296,
+        "median_ms": 0.39181200000000005,
+        "min_ms": 0.108558,
+        "rank_times_ms": [
+          [
+            0.675066,
+            0.108558
+          ],
+          [
+            0.242662,
+            0.067045
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.12739783365491614,
+      "world_size": 2
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.044481,
+          0.035351,
+          0.038357
+        ],
+        "best_bandwidth_gbps": 0.11586659500438459,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.044481,
+        "mean_ms": 0.03939633333333333,
+        "median_bandwidth_gbps": 0.10678624501394789,
+        "median_ms": 0.038357,
+        "min_ms": 0.035351,
+        "rank_times_ms": [
+          [
+            0.044481,
+            0.035351,
+            0.035664
+          ],
+          [
+            0.04148,
+            0.034022,
+            0.038357
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.183363,
+          0.080241,
+          0.068815
+        ],
+        "best_bandwidth_gbps": 0.05952190656106953,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.183363,
+        "mean_ms": 0.11080633333333334,
+        "median_bandwidth_gbps": 0.051046223252451985,
+        "median_ms": 0.080241,
+        "min_ms": 0.068815,
+        "rank_times_ms": [
+          [
+            0.183363,
+            0.080241,
+            0.068815
+          ],
+          [
+            0.15846,
+            0.071769,
+            0.059678
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.4780224573472415,
+      "world_size": 2
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.042203,
+          0.042229,
+          0.033873
+        ],
+        "best_bandwidth_gbps": 0.4836890738936616,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.042229,
+        "mean_ms": 0.039435000000000005,
+        "median_bandwidth_gbps": 0.388218847001398,
+        "median_ms": 0.042203,
+        "min_ms": 0.033873,
+        "rank_times_ms": [
+          [
+            0.040253,
+            0.042229,
+            0.033873
+          ],
+          [
+            0.042203,
+            0.036485,
+            0.033264
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.175863,
+          0.082916,
+          0.071795
+        ],
+        "best_bandwidth_gbps": 0.2282053067762379,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.175863,
+        "mean_ms": 0.11019133333333332,
+        "median_bandwidth_gbps": 0.19759756862366734,
+        "median_ms": 0.082916,
+        "min_ms": 0.071795,
+        "rank_times_ms": [
+          [
+            0.175863,
+            0.082916,
+            0.071795
+          ],
+          [
+            0.163446,
+            0.072837,
+            0.067632
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.5089849968642964,
+      "world_size": 2
+    },
+    {
+      "collective": "reduce_scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.049316,
+          0.053561,
+          0.037481
+        ],
+        "best_bandwidth_gbps": 1.7485125797070515,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.053561,
+        "mean_ms": 0.046785999999999994,
+        "median_bandwidth_gbps": 1.3288993430124096,
+        "median_ms": 0.049316,
+        "min_ms": 0.037481,
+        "rank_times_ms": [
+          [
+            0.043716,
+            0.053561,
+            0.037299
+          ],
+          [
+            0.049316,
+            0.04774,
+            0.037481
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.202695,
+          0.090612,
+          0.067407
+        ],
+        "best_bandwidth_gbps": 0.9722432388327621,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.202695,
+        "mean_ms": 0.120238,
+        "median_bandwidth_gbps": 0.7232596124133668,
+        "median_ms": 0.090612,
+        "min_ms": 0.067407,
+        "rank_times_ms": [
+          [
+            0.202695,
+            0.090612,
+            0.067407
+          ],
+          [
+            0.177973,
+            0.078261,
+            0.067248
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.5442546241115966,
+      "world_size": 2
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.153078,
+          0.073504,
+          0.068809
+        ],
+        "best_bandwidth_gbps": 0.0595270967460652,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.153078,
+        "mean_ms": 0.09846366666666667,
+        "median_bandwidth_gbps": 0.055724858511101434,
+        "median_ms": 0.073504,
+        "min_ms": 0.068809,
+        "rank_times_ms": [
+          [
+            0.153078,
+            0.060207,
+            0.060052
+          ],
+          [
+            0.151521,
+            0.073504,
+            0.068809
+          ]
+        ]
+      },
+      "size_bytes": 4096,
+      "size_mib": 0.00390625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.161105,
+          0.074396,
+          0.064336
+        ],
+        "best_bandwidth_gbps": 0.06366575478736633,
+        "correct_all_ranks": true,
+        "effective_bytes": 4096.0,
+        "max_ms": 0.161105,
+        "mean_ms": 0.09994566666666667,
+        "median_bandwidth_gbps": 0.055056723479756965,
+        "median_ms": 0.074396,
+        "min_ms": 0.064336,
+        "rank_times_ms": [
+          [
+            0.158412,
+            0.074396,
+            0.064336
+          ],
+          [
+            0.161105,
+            0.072033,
+            0.063199
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.9880101080703262,
+      "world_size": 2
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.073895,
+          0.066143,
+          0.061846
+        ],
+        "best_bandwidth_gbps": 0.2649160818808007,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.073895,
+        "mean_ms": 0.06729466666666667,
+        "median_bandwidth_gbps": 0.24770572849734668,
+        "median_ms": 0.066143,
+        "min_ms": 0.061846,
+        "rank_times_ms": [
+          [
+            0.062075,
+            0.065555,
+            0.053522
+          ],
+          [
+            0.073895,
+            0.066143,
+            0.061846
+          ]
+        ]
+      },
+      "size_bytes": 16384,
+      "size_mib": 0.015625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.149809,
+          0.077912,
+          0.069464
+        ],
+        "best_bandwidth_gbps": 0.23586318092825062,
+        "correct_all_ranks": true,
+        "effective_bytes": 16384.0,
+        "max_ms": 0.149809,
+        "mean_ms": 0.09906166666666667,
+        "median_bandwidth_gbps": 0.21028853064996406,
+        "median_ms": 0.077912,
+        "min_ms": 0.069464,
+        "rank_times_ms": [
+          [
+            0.149809,
+            0.077912,
+            0.069464
+          ],
+          [
+            0.14868,
+            0.072611,
+            0.066113
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.8489449635486188,
+      "world_size": 2
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.07663,
+          0.060716,
+          0.058175
+        ],
+        "best_bandwidth_gbps": 1.126532015470563,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.07663,
+        "mean_ms": 0.06517366666666667,
+        "median_bandwidth_gbps": 1.0793859938072337,
+        "median_ms": 0.060716,
+        "min_ms": 0.058175,
+        "rank_times_ms": [
+          [
+            0.068691,
+            0.059418,
+            0.052965
+          ],
+          [
+            0.07663,
+            0.060716,
+            0.058175
+          ]
+        ]
+      },
+      "size_bytes": 65536,
+      "size_mib": 0.0625,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.142375,
+          0.074476,
+          0.067526
+        ],
+        "best_bandwidth_gbps": 0.9705298699760091,
+        "correct_all_ranks": true,
+        "effective_bytes": 65536.0,
+        "max_ms": 0.142375,
+        "mean_ms": 0.09479233333333333,
+        "median_bandwidth_gbps": 0.879961329824373,
+        "median_ms": 0.074476,
+        "min_ms": 0.067526,
+        "rank_times_ms": [
+          [
+            0.142375,
+            0.074476,
+            0.067526
+          ],
+          [
+            0.138039,
+            0.074358,
+            0.062208
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.815242494226328,
+      "world_size": 2
+    },
+    {
+      "collective": "scatter",
+      "nccl": {
+        "aggregate_times_ms": [
+          0.19002,
+          0.172695
+        ],
+        "best_bandwidth_gbps": 1.5179594082052175,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.19002,
+        "mean_ms": 0.1813575,
+        "median_bandwidth_gbps": 1.4454544201370223,
+        "median_ms": 0.1813575,
+        "min_ms": 0.172695,
+        "rank_times_ms": [
+          [
+            0.19002,
+            0.172695
+          ],
+          [
+            0.171903,
+            0.157796
+          ]
+        ]
+      },
+      "size_bytes": 262144,
+      "size_mib": 0.25,
+      "tncc": {
+        "aggregate_times_ms": [
+          0.41528,
+          0.256689
+        ],
+        "best_bandwidth_gbps": 1.021251397605663,
+        "correct_all_ranks": true,
+        "effective_bytes": 262144.0,
+        "max_ms": 0.41528,
+        "mean_ms": 0.3359845,
+        "median_bandwidth_gbps": 0.7802264687805538,
+        "median_ms": 0.3359845,
+        "min_ms": 0.256689,
+        "rank_times_ms": [
+          [
+            0.41528,
+            0.256689
+          ],
+          [
+            0.250509,
+            0.07983
+          ]
+        ]
+      },
+      "tncc_vs_nccl_bandwidth_ratio": 0.539779364821889,
+      "world_size": 2
+    }
+  ],
+  "summary": {
+    "case_count": 21,
+    "collectives": {
       "allgather": {
-        "best_xtile_vs_nccl_ratio": 1.4712777498478555,
-        "peak_nccl_bandwidth_gbps": 0.037793,
-        "peak_xtile_bandwidth_gbps": 0.055604
+        "case_count": 4,
+        "peak_tncc_bandwidth_gbps": 1.4812069160357104,
+        "peak_nccl_bandwidth_gbps": 5.463609837432262,
+        "best_tncc_vs_nccl_ratio": 0.5742159356574671
       },
       "allreduce": {
-        "best_xtile_vs_nccl_ratio": 0.9972475513836773,
-        "peak_nccl_bandwidth_gbps": 0.443484,
-        "peak_xtile_bandwidth_gbps": 0.027143826328550637
+        "case_count": 6,
+        "peak_tncc_bandwidth_gbps": 2.338754717317798,
+        "peak_nccl_bandwidth_gbps": 11.226002612251888,
+        "best_tncc_vs_nccl_ratio": 0.21087398554930792
       },
       "broadcast": {
-        "best_xtile_vs_nccl_ratio": 1.0040123472273086,
-        "peak_nccl_bandwidth_gbps": 0.10914871629178162,
-        "peak_xtile_bandwidth_gbps": 0.10958665884095924
+        "case_count": 4,
+        "peak_tncc_bandwidth_gbps": 0.9209538932842427,
+        "peak_nccl_bandwidth_gbps": 5.251702860806154,
+        "best_tncc_vs_nccl_ratio": 0.6162645269178341
       },
       "reduce_scatter": {
-        "best_xtile_vs_nccl_ratio": 1.0017806630341362,
-        "peak_nccl_bandwidth_gbps": 0.10901862279483318,
-        "peak_xtile_bandwidth_gbps": 0.027257172184841024
+        "case_count": 3,
+        "peak_tncc_bandwidth_gbps": 0.7232596124133668,
+        "peak_nccl_bandwidth_gbps": 1.3288993430124096,
+        "best_tncc_vs_nccl_ratio": 0.5442546241115966
       },
       "scatter": {
-        "best_xtile_vs_nccl_ratio": 1.466046815765195,
-        "peak_nccl_bandwidth_gbps": 0.03780247993693626,
-        "peak_xtile_bandwidth_gbps": 0.055420205339573064
+        "case_count": 4,
+        "peak_tncc_bandwidth_gbps": 0.879961329824373,
+        "peak_nccl_bandwidth_gbps": 1.4454544201370223,
+        "best_tncc_vs_nccl_ratio": 0.9880101080703262
       }
+    },
+    "incomplete_cases": [
+      {
+        "collective": "reduce_scatter",
+        "size_bytes": 262144,
+        "reason": "rerun did not complete in the current shared-GPU environment"
+      }
+    ],
+    "best_tncc_vs_nccl_case": {
+      "collective": "scatter",
+      "size_bytes": 4096,
+      "ratio": 0.9880101080703262
     }
-  }
+  },
+  "notes": [
+    "All cases were rerun on 2026-03-28 except reduce_scatter@256KiB, which did not finish under the current shared-GPU environment.",
+    "GPU isolation warnings were emitted during reruns; treat these measurements as noisy rather than canonical."
+  ]
 }

@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from xtile.utils.benchmark_results import benchmark_environment_health, write_json
+from tncc.utils.benchmark_results import benchmark_environment_health, write_json
 
 
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "figures" / "data" / "noise_study"
@@ -151,21 +151,21 @@ class ExperimentSpec:
 
 
 def _extract_collective_case_metrics(case: dict[str, Any]) -> dict[str, Any]:
-    xtile = case["xtile"]
+    tncc = case["tncc"]
     nccl = case["nccl"]
-    xtile_iter_times = [_safe_float(value) for value in xtile.get("aggregate_times_ms", [])]
+    tncc_iter_times = [_safe_float(value) for value in tncc.get("aggregate_times_ms", [])]
     nccl_iter_times = [_safe_float(value) for value in nccl.get("aggregate_times_ms", [])]
     return {
         "collective": case["collective"],
         "size_bytes": int(case["size_bytes"]),
         "size_mib": _safe_float(case.get("size_mib")),
-        "xtile_median_ms": _safe_float(xtile.get("median_ms")),
-        "xtile_median_bandwidth_gbps": _safe_float(xtile.get("median_bandwidth_gbps")),
-        "xtile_iter_slowdown_factor": _slowdown_factor(xtile_iter_times),
+        "tncc_median_ms": _safe_float(tncc.get("median_ms")),
+        "tncc_median_bandwidth_gbps": _safe_float(tncc.get("median_bandwidth_gbps")),
+        "tncc_iter_slowdown_factor": _slowdown_factor(tncc_iter_times),
         "nccl_median_ms": _safe_float(nccl.get("median_ms")),
         "nccl_median_bandwidth_gbps": _safe_float(nccl.get("median_bandwidth_gbps")),
         "nccl_iter_slowdown_factor": _slowdown_factor(nccl_iter_times),
-        "xtile_vs_nccl_bandwidth_ratio": _safe_float(case.get("xtile_vs_nccl_bandwidth_ratio")),
+        "tncc_vs_nccl_bandwidth_ratio": _safe_float(case.get("tncc_vs_nccl_bandwidth_ratio")),
     }
 
 
@@ -181,21 +181,21 @@ def _summarize_collective_comm(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     cases_summary: list[dict[str, Any]] = []
     for (collective, size_bytes), samples in sorted(grouped.items()):
-        xtile_ms = [sample["xtile_median_ms"] for sample in samples]
+        tncc_ms = [sample["tncc_median_ms"] for sample in samples]
         nccl_ms = [sample["nccl_median_ms"] for sample in samples]
-        xtile_bw = [sample["xtile_median_bandwidth_gbps"] for sample in samples]
+        tncc_bw = [sample["tncc_median_bandwidth_gbps"] for sample in samples]
         nccl_bw = [sample["nccl_median_bandwidth_gbps"] for sample in samples]
-        ratio = [sample["xtile_vs_nccl_bandwidth_ratio"] for sample in samples]
+        ratio = [sample["tncc_vs_nccl_bandwidth_ratio"] for sample in samples]
         cases_summary.append({
             "collective": collective,
             "size_bytes": size_bytes,
             "size_mib": samples[0]["size_mib"],
             "samples": len(samples),
-            "xtile_latency_ms": {
-                "median": _median(xtile_ms),
-                "cv_pct": _cv_pct(xtile_ms),
-                "spread_pct": _spread_pct(xtile_ms),
-                "max_over_min": _slowdown_factor(xtile_ms),
+            "tncc_latency_ms": {
+                "median": _median(tncc_ms),
+                "cv_pct": _cv_pct(tncc_ms),
+                "spread_pct": _spread_pct(tncc_ms),
+                "max_over_min": _slowdown_factor(tncc_ms),
             },
             "nccl_latency_ms": {
                 "median": _median(nccl_ms),
@@ -203,31 +203,31 @@ def _summarize_collective_comm(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "spread_pct": _spread_pct(nccl_ms),
                 "max_over_min": _slowdown_factor(nccl_ms),
             },
-            "xtile_bandwidth_gbps": {
-                "median": _median(xtile_bw),
-                "cv_pct": _cv_pct(xtile_bw),
-                "spread_pct": _spread_pct(xtile_bw),
+            "tncc_bandwidth_gbps": {
+                "median": _median(tncc_bw),
+                "cv_pct": _cv_pct(tncc_bw),
+                "spread_pct": _spread_pct(tncc_bw),
             },
             "nccl_bandwidth_gbps": {
                 "median": _median(nccl_bw),
                 "cv_pct": _cv_pct(nccl_bw),
                 "spread_pct": _spread_pct(nccl_bw),
             },
-            "xtile_vs_nccl_ratio": {
+            "tncc_vs_nccl_ratio": {
                 "median": _median(ratio),
                 "spread_pct": _spread_pct(ratio),
             },
             "worst_intrarun_iter_slowdown_factor": {
-                "xtile": max(sample["xtile_iter_slowdown_factor"] for sample in samples),
+                "tncc": max(sample["tncc_iter_slowdown_factor"] for sample in samples),
                 "nccl": max(sample["nccl_iter_slowdown_factor"] for sample in samples),
             },
         })
 
-    worst_xtile = max(
+    worst_tncc = max(
         cases_summary,
         key=lambda item: (
-            item["xtile_latency_ms"]["spread_pct"],
-            item["worst_intrarun_iter_slowdown_factor"]["xtile"],
+            item["tncc_latency_ms"]["spread_pct"],
+            item["worst_intrarun_iter_slowdown_factor"]["tncc"],
         ),
         default=None,
     )
@@ -243,7 +243,7 @@ def _summarize_collective_comm(records: list[dict[str, Any]]) -> dict[str, Any]:
         "status_counts": _run_status_counts(records),
         "environment": _summarize_health_snapshots(records),
         "cases": cases_summary,
-        "worst_xtile_case": worst_xtile,
+        "worst_tncc_case": worst_tncc,
         "worst_nccl_case": worst_nccl,
     }
 
@@ -265,7 +265,7 @@ def _summarize_gemm(records: list[dict[str, Any]]) -> dict[str, Any]:
     configs: list[dict[str, Any]] = []
     for (m, n, k, dtype), samples in sorted(grouped.items()):
         torch_tflops = [_safe_float(sample["torch_tflops"]) for sample in samples]
-        xtile_tflops = [_safe_float(sample["xtile_tflops"]) for sample in samples]
+        tncc_tflops = [_safe_float(sample["tncc_tflops"]) for sample in samples]
         ratio_pct = [_safe_float(sample["ratio_pct"]) for sample in samples]
         configs.append({
             "M": m,
@@ -278,10 +278,10 @@ def _summarize_gemm(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "cv_pct": _cv_pct(torch_tflops),
                 "spread_pct": _spread_pct(torch_tflops),
             },
-            "xtile_tflops": {
-                "median": _median(xtile_tflops),
-                "cv_pct": _cv_pct(xtile_tflops),
-                "spread_pct": _spread_pct(xtile_tflops),
+            "tncc_tflops": {
+                "median": _median(tncc_tflops),
+                "cv_pct": _cv_pct(tncc_tflops),
+                "spread_pct": _spread_pct(tncc_tflops),
             },
             "ratio_pct": {
                 "median": _median(ratio_pct),
@@ -294,7 +294,7 @@ def _summarize_gemm(records: list[dict[str, Any]]) -> dict[str, Any]:
         "status_counts": _run_status_counts(records),
         "environment": _summarize_health_snapshots(records),
         "configs": configs,
-        "worst_xtile_config": max(configs, key=lambda item: item["xtile_tflops"]["spread_pct"], default=None),
+        "worst_tncc_config": max(configs, key=lambda item: item["tncc_tflops"]["spread_pct"], default=None),
         "worst_torch_config": max(configs, key=lambda item: item["torch_tflops"]["spread_pct"], default=None),
         "worst_ratio_config": max(configs, key=lambda item: item["ratio_pct"]["spread_pct"], default=None),
     }
@@ -404,17 +404,17 @@ def _summarize_bulk_sync(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     cases_summary: list[dict[str, Any]] = []
     for (collective, size_bytes), samples in sorted(grouped.items()):
-        xtile_ms = [_safe_float(sample["xtile"]["median_ms"]) for sample in samples]
+        tncc_ms = [_safe_float(sample["tncc"]["median_ms"]) for sample in samples]
         bulk_ms = [_safe_float(sample["bulk_sync"]["median_ms"]) for sample in samples]
         speedups = [_safe_float(sample["speedup_vs_bulk"]) for sample in samples]
         cases_summary.append({
             "collective": collective,
             "size_bytes": size_bytes,
             "samples": len(samples),
-            "xtile_latency_ms": {
-                "median": _median(xtile_ms),
-                "cv_pct": _cv_pct(xtile_ms),
-                "spread_pct": _spread_pct(xtile_ms),
+            "tncc_latency_ms": {
+                "median": _median(tncc_ms),
+                "cv_pct": _cv_pct(tncc_ms),
+                "spread_pct": _spread_pct(tncc_ms),
             },
             "bulk_sync_latency_ms": {
                 "median": _median(bulk_ms),

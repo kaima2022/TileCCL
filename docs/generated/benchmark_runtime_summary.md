@@ -1,4 +1,4 @@
-# XTile Benchmark Runtime Summary
+# TNCC Benchmark Runtime Summary
 
 > Generated at UTC: `2026-03-25T18:21:01.551576+00:00`
 > This file is auto-generated from canonical benchmark JSON artifacts.
@@ -20,11 +20,11 @@
 
 ## Runtime Support Snapshots
 
-- GEMM: source=gemm_latest.json | run=2026-03-23 | backend=cuda, ws=1, heap=none | cmd=/home/makai/XTile/tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json
-- P2P: source=p2p_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access, reduce_scatter=supported | cmd=/home/makai/XTile/tests/benchmarks/bench_p2p_translate.py --output-json figures/data/p2p_latest.json
-- Pattern: source=pattern_overlap_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access, gemm_allscatter=supported | cmd=/home/makai/XTile/tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json figures/data/pattern_overlap_latest.json
+- GEMM: source=gemm_latest.json | run=2026-03-23 | backend=cuda, ws=1, heap=none | cmd=/home/makai/TNCC/tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json
+- P2P: source=p2p_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access, reduce_scatter=supported | cmd=/home/makai/TNCC/tests/benchmarks/bench_p2p_translate.py --output-json figures/data/p2p_latest.json
+- Pattern: source=pattern_overlap_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access, gemm_allscatter=supported | cmd=/home/makai/TNCC/tests/benchmarks/bench_patterns.py --warmup 3 --iters 10 --output-json figures/data/pattern_overlap_latest.json
 - Comm-only collectives: source=collective_comm_only_latest.json | run=2026-03-25 | backend=cuda, ws=2, heap=multiprocess, transport=ctypes_ipc | cmd=fig6 mixed-source dataset: small-message steady host-wall + unified 256 KiB anchors + allreduce 1/2 MiB sweep
-- Collective vs bulk_sync: source=collective_bulk_sync_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access | cmd=/home/makai/XTile/tests/benchmarks/bench_collective_bulk_sync.py
+- Collective vs bulk_sync: source=collective_bulk_sync_latest.json | run=2026-03-23 | backend=cuda, ws=2, heap=single_process, transport=peer_access | cmd=/home/makai/TNCC/tests/benchmarks/bench_collective_bulk_sync.py
 
 ## Execution Paths
 
@@ -51,11 +51,11 @@
 
 ### Comm-only Collectives
 
-- allreduce: XTile peak 0.03 GB/s, NCCL peak 0.44 GB/s, best ratio 0.997×
-- allgather: XTile peak 0.06 GB/s, NCCL peak 0.04 GB/s, best ratio 1.471×
-- scatter: XTile peak 0.06 GB/s, NCCL peak 0.04 GB/s, best ratio 1.466×
-- reduce_scatter: XTile peak 0.03 GB/s, NCCL peak 0.11 GB/s, best ratio 1.002×
-- broadcast: XTile peak 0.11 GB/s, NCCL peak 0.11 GB/s, best ratio 1.004×
+- allreduce: TNCC peak 0.03 GB/s, NCCL peak 0.44 GB/s, best ratio 0.997×
+- allgather: TNCC peak 0.06 GB/s, NCCL peak 0.04 GB/s, best ratio 1.471×
+- scatter: TNCC peak 0.06 GB/s, NCCL peak 0.04 GB/s, best ratio 1.466×
+- reduce_scatter: TNCC peak 0.03 GB/s, NCCL peak 0.11 GB/s, best ratio 1.002×
+- broadcast: TNCC peak 0.11 GB/s, NCCL peak 0.11 GB/s, best ratio 1.004×
 
 ### Collective vs bulk_sync
 

@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 import torch
 
-import xtile
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.patterns import (
+import tncc
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.patterns import (
     BulkSyncPattern,
     FusedSequentialPattern,
     ProducerConsumerPattern,
@@ -39,7 +39,7 @@ class TestPatternGEMMCorrectness:
         """Create a single-GPU ctx with SymmetricHeap."""
         heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
         torch.cuda.set_device(0)
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=self.backend_name,
             rank=0,
             world_size=1,
@@ -121,7 +121,7 @@ class TestPatternScatterCorrectness:
         A = torch.randn(M, K, device="cuda:0", dtype=torch.float16)
         B = torch.randn(K, N, device="cuda:0", dtype=torch.float16)
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=self.backend_name,
             rank=0,
             world_size=world_size,

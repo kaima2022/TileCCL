@@ -14,7 +14,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.feature_gates import (
+from tncc.utils.feature_gates import (
     FORCE_MULTIPROCESS_TRANSPORT_ENV,
     MULTIPROCESS_DEVICE_COLLECTIVES_ENV,
 )
@@ -233,8 +233,8 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import xtile
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    import tncc
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heap_size_bytes = max(
         config.heap_size_mb * 1024 * 1024,
@@ -267,7 +267,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         C.zero_()
         torch.cuda.synchronize(rank)
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=world_size,
@@ -275,7 +275,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             force_backend=True,
         )
 
-        plan = xtile.ops.build_gemm_reducescatter_plan(
+        plan = tncc.ops.build_gemm_reducescatter_plan(
             A,
             B,
             C,
@@ -316,7 +316,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_sample = None
         if config.launcher in {"ops", "all"}:
             high_level_timing = _timed_call(
-                lambda: xtile.ops.gemm_reducescatter(
+                lambda: tncc.ops.gemm_reducescatter(
                     A,
                     B,
                     C,
@@ -435,7 +435,7 @@ def main() -> None:
     )
 
     handle = tempfile.NamedTemporaryFile(
-        prefix="xtile_gemm_reducescatter_",
+        prefix="tncc_gemm_reducescatter_",
         delete=False,
     )
     handle.close()

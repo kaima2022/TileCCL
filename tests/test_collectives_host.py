@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 import torch
 
-import xtile
+import tncc
 
 
 def test_reduce_scatter_launcher_validates_input_shape(skip_no_gpu, device_info) -> None:
     """The host launcher should reject mismatched input/output sizes."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives import reduce_scatter
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives import reduce_scatter
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
@@ -30,7 +30,7 @@ def test_allgather_launcher_rejects_unvalidated_multiprocess_transport(
     skip_no_gpu,
 ) -> None:
     """Host allgather should fail fast on transports that are not device-safe."""
-    from xtile.primitives import allgather
+    from tncc.primitives import allgather
 
     class _DummyHeap:
         mode = "multiprocess"
@@ -50,8 +50,8 @@ def test_allreduce_launcher_supports_non_divisible_tensor_sizes(
     device_info,
 ) -> None:
     """The public allreduce path should handle odd-sized contiguous tensors."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives import allreduce
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives import allreduce
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=2)
     try:
@@ -82,7 +82,7 @@ def test_allreduce_launcher_rejects_unvalidated_multiprocess_transport(
     skip_no_gpu,
 ) -> None:
     """Host allreduce should fail fast on transports outside the validated surface."""
-    from xtile.primitives import allreduce
+    from tncc.primitives import allreduce
 
     class _DummyHeap:
         mode = "multiprocess"
@@ -102,8 +102,8 @@ def test_allreduce_launcher_rejects_unvalidated_multiprocess_transport(
 @pytest.mark.multigpu
 def test_reduce_scatter_launcher_multigpu_value_check(skip_no_multigpu, device_info) -> None:
     """The single-process reference path should produce the reduced chunk."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives import reduce_scatter
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives import reduce_scatter
 
     world_size = 2
     block_size = 128
@@ -153,8 +153,8 @@ def test_reduce_scatter_launcher_rejects_single_process_device_override(
     device_info,
 ) -> None:
     """The unvalidated single-process device path should be explicitly rejected."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives import reduce_scatter
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives import reduce_scatter
 
     world_size = 2
     block_size = 32

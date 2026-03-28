@@ -18,8 +18,8 @@ import torch
 import triton
 import triton.language as tl
 
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.memory.translation import translate_ptr
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.memory.translation import translate_ptr
 
 
 # ---------------------------------------------------------------------------

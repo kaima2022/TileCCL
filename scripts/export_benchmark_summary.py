@@ -178,9 +178,9 @@ def _extract_collective_headlines(payload: dict[str, Any]) -> list[str]:
             continue
         lines.append(
             "- "
-            f"{collective}: XTile peak {float(entry['peak_xtile_bandwidth_gbps']):.2f} GB/s, "
+            f"{collective}: TNCC peak {float(entry['peak_tncc_bandwidth_gbps']):.2f} GB/s, "
             f"NCCL peak {float(entry['peak_nccl_bandwidth_gbps']):.2f} GB/s, "
-            f"best ratio {float(entry['best_xtile_vs_nccl_ratio']):.3f}×"
+            f"best ratio {float(entry['best_tncc_vs_nccl_ratio']):.3f}×"
         )
     return lines or ["Collective 结果不足以提取 headline。"]
 
@@ -230,7 +230,7 @@ def build_summary_document(
         gemm_payload,
     )
     lines = [
-        "# XTile Benchmark Runtime Summary",
+        "# TNCC Benchmark Runtime Summary",
         "",
         f"> Generated at UTC: `{generated_at}`",
         "> This file is auto-generated from canonical benchmark JSON artifacts.",

@@ -14,7 +14,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 @dataclass(frozen=True)
@@ -228,8 +228,8 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import xtile
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    import tncc
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heap_size_bytes = max(
         config.heap_size_mb * 1024 * 1024,
@@ -273,7 +273,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         C.zero_()
         torch.cuda.synchronize(rank)
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=world_size,
@@ -281,7 +281,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             force_backend=True,
         )
 
-        plan = xtile.ops.build_gemm_allgather_plan(
+        plan = tncc.ops.build_gemm_allgather_plan(
             A,
             B_shard,
             C,
@@ -320,7 +320,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_sample = None
         if config.launcher in {"ops", "all"}:
             high_level_timing = _timed_call(
-                lambda: xtile.ops.gemm_allgather(
+                lambda: tncc.ops.gemm_allgather(
                     A,
                     B_shard,
                     C,
@@ -443,7 +443,7 @@ def main() -> None:
         heap_size_mb=args.heap_size_mb,
     )
 
-    with tempfile.TemporaryDirectory(prefix="xtile_gemm_allgather_") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="tncc_gemm_allgather_") as tmpdir:
         store_path = str(Path(tmpdir) / "dist_store")
         mp.spawn(
             _worker,

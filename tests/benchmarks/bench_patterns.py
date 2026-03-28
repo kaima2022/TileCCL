@@ -22,9 +22,9 @@ from pathlib import Path
 from dataclasses import dataclass
 
 import torch
-import xtile
-from xtile.ops import build_gemm_allscatter_plan
-from xtile.utils.benchmark_results import (
+import tncc
+from tncc.ops import build_gemm_allscatter_plan
+from tncc.utils.benchmark_results import (
     canonical_benchmark_run,
     default_pattern_benchmark_path,
     runtime_metadata_snapshot,
@@ -98,7 +98,7 @@ def _required_heap_size(
     return _round_up(required, _HEAP_GRANULARITY)
 
 
-def _cleanup_contexts(contexts: list[xtile.XTileContext]) -> None:
+def _cleanup_contexts(contexts: list[tncc.TNCCContext]) -> None:
     """Release heaps attached to benchmark contexts."""
     for ctx in contexts:
         if ctx.heap is not None:
@@ -107,15 +107,15 @@ def _cleanup_contexts(contexts: list[xtile.XTileContext]) -> None:
 
 def benchmark_size(
     M: int, N: int, K: int,
-    ctx: xtile.XTileContext,
+    ctx: tncc.TNCCContext,
     warmup: int = 5,
     iters: int = 20,
 ) -> tuple[list[PatternResult], dict[str, object]]:
     """Benchmark all 4 patterns on a given problem size."""
-    from xtile.patterns.bulk_sync import BulkSyncPattern
-    from xtile.patterns.fused_sequential import FusedSequentialPattern
-    from xtile.patterns.producer_consumer import ProducerConsumerPattern
-    from xtile.patterns.wg_specialized import WGSpecializedPattern
+    from tncc.patterns.bulk_sync import BulkSyncPattern
+    from tncc.patterns.fused_sequential import FusedSequentialPattern
+    from tncc.patterns.producer_consumer import ProducerConsumerPattern
+    from tncc.patterns.wg_specialized import WGSpecializedPattern
 
     world_size = ctx.world_size
     rank = ctx.rank
@@ -254,7 +254,7 @@ def main():
     with canonical_benchmark_run(args.output_json):
         sizes = QUICK_SIZES if args.quick else IRIS_SIZES
 
-        print("=== XTile Pattern Overlap Efficiency Benchmark ===")
+        print("=== TNCC Pattern Overlap Efficiency Benchmark ===")
         print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
         print(f"Sizes: {len(sizes)} configurations")
         print()
@@ -278,7 +278,7 @@ def main():
                         f"got {args.heap_size_mb} MiB"
                     )
 
-            contexts = xtile.init_local(world_size=world_size, heap_size=heap_size)
+            contexts = tncc.init_local(world_size=world_size, heap_size=heap_size)
             try:
                 print(f"--- M={M}, N={N}, K={K} ---")
                 print(

@@ -13,7 +13,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 @dataclass(frozen=True)
@@ -110,10 +110,10 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import xtile
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives.collectives import _allreduce_kernel, resolve_allreduce_execution
-    from xtile.primitives import allreduce as primitive_allreduce
+    import tncc
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives.collectives import _allreduce_kernel, resolve_allreduce_execution
+    from tncc.primitives import allreduce as primitive_allreduce
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,
@@ -175,7 +175,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
                 iters=config.iters,
             )
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=world_size,
@@ -187,12 +187,12 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_first_value = None
         high_level_plan = None
         if config.launcher in {"ops", "primitive_ops", "all"}:
-            high_level_plan = xtile.ops.build_allreduce_plan(
+            high_level_plan = tncc.ops.build_allreduce_plan(
                 tensor_ops,
                 ctx=ctx,
             ).to_dict()
             high_level_timing = _timed_collective(
-                lambda: xtile.ops.allreduce(
+                lambda: tncc.ops.allreduce(
                     tensor_ops,
                     ctx=ctx,
                 ),
@@ -292,7 +292,7 @@ def main() -> None:
         launcher=str(args.launcher),
     )
 
-    with tempfile.TemporaryDirectory(prefix="xtile_allreduce_mp_") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="tncc_allreduce_mp_") as tmpdir:
         store_path = os.path.join(tmpdir, "store")
         mp.spawn(
             _worker,

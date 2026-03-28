@@ -102,7 +102,7 @@ def test_build_summary_document_contains_runtime_and_headlines() -> None:
         pattern_payload=pattern_payload,
     )
 
-    assert "# XTile Benchmark Runtime Summary" in document
+    assert "# TNCC Benchmark Runtime Summary" in document
     assert "backend=cuda, ws=1, heap=none" in document
     assert "reduce_scatter=supported" in document
     assert "reduce_scatter.reference=supported, reduce_scatter.device=unsupported" in document

@@ -4,7 +4,7 @@
 This script is meant to be launched as a standalone module so
 ``torch.multiprocessing.spawn`` can re-import it safely.  It validates the
 current multiprocess/device execution path used by
-``xtile.primitives.reduce_scatter(..., implementation="device")``.
+``tncc.primitives.reduce_scatter(..., implementation="device")``.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 @dataclass(frozen=True)
@@ -118,10 +118,10 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import xtile
-    from xtile.memory.symmetric_heap import SymmetricHeap
-    from xtile.primitives.collectives import _reduce_scatter_kernel
-    from xtile.primitives import reduce_scatter as primitive_reduce_scatter
+    import tncc
+    from tncc.memory.symmetric_heap import SymmetricHeap
+    from tncc.primitives.collectives import _reduce_scatter_kernel
+    from tncc.primitives import reduce_scatter as primitive_reduce_scatter
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,
@@ -202,7 +202,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
                 iters=config.iters,
             )
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=world_size,
@@ -214,7 +214,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_value = None
         if config.launcher in {"ops", "all"}:
             high_level_timing = _timed_collective(
-                lambda: xtile.ops.reduce_scatter(
+                lambda: tncc.ops.reduce_scatter(
                     src_high_level,
                     dst_high_level,
                     ctx=ctx,
@@ -346,7 +346,7 @@ def main() -> None:
         launcher=args.launcher,
     )
 
-    store_fd, store_path = tempfile.mkstemp(prefix="xtile_rs_store_")
+    store_fd, store_path = tempfile.mkstemp(prefix="tncc_rs_store_")
     os.close(store_fd)
     os.unlink(store_path)
 

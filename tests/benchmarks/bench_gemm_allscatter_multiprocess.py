@@ -13,7 +13,7 @@ import sys
 
 import torch
 
-from xtile.utils.benchmark_results import write_json
+from tncc.utils.benchmark_results import write_json
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -46,7 +46,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--pattern",
         type=str,
         default="bulk_sync",
-        help="Pattern name passed to xtile.ops.gemm_allscatter(...).",
+        help="Pattern name passed to tncc.ops.gemm_allscatter(...).",
     )
     parser.add_argument(
         "--timeout-sec",

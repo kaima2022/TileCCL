@@ -31,7 +31,7 @@ def _worker(rank: int, world_size: int, store_path: str):
     )
     print(f"Rank {rank}/{world_size}: init on cuda:{rank}", flush=True)
 
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     try:
         heap = SymmetricHeap(
@@ -98,7 +98,7 @@ def main():
     world_size = min(torch.cuda.device_count(), 2)
     assert world_size >= 2, f"Need >= 2 GPUs, got {world_size}"
 
-    store_fd, store_path = tempfile.mkstemp(prefix="xtile_store_")
+    store_fd, store_path = tempfile.mkstemp(prefix="tncc_store_")
     os.close(store_fd)
     os.unlink(store_path)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""XTile — CUDA IPC cross-process fix and verification.
+"""TNCC — CUDA IPC cross-process fix and verification.
 
 Uses torch.multiprocessing.spawn for proper GPU process management.
 Tests both raw ctypes IPC and PyTorch-level IPC.
@@ -257,7 +257,7 @@ def main():
         return 1
 
     print("=" * 60)
-    print("  XTile CUDA IPC Cross-Process Fix")
+    print("  TNCC CUDA IPC Cross-Process Fix")
     print("=" * 60)
     print(f"  GPUs: {torch.cuda.device_count()} × {torch.cuda.get_device_name(0)}")
     print(f"  CUDA: {torch.version.cuda}, PyTorch: {torch.__version__}")

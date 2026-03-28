@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import xtile
+import tncc
 
 
 def test_support_matrix_without_heap(skip_no_gpu, device_info) -> None:
     """The support matrix should report heap-backed ops conservatively."""
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
         force_backend=True,
     )
 
-    matrix = xtile.describe_runtime_support(ctx)
+    matrix = tncc.describe_runtime_support(ctx)
     payload = matrix.to_dict()
 
     assert matrix.has_heap is False
@@ -52,11 +52,11 @@ def test_support_matrix_with_heap_matches_context_method(
     device_info,
 ) -> None:
     """The top-level helper and context method should agree."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -64,7 +64,7 @@ def test_support_matrix_with_heap_matches_context_method(
             force_backend=True,
         )
 
-        direct = xtile.describe_runtime_support(ctx)
+        direct = tncc.describe_runtime_support(ctx)
         via_ctx = ctx.support_matrix()
 
         assert direct.to_dict() == via_ctx.to_dict()
@@ -106,7 +106,7 @@ def test_support_matrix_multigpu_reports_peer_access(
     device_info,
 ) -> None:
     """A local multi-GPU heap should surface its active transport strategy."""
-    contexts = xtile.init_local(
+    contexts = tncc.init_local(
         world_size=2,
         heap_size=64 * 1024 * 1024,
         backend=device_info.backend,
@@ -152,7 +152,7 @@ def test_support_matrix_multiprocess_defaults_to_unsupported(
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -160,11 +160,11 @@ def test_support_matrix_multiprocess_defaults_to_unsupported(
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.delenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         raising=False,
     )
 
-    matrix = xtile.describe_runtime_support(ctx)
+    matrix = tncc.describe_runtime_support(ctx)
     assert matrix.ops["reduce_scatter"].state == "unsupported"
     assert matrix.ops["allgather"].state == "unsupported"
     assert matrix.ops["allreduce"].state == "unsupported"
@@ -186,7 +186,7 @@ def test_support_matrix_multiprocess_validated_surface_is_supported(
         mode = "multiprocess"
         transport_strategy = "ctypes_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -194,7 +194,7 @@ def test_support_matrix_multiprocess_validated_surface_is_supported(
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
 
-    matrix = xtile.describe_runtime_support(ctx)
+    matrix = tncc.describe_runtime_support(ctx)
     assert matrix.ops["reduce_scatter"].state == "supported"
     assert matrix.ops["allgather"].state == "supported"
     assert matrix.ops["allreduce"].state == "supported"
@@ -217,7 +217,7 @@ def test_support_matrix_multiprocess_opt_in_remains_partial_outside_public_surfa
         mode = "multiprocess"
         transport_strategy = "ctypes_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=4,
@@ -225,11 +225,11 @@ def test_support_matrix_multiprocess_opt_in_remains_partial_outside_public_surfa
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.setenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         "1",
     )
 
-    matrix = xtile.describe_runtime_support(ctx)
+    matrix = tncc.describe_runtime_support(ctx)
     assert matrix.ops["reduce_scatter"].state == "partial"
     assert matrix.execution_paths["reduce_scatter.device"].state == "partial"
     assert matrix.ops["allgather"].state == "unsupported"
@@ -248,7 +248,7 @@ def test_support_matrix_multiprocess_opt_in_rejects_unvalidated_transport(
         mode = "multiprocess"
         transport_strategy = "pytorch_ipc"
 
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=2,
@@ -256,11 +256,11 @@ def test_support_matrix_multiprocess_opt_in_rejects_unvalidated_transport(
     )
     ctx.heap = _DummyHeap()  # type: ignore[assignment]
     monkeypatch.setenv(
-        "XTILE_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
+        "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES",
         "1",
     )
 
-    matrix = xtile.describe_runtime_support(ctx)
+    matrix = tncc.describe_runtime_support(ctx)
     assert matrix.ops["reduce_scatter"].state == "unsupported"
     assert matrix.ops["allgather"].state == "unsupported"
     assert matrix.ops["allreduce"].state == "unsupported"

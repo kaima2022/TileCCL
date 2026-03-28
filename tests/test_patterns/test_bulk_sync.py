@@ -1,4 +1,4 @@
-"""Tests for xtile.patterns.BulkSyncPattern.
+"""Tests for tncc.patterns.BulkSyncPattern.
 
 The BulkSyncPattern is the simplest overlap strategy (no overlap -- just
 compute then communicate).  This test verifies correctness by comparing
@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-import xtile
+import tncc
 
 
 @pytest.mark.multigpu
@@ -23,8 +23,8 @@ class TestBulkSyncPattern:
         Uses a single GPU (world_size=1) so the scatter is a no-op.
         Verifies that the persistent GEMM kernel is numerically correct.
         """
-        from xtile.patterns import BulkSyncPattern
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.patterns import BulkSyncPattern
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         M, N, K = 512, 512, 512
 
@@ -35,7 +35,7 @@ class TestBulkSyncPattern:
             B = torch.randn(K, N, device="cuda:0", dtype=torch.float16)
             C = torch.zeros(M, N, device="cuda:0", dtype=torch.float16)
 
-            ctx = xtile.init(
+            ctx = tncc.init(
                 backend=device_info.backend,
                 rank=0,
                 world_size=1,
@@ -65,8 +65,8 @@ class TestBulkSyncPattern:
         if device_info.num_gpus < 2:
             pytest.skip("Requires 2+ GPUs")
 
-        from xtile.patterns import BulkSyncPattern
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.patterns import BulkSyncPattern
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         M, N, K = 256, 256, 256
         world_size = 2
@@ -84,7 +84,7 @@ class TestBulkSyncPattern:
             A = torch.randn(M, K, device="cuda:0", dtype=torch.float16)
             B = torch.randn(K, N, device="cuda:0", dtype=torch.float16)
 
-            ctx = xtile.init(
+            ctx = tncc.init(
                 backend=device_info.backend,
                 rank=0,
                 world_size=world_size,

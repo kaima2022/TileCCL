@@ -9,8 +9,8 @@ import sys
 import importlib.util
 import io
 
-import xtile
-from xtile.utils.benchmark_results import (
+import tncc
+from tncc.utils.benchmark_results import (
     benchmark_environment_health,
     canonical_benchmark_run,
     default_collective_bulk_sync_benchmark_path,
@@ -28,7 +28,7 @@ from xtile.utils.benchmark_results import (
 
 def test_runtime_support_snapshot_from_context(skip_no_gpu, device_info) -> None:
     """Existing contexts should serialize into a stable support payload."""
-    ctx = xtile.init(
+    ctx = tncc.init(
         backend=device_info.backend,
         rank=0,
         world_size=1,
@@ -50,7 +50,7 @@ def test_describe_runtime_support_snapshot_with_heap(
     device_info,
 ) -> None:
     """Temporary support snapshots should preserve heap-backed capabilities."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
@@ -79,11 +79,11 @@ def test_runtime_metadata_snapshot_from_context(
     device_info,
 ) -> None:
     """Existing contexts should also expose unified runtime metadata."""
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend=device_info.backend,
             rank=0,
             world_size=1,
@@ -184,7 +184,7 @@ def test_benchmark_environment_health_flags_foreign_gpu_activity(monkeypatch) ->
             )
         raise AssertionError(f"unexpected command: {command}")
 
-    monkeypatch.setattr("xtile.utils.benchmark_results.subprocess.run", _fake_run)
+    monkeypatch.setattr("tncc.utils.benchmark_results.subprocess.run", _fake_run)
 
     snapshot = benchmark_environment_health(visible_gpu_count=2)
 
@@ -223,7 +223,7 @@ def test_is_canonical_benchmark_output_matches_figures_data() -> None:
     assert is_canonical_benchmark_output(default_collective_bulk_sync_benchmark_path())
     assert is_canonical_benchmark_output(default_gemm_benchmark_path())
     assert is_canonical_benchmark_output(default_collective_comm_only_benchmark_path())
-    assert not is_canonical_benchmark_output(Path("/tmp/not_xtile_benchmark.json"))
+    assert not is_canonical_benchmark_output(Path("/tmp/not_tncc_benchmark.json"))
 
 
 def test_canonical_benchmark_run_rejects_parallel_nonblocking_probe() -> None:
@@ -232,7 +232,7 @@ def test_canonical_benchmark_run_rejects_parallel_nonblocking_probe() -> None:
     repo_root = project_root()
     script = """
 from pathlib import Path
-from xtile.utils.benchmark_results import canonical_benchmark_run
+from tncc.utils.benchmark_results import canonical_benchmark_run
 
 try:
     with canonical_benchmark_run(Path(%r), blocking=False):
@@ -286,7 +286,7 @@ def test_collective_comm_only_aggregate_preserves_allreduce_execution_metadata()
                 {
                     "collective": "allreduce",
                     "size_bytes": 65536,
-                    "xtile": {
+                    "tncc": {
                         "times_ms": [1.0, 1.1],
                         "correct": True,
                         "implementation": "device_staged_pipeline",
@@ -316,7 +316,7 @@ def test_collective_comm_only_aggregate_preserves_allreduce_execution_metadata()
                 {
                     "collective": "allreduce",
                     "size_bytes": 65536,
-                    "xtile": {
+                    "tncc": {
                         "times_ms": [0.9, 1.0],
                         "correct": True,
                         "implementation": "device_staged_pipeline",
@@ -347,13 +347,13 @@ def test_collective_comm_only_aggregate_preserves_allreduce_execution_metadata()
 
     assert len(cases) == 1
     case = cases[0]
-    assert case["xtile"]["implementation"] == "device_staged_pipeline"
-    assert case["xtile"]["protocol"] == "slot_epoch_pipeline"
-    assert case["xtile"]["kernel_family"] == "ws2_specialized"
-    assert case["xtile"]["reuse_handshake"] == "ws2_epoch_ack"
-    assert case["xtile"]["message_bytes"] == 65536
-    assert case["xtile"]["message_regime"] == "throughput"
-    assert case["xtile"]["cta_policy"] == "multi_cta_pipeline"
-    assert case["xtile"]["epoch_policy"] == "per_chunk_slot_epoch"
-    assert case["xtile"]["chunk_elems"] == 4096
-    assert summary["peak_by_collective"]["allreduce"]["peak_xtile_bandwidth_gbps"] > 0.0
+    assert case["tncc"]["implementation"] == "device_staged_pipeline"
+    assert case["tncc"]["protocol"] == "slot_epoch_pipeline"
+    assert case["tncc"]["kernel_family"] == "ws2_specialized"
+    assert case["tncc"]["reuse_handshake"] == "ws2_epoch_ack"
+    assert case["tncc"]["message_bytes"] == 65536
+    assert case["tncc"]["message_regime"] == "throughput"
+    assert case["tncc"]["cta_policy"] == "multi_cta_pipeline"
+    assert case["tncc"]["epoch_policy"] == "per_chunk_slot_epoch"
+    assert case["tncc"]["chunk_elems"] == 4096
+    assert summary["peak_by_collective"]["allreduce"]["peak_tncc_bandwidth_gbps"] > 0.0

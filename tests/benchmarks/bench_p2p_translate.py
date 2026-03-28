@@ -31,9 +31,9 @@ import torch
 import triton
 import triton.language as tl
 
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.memory.translation import translate_ptr
-from xtile.utils.benchmark_results import (
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.memory.translation import translate_ptr
+from tncc.utils.benchmark_results import (
     canonical_benchmark_run,
     default_p2p_benchmark_path,
     describe_runtime_metadata_snapshot,
@@ -455,7 +455,7 @@ def main():
             pass
 
         theoretical_peak = 300.0  # GB/s
-        print(f"=== XTile P2P Bandwidth Benchmark (Optimized) ===")
+        print(f"=== TNCC P2P Bandwidth Benchmark (Optimized) ===")
         print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
         print(f"Link: {link}")
         print(f"Theoretical peak: {theoretical_peak:.1f} GB/s (per direction)")

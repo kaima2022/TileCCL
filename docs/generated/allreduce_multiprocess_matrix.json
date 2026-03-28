@@ -464,7 +464,7 @@
       }
     }
   ],
-  "command": "/home/makai/XTile/tests/benchmarks/bench_allreduce_multiprocess.py --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --warmup 1 --iters 3 --launcher primitive_ops --timeout-sec 240 --output-json docs/generated/allreduce_multiprocess_matrix.json",
+  "command": "/home/makai/TNCC/tests/benchmarks/bench_allreduce_multiprocess.py --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --warmup 1 --iters 3 --launcher primitive_ops --timeout-sec 240 --output-json docs/generated/allreduce_multiprocess_matrix.json",
   "environment": {
     "block_size": 128,
     "gpu_name": "NVIDIA H100 PCIe",

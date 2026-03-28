@@ -526,18 +526,18 @@ translated_ptr 指向 GPU2 的内存地址
 
 ---
 
-## 系统四：XTile
+## 系统四：TNCC (Tile Native Collective Communication)
 
 > 维护说明
 >
-> - 为降低维护成本和口径漂移风险，本文件不再维护 XTile 的分层流程展开。
-> - XTile 当前流程、公开入口、边界、support surface 与性能口径，统一以 [XTile现状流程_修订版.md](./XTile现状流程_修订版.md) 为准。
+> - 为降低维护成本和口径漂移风险，本文件不再维护 TNCC 的分层流程展开。
+> - TNCC 当前流程、公开入口、边界、support surface 与性能口径，统一以 [TNCC现状流程_修订版.md](./TNCC现状流程_修订版.md) 为准。
 
 ---
 
 ## 关键差异总结表
 
-| 方面 | TileScale | Triton-distributed | Iris | XTile |
+| 方面 | TileScale | Triton-distributed | Iris | TNCC |
 | --- | --- | --- | --- | --- |
 | 用户接口层级 | TileLang distributed primitives | Triton distributed low-level ops | Triton kernel 内远端访存原语 | Host ops + patterns + primitives |
 | 编译表示 | TVM IR + extern / NVSHMEM 调用 | Distributed dialect + backend lowering | 标准 Triton load/store | 标准 Triton + pointer translation / load / store / atomic |
@@ -557,7 +557,7 @@ translated_ptr 指向 GPU2 的内存地址
 
 ```
 TileScale 用 TVM 编译器（基于 Apache TVM 项目）
-Iris、TileLink、XTile 用 Triton JIT 编译器（基于 OpenAI Triton 项目）
+Iris、TileLink、TNCC 用 Triton JIT 编译器（基于 OpenAI Triton 项目）
 ```
 
 **TVM 编译器**是什么：
@@ -601,7 +601,7 @@ cubin（NVIDIA）或 HSACO（AMD）
 
 **关键区别**：
 
-| 方面     | TVM（TileScale 用）            | Triton JIT（Iris/TileLink/XTile 用） |
+| 方面     | TVM（TileScale 用）            | Triton JIT（Iris/TileLink/TNCC 用） |
 | -------- | ------------------------------ | ------------------------------------ |
 | 编译时机 | 可以提前编译（AOT）            | 第一次调用时编译（JIT）              |
 | IR 基础  | TVM PrimFunc                   | Triton 自研 IR → LLVM IR             |
@@ -737,7 +737,7 @@ Iris：    你发现其实不需要说外语——你可以直接把东西放到
 
 ### "编译器"指的是谁
 
-在这个上下文中，"编译器"指的是**把你的 kernel 代码翻译成 GPU 机器码的那个工具**，具体就是 **Triton JIT 编译器**（对于 Iris、TileLink、XTile）或 **TVM 编译器**（对于 TileScale）。
+在这个上下文中，"编译器"指的是**把你的 kernel 代码翻译成 GPU 机器码的那个工具**，具体就是 **Triton JIT 编译器**（对于 Iris、TileLink、TNCC）或 **TVM 编译器**（对于 TileScale）。
 
 编译器的核心工作除了翻译，还包括**优化**。优化的前提是：**编译器必须理解代码在做什么**。
 
@@ -781,7 +781,7 @@ call void asm sideeffect                         # ← 编译器部分理解
 
 **这就是"半透明"——编译器能看到一些外部特征，但看不到内部逻辑。**
 
-### 全透明（Iris 的 `tl.store`；XTile 的 `translate_ptr + load/store/atomic`）
+### 全透明（Iris 的 `tl.store`；TNCC 的 `translate_ptr + load/store/atomic`）
 
 ```python
 # 编译器看到的 Triton IR（概念性展示）：
@@ -799,7 +799,7 @@ tt.store %remote_ptr, %acc, %mask                  # 存储到远端
 - `arith.subi` / `arith.addi`
 - `tt.store`
 
-XTile 当前源码里的 device path 也属于同一类“IR 可见”的 Triton 组合，只是具体形态更准确地说是：
+TNCC 当前源码里的 device path 也属于同一类“IR 可见”的 Triton 组合，只是具体形态更准确地说是：
 
 - `translate_ptr(...)`
 - `tt.load` / `tt.store`
@@ -823,7 +823,7 @@ XTile 当前源码里的 device path 也属于同一类“IR 可见”的 Triton
   但不知道你具体走哪条路线，开多快。
   → 可见性比纯 extern 更高，但仍然有明显黑盒边界。
 
-全透明（Iris/XTile）：
+全透明（Iris/TNCC）：
   你跟编译器说"把包裹放到架子上"。
   在 IR 层，它跟放到本地架子上属于同一种 load/store/atomic 操作家族。
   只不过这个架子恰好在另一个房间（GPU2），搬运工（硬件）自己会处理。
@@ -838,7 +838,7 @@ XTile 当前源码里的 device path 也属于同一类“IR 可见”的 Triton
 
 2. examples 里的 overlap 仍主要来自用户显式写出的 pattern、同步和 kernel 结构。
 
-3. Iris / XTile 保留了更多编译器分析空间，但当前仓库没有实现自动通信调度优化。
+3. Iris / TNCC 保留了更多编译器分析空间，但当前仓库没有实现自动通信调度优化。
 
 ---
 

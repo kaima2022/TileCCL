@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from xtile.cli import _build_support_context, _format_support_matrix, _handle_support
+from tncc.cli import _build_support_context, _format_support_matrix, _handle_support
 
 
 def test_format_support_matrix_contains_sections(skip_no_gpu, device_info) -> None:
@@ -20,7 +20,7 @@ def test_format_support_matrix_contains_sections(skip_no_gpu, device_info) -> No
     try:
         matrix = ctx.support_matrix()
         rendered = _format_support_matrix(matrix)
-        assert "XTile Runtime Support Matrix" in rendered
+        assert "TNCC Runtime Support Matrix" in rendered
         assert "Ops:" in rendered
         assert "Contracts:" in rendered
         assert "Execution Paths:" in rendered

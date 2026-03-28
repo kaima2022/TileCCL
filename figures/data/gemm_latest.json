@@ -1,6 +1,6 @@
 {
   "benchmark": "gemm_comparison",
-  "command": "/home/makai/XTile/tests/benchmarks/bench_gemm.py --repeats 3 --output-json figures/data/gemm_latest.json",
+  "command": "tests/benchmarks/bench_gemm.py --output-json figures/data/gemm_latest.json",
   "environment": {
     "aggregation": "median_of_full_runs",
     "device": "cuda:0",
@@ -10,7 +10,7 @@
     "visible_gpus": 2,
     "warmup": 10
   },
-  "generated_at_utc": "2026-03-23T08:47:10.615307+00:00",
+  "generated_at_utc": "2026-03-28T17:54:08.202534+00:00",
   "results": [
     {
       "K": 1024,
@@ -18,12 +18,12 @@
       "N": 1024,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.5359,
-      "ratio_pct": 53.6,
-      "torch_ms": 0.032,
-      "torch_tflops": 67.53,
-      "xtile_ms": 0.059,
-      "xtile_tflops": 36.43
+      "ratio": 0.5096,
+      "ratio_pct": 51.0,
+      "tncc_ms": 0.06,
+      "tncc_tflops": 36.01,
+      "torch_ms": 0.031,
+      "torch_tflops": 70.34
     },
     {
       "K": 1024,
@@ -31,12 +31,12 @@
       "N": 1024,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.4974,
-      "ratio_pct": 49.7,
+      "ratio": 0.5008,
+      "ratio_pct": 50.1,
+      "tncc_ms": 0.06,
+      "tncc_tflops": 35.7,
       "torch_ms": 0.03,
-      "torch_tflops": 70.89,
-      "xtile_ms": 0.061,
-      "xtile_tflops": 35.26
+      "torch_tflops": 70.86
     },
     {
       "K": 2048,
@@ -44,12 +44,12 @@
       "N": 2048,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.9409,
-      "ratio_pct": 94.1,
-      "torch_ms": 0.073,
-      "torch_tflops": 234.78,
-      "xtile_ms": 0.077,
-      "xtile_tflops": 224.21
+      "ratio": 0.9165,
+      "ratio_pct": 91.7,
+      "tncc_ms": 0.076,
+      "tncc_tflops": 225.86,
+      "torch_ms": 0.086,
+      "torch_tflops": 198.92
     },
     {
       "K": 2048,
@@ -57,12 +57,12 @@
       "N": 2048,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.8883,
-      "ratio_pct": 88.8,
-      "torch_ms": 0.068,
-      "torch_tflops": 250.81,
-      "xtile_ms": 0.077,
-      "xtile_tflops": 222.78
+      "ratio": 0.8848,
+      "ratio_pct": 88.5,
+      "tncc_ms": 0.076,
+      "tncc_tflops": 227.22,
+      "torch_ms": 0.067,
+      "torch_tflops": 255.21
     },
     {
       "K": 4096,
@@ -70,12 +70,12 @@
       "N": 4096,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.9542,
-      "ratio_pct": 95.4,
-      "torch_ms": 0.326,
-      "torch_tflops": 421.99,
-      "xtile_ms": 0.326,
-      "xtile_tflops": 421.05
+      "ratio": 0.9854,
+      "ratio_pct": 98.5,
+      "tncc_ms": 0.316,
+      "tncc_tflops": 434.48,
+      "torch_ms": 0.311,
+      "torch_tflops": 441.29
     },
     {
       "K": 4096,
@@ -83,12 +83,12 @@
       "N": 4096,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.9192,
+      "ratio": 0.9189,
       "ratio_pct": 91.9,
-      "torch_ms": 0.302,
-      "torch_tflops": 454.36,
-      "xtile_ms": 0.327,
-      "xtile_tflops": 419.91
+      "tncc_ms": 0.339,
+      "tncc_tflops": 404.85,
+      "torch_ms": 0.312,
+      "torch_tflops": 440.99
     },
     {
       "K": 8192,
@@ -96,12 +96,12 @@
       "N": 8192,
       "correct": true,
       "dtype": "fp16",
-      "ratio": 0.8218,
-      "ratio_pct": 82.2,
-      "torch_ms": 2.377,
-      "torch_tflops": 462.54,
-      "xtile_ms": 2.892,
-      "xtile_tflops": 380.13
+      "ratio": 0.8241,
+      "ratio_pct": 82.4,
+      "tncc_ms": 2.874,
+      "tncc_tflops": 382.59,
+      "torch_ms": 2.368,
+      "torch_tflops": 464.25
     },
     {
       "K": 8192,
@@ -109,12 +109,12 @@
       "N": 8192,
       "correct": true,
       "dtype": "bf16",
-      "ratio": 0.844,
-      "ratio_pct": 84.4,
-      "torch_ms": 2.325,
-      "torch_tflops": 472.87,
-      "xtile_ms": 2.726,
-      "xtile_tflops": 403.29
+      "ratio": 0.8219,
+      "ratio_pct": 82.2,
+      "tncc_ms": 2.687,
+      "tncc_tflops": 409.18,
+      "torch_ms": 2.253,
+      "torch_tflops": 487.93
     }
   ],
   "runtime_metadata": {
@@ -151,7 +151,7 @@
     },
     "contracts": {
       "allreduce.in_place": {
-        "detail": "Stable public in-place host contract: tensor.numel must be divisible by world_size, and the tensor must reside in the attached symmetric heap.",
+        "detail": "Stable public in-place host contract: contiguous tensor on the attached symmetric heap. The current public fast path does not require tensor.numel to be divisible by world_size.",
         "state": "partial"
       },
       "gemm_allgather.shard/full": {
@@ -272,8 +272,8 @@
   },
   "schema_version": 1,
   "summary": {
-    "max_ratio": 0.9542,
-    "min_ratio": 0.4974,
+    "max_ratio": 0.9854,
+    "min_ratio": 0.5008,
     "result_count": 8,
     "target_ratio": 0.9
   }

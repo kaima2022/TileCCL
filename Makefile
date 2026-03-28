@@ -4,7 +4,7 @@ help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-install:  ## Install xtile in editable mode
+install:  ## Install tncc in editable mode
 	pip install -e .
 
 install-dev:  ## Install with dev + benchmark dependencies
@@ -23,16 +23,16 @@ bench:  ## Run benchmarks
 	pytest tests/benchmarks/ -v -m "benchmark" --no-header -rN
 
 lint:  ## Run ruff linter
-	ruff check xtile/ tests/
+	ruff check tncc/ tests/
 
 lint-fix:  ## Run ruff linter with auto-fix
-	ruff check --fix xtile/ tests/
+	ruff check --fix tncc/ tests/
 
 format:  ## Format code with ruff
-	ruff format xtile/ tests/
+	ruff format tncc/ tests/
 
 typecheck:  ## Run mypy type checker
-	mypy xtile/
+	mypy tncc/
 
 audit:  ## Run Iris source code audit
 	python scripts/audit_iris.py

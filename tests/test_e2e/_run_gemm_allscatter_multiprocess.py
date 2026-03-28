@@ -14,7 +14,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 @dataclass(frozen=True)
@@ -240,8 +240,8 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import xtile
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    import tncc
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heap_size_bytes = max(
         config.heap_size_mb * 1024 * 1024,
@@ -275,7 +275,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
         torch.cuda.synchronize(rank)
 
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=world_size,
@@ -294,7 +294,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
                 "c_layout": "shard",
             })
 
-        plan = xtile.ops.build_gemm_allscatter_plan(
+        plan = tncc.ops.build_gemm_allscatter_plan(
             A,
             B_full,
             C,
@@ -335,7 +335,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         high_level_sample = None
         if config.launcher in {"ops", "all"}:
             high_level_timing = _timed_call(
-                lambda: xtile.ops.gemm_allscatter(
+                lambda: tncc.ops.gemm_allscatter(
                     A,
                     B_full,
                     C,
@@ -436,7 +436,7 @@ def _parse_args() -> argparse.Namespace:
         "--pattern",
         type=str,
         default="bulk_sync",
-        help="Pattern name passed to xtile.ops.gemm_allscatter(...).",
+        help="Pattern name passed to tncc.ops.gemm_allscatter(...).",
     )
     parser.add_argument(
         "--expect-pattern",
@@ -486,7 +486,7 @@ def main() -> None:
     )
 
     handle = tempfile.NamedTemporaryFile(
-        prefix="xtile_gemm_allscatter_",
+        prefix="tncc_gemm_allscatter_",
         delete=False,
     )
     handle.close()

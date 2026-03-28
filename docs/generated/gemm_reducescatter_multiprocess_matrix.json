@@ -476,7 +476,7 @@
       }
     }
   ],
-  "command": "/home/makai/XTile/tests/benchmarks/bench_gemm_reducescatter_multiprocess.py --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --M 128 --N 256 --K 128 --warmup 1 --iters 3 --timeout-sec 240 --output-json docs/generated/gemm_reducescatter_multiprocess_matrix.json",
+  "command": "/home/makai/TNCC/tests/benchmarks/bench_gemm_reducescatter_multiprocess.py --dtypes float16,bfloat16,float32 --transports auto,ctypes_ipc --M 128 --N 256 --K 128 --warmup 1 --iters 3 --timeout-sec 240 --output-json docs/generated/gemm_reducescatter_multiprocess_matrix.json",
   "environment": {
     "K": 128,
     "M": 128,

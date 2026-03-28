@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xtile"
+name = "tncc"
 version = "0.1.0"
-description = "XTile: Cross-platform tile communication library with full compiler visibility"
+description = "TNCC (Tile Native Collective Communication): cross-platform tile communication library with full compiler visibility"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "XTile Contributors"},
+    {name = "TNCC Contributors"},
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -49,11 +49,11 @@ benchmark = [
 ]
 
 [project.scripts]
-xtile = "xtile.cli:main"
+tncc = "tncc.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["xtile*"]
+include = ["tncc*"]
 
 [tool.ruff]
 target-version = "py310"

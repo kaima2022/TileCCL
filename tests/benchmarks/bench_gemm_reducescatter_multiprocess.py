@@ -14,8 +14,8 @@ import sys
 
 import torch
 
-from xtile.utils.benchmark_results import write_json
-from xtile.utils.feature_gates import MULTIPROCESS_DEVICE_COLLECTIVES_ENV
+from tncc.utils.benchmark_results import write_json
+from tncc.utils.feature_gates import MULTIPROCESS_DEVICE_COLLECTIVES_ENV
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:

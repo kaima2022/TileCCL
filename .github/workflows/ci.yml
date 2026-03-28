@@ -11,8 +11,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff mypy
-      - run: ruff check xtile/ tests/
-      - run: mypy xtile/ --ignore-missing-imports
+      - run: ruff check tncc/ tests/
+      - run: mypy tncc/ --ignore-missing-imports
 
   test-amd:
     runs-on: [self-hosted, amd-gpu]

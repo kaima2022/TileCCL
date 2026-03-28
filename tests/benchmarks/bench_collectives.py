@@ -24,8 +24,8 @@ import torch
 import triton
 import triton.language as tl
 
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.primitives.collectives import (
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.primitives.collectives import (
     tile_allreduce,
     tile_allgather,
     tile_broadcast,
@@ -234,7 +234,7 @@ def main():
     assert torch.cuda.device_count() >= 2, "Need >= 2 GPUs"
 
     theoretical_peak = 300.0  # GB/s
-    print("=== XTile Collective Bandwidth Benchmark ===")
+    print("=== TNCC Collective Bandwidth Benchmark ===")
     print(f"GPUs: {torch.cuda.get_device_name(0)} x {torch.cuda.device_count()}")
     print(f"Theoretical peak: {theoretical_peak:.1f} GB/s (per direction)")
     print()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from xtile.utils.feature_gates import (
+from tncc.utils.feature_gates import (
     FORCE_MULTIPROCESS_TRANSPORT_ENV,
     forced_multiprocess_transport,
     multiprocess_device_collectives_detail,
@@ -124,10 +124,10 @@ def test_multiprocess_device_remote_access_detail_mentions_operation() -> None:
     """The detail should explain why an unsupported transport is being rejected."""
     detail = multiprocess_device_remote_access_detail(
         transport_strategy="pytorch_ipc",
-        operation="xtile.ops.allgather(...)",
+        operation="tncc.ops.allgather(...)",
         world_size=2,
     )
-    assert "xtile.ops.allgather" in detail
+    assert "tncc.ops.allgather" in detail
     assert "ctypes_ipc" in detail
     assert "pytorch_ipc" in detail
     assert "world_size=2" in detail

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Real communication-only collective benchmark: XTile kernels vs NCCL.
+"""Real communication-only collective benchmark: TNCC kernels vs NCCL.
 
-This benchmark measures the pure communication collectives exposed by XTile's
+This benchmark measures the pure communication collectives exposed by TNCC's
 tile primitives and compares them against the corresponding NCCL-backed
 ``torch.distributed`` collectives on the same host.
 
@@ -35,7 +35,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from xtile.utils.benchmark_results import (
+from tncc.utils.benchmark_results import (
     benchmark_environment_health,
     canonical_benchmark_run,
     default_collective_comm_only_benchmark_path,
@@ -44,7 +44,7 @@ from xtile.utils.benchmark_results import (
     runtime_support_snapshot,
     write_json,
 )
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 _DTYPES = {
@@ -91,7 +91,7 @@ def _parse_args() -> argparse.Namespace:
         "--dtype",
         choices=sorted(_DTYPES),
         default="float32",
-        help="Element dtype for both XTile and NCCL buffers.",
+        help="Element dtype for both TNCC and NCCL buffers.",
     )
     parser.add_argument(
         "--message-sizes",
@@ -126,7 +126,7 @@ def _parse_args() -> argparse.Namespace:
         "--force-transport",
         choices=["auto", "ctypes_ipc", "pytorch_ipc", "peer_access_pointer_exchange"],
         default="auto",
-        help="Force one specific XTile multiprocess transport strategy.",
+        help="Force one specific TNCC multiprocess transport strategy.",
     )
     parser.add_argument(
         "--output-json",
@@ -397,9 +397,9 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
             device_id=device,
         )
 
-        import xtile
-        from xtile.memory.symmetric_heap import SymmetricHeap
-        from xtile.primitives import (
+        import tncc
+        from tncc.memory.symmetric_heap import SymmetricHeap
+        from tncc.primitives import (
             allgather as primitive_allgather,
             allreduce as primitive_allreduce,
             broadcast as primitive_broadcast,
@@ -413,7 +413,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
             world_size=config.world_size,
             backend="cuda",
         )
-        ctx = xtile.init(
+        ctx = tncc.init(
             backend="cuda",
             rank=rank,
             world_size=config.world_size,
@@ -483,15 +483,15 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     total_elements = block_elements
                     xt_view = xt_allreduce.narrow(0, 0, total_elements)
                     nccl_view = nccl_allreduce.narrow(0, 0, total_elements)
-                    allreduce_plan = xtile.ops.build_allreduce_plan(xt_view, ctx=ctx)
+                    allreduce_plan = tncc.ops.build_allreduce_plan(xt_view, ctx=ctx)
 
-                    def prepare_xtile() -> None:
+                    def prepare_tncc() -> None:
                         _fill_allreduce_input(xt_view, rank=rank)
 
                     def prepare_nccl() -> None:
                         _fill_allreduce_input(nccl_view, rank=rank)
 
-                    xtile_fn = lambda: primitive_allreduce(xt_view, heap)
+                    tncc_fn = lambda: primitive_allreduce(xt_view, heap)
                     nccl_fn = lambda: dist.all_reduce(nccl_view, async_op=nccl_async)
                     expected_xt = _expected_allreduce(xt_view, world_size=config.world_size)
                     expected_nccl = _expected_allreduce(nccl_view, world_size=config.world_size)
@@ -502,13 +502,13 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     nccl_src = nccl_allgather_src.narrow(0, 0, block_elements)
                     nccl_dst = nccl_allgather_dst.narrow(0, 0, block_elements * config.world_size)
 
-                    def prepare_xtile() -> None:
+                    def prepare_tncc() -> None:
                         _fill_allgather_input(xt_src, xt_dst, rank=rank)
 
                     def prepare_nccl() -> None:
                         _fill_allgather_input(nccl_src, nccl_dst, rank=rank)
 
-                    xtile_fn = lambda: primitive_allgather(xt_src, xt_dst, heap)
+                    tncc_fn = lambda: primitive_allgather(xt_src, xt_dst, heap)
                     nccl_fn = lambda: dist.all_gather_into_tensor(
                         nccl_dst,
                         nccl_src,
@@ -538,7 +538,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     else:
                         nccl_scatter_list = None
 
-                    def prepare_xtile() -> None:
+                    def prepare_tncc() -> None:
                         _fill_scatter_input(
                             xt_src,
                             xt_dst,
@@ -558,7 +558,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                             root=config.root,
                         )
 
-                    xtile_fn = lambda: primitive_scatter(
+                    tncc_fn = lambda: primitive_scatter(
                         xt_src,
                         xt_dst,
                         heap,
@@ -591,7 +591,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     )
                     nccl_dst = nccl_reduce_scatter_dst.narrow(0, 0, block_elements)
 
-                    def prepare_xtile() -> None:
+                    def prepare_tncc() -> None:
                         _fill_reduce_scatter_input(
                             xt_src,
                             xt_dst,
@@ -609,7 +609,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                             block_elements=block_elements,
                         )
 
-                    xtile_fn = lambda: primitive_reduce_scatter(
+                    tncc_fn = lambda: primitive_reduce_scatter(
                         xt_src,
                         xt_dst,
                         heap,
@@ -635,13 +635,13 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     xt_view = xt_broadcast.narrow(0, 0, block_elements)
                     nccl_view = nccl_broadcast.narrow(0, 0, block_elements)
 
-                    def prepare_xtile() -> None:
+                    def prepare_tncc() -> None:
                         _fill_broadcast_input(xt_view, rank=rank, root=config.root)
 
                     def prepare_nccl() -> None:
                         _fill_broadcast_input(nccl_view, rank=rank, root=config.root)
 
-                    xtile_fn = lambda: primitive_broadcast(xt_view, heap, root=config.root)
+                    tncc_fn = lambda: primitive_broadcast(xt_view, heap, root=config.root)
                     nccl_fn = lambda: dist.broadcast(
                         nccl_view,
                         src=config.root,
@@ -661,12 +661,12 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                 else:
                     raise ValueError(f"unsupported collective: {collective}")
 
-                xtile_result: dict[str, Any] = {
+                tncc_result: dict[str, Any] = {
                     "times_ms": {},
                     "correct": False,
                 }
                 if allreduce_plan is not None:
-                    xtile_result.update(
+                    tncc_result.update(
                         {
                             "implementation": allreduce_plan.implementation,
                             "protocol": allreduce_plan.protocol,
@@ -685,9 +685,9 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         }
                     )
 
-                xtile_times_ms = _timed_collective(
-                    xtile_fn,
-                    prepare_fn=prepare_xtile,
+                tncc_times_ms = _timed_collective(
+                    tncc_fn,
+                    prepare_fn=prepare_tncc,
                     rank=rank,
                     barrier_kwargs=barrier_kwargs,
                     timing_mode=config.timing_mode,
@@ -705,19 +705,19 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                 )
 
                 if collective == "allreduce":
-                    xtile_ok = bool(torch.allclose(xt_view, expected_xt, atol=1e-4))
+                    tncc_ok = bool(torch.allclose(xt_view, expected_xt, atol=1e-4))
                     nccl_ok = bool(torch.allclose(nccl_view, expected_nccl, atol=1e-4))
                 elif collective == "allgather":
-                    xtile_ok = bool(torch.allclose(xt_dst, expected_xt, atol=1e-4))
+                    tncc_ok = bool(torch.allclose(xt_dst, expected_xt, atol=1e-4))
                     nccl_ok = bool(torch.allclose(nccl_dst, expected_nccl, atol=1e-4))
                 elif collective == "scatter":
-                    xtile_ok = bool(torch.allclose(xt_dst, expected_xt, atol=1e-4))
+                    tncc_ok = bool(torch.allclose(xt_dst, expected_xt, atol=1e-4))
                     nccl_ok = bool(torch.allclose(nccl_dst, expected_nccl, atol=1e-4))
                 elif collective == "reduce_scatter":
-                    xtile_ok = bool(torch.allclose(xt_dst, expected_xt, atol=1e-4))
+                    tncc_ok = bool(torch.allclose(xt_dst, expected_xt, atol=1e-4))
                     nccl_ok = bool(torch.allclose(nccl_dst, expected_nccl, atol=1e-4))
                 elif collective == "broadcast":
-                    xtile_ok = bool(torch.allclose(xt_view, expected_xt, atol=1e-4))
+                    tncc_ok = bool(torch.allclose(xt_view, expected_xt, atol=1e-4))
                     nccl_ok = bool(torch.allclose(nccl_view, expected_nccl, atol=1e-4))
 
                 results.append(
@@ -731,10 +731,10 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                             "size_adaptive": bool(size_bytes >= _LARGE_MESSAGE_THRESHOLD_BYTES),
                             "timing_mode": config.timing_mode,
                         },
-                        "xtile": {
-                            **xtile_result,
-                            "times_ms": xtile_times_ms,
-                            "correct": xtile_ok,
+                        "tncc": {
+                            **tncc_result,
+                            "times_ms": tncc_times_ms,
+                            "correct": tncc_ok,
                         },
                         "nccl": {
                             "times_ms": nccl_times_ms,
@@ -764,11 +764,11 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
             {
                 "collective": entry["collective"],
                 "size_bytes": entry["size_bytes"],
-                "xtile_correct": entry["xtile"]["correct"],
+                "tncc_correct": entry["tncc"]["correct"],
                 "nccl_correct": entry["nccl"]["correct"],
             }
             for entry in results
-            if not (entry["xtile"]["correct"] and entry["nccl"]["correct"])
+            if not (entry["tncc"]["correct"] and entry["nccl"]["correct"])
         ]
         if failures:
             raise RuntimeError(
@@ -813,9 +813,9 @@ def _aggregate_rank_results(
         key=lambda key: (_COLLECTIVES.index(key[0]), key[1]),
     ):
         per_rank = grouped[(collective, size_bytes)]
-        xtile_execution_metadata = _shared_rank_metadata(
+        tncc_execution_metadata = _shared_rank_metadata(
             per_rank,
-            side="xtile",
+            side="tncc",
             keys=(
                 "implementation",
                 "protocol",
@@ -833,22 +833,22 @@ def _aggregate_rank_results(
                 "workspace_bytes",
             ),
         )
-        xtile_times_by_rank = [list(entry["xtile"]["times_ms"]) for entry in per_rank]
+        tncc_times_by_rank = [list(entry["tncc"]["times_ms"]) for entry in per_rank]
         nccl_times_by_rank = [list(entry["nccl"]["times_ms"]) for entry in per_rank]
-        xtile_aggregate_times = [
-            max(rank_times[idx] for rank_times in xtile_times_by_rank)
-            for idx in range(len(xtile_times_by_rank[0]))
+        tncc_aggregate_times = [
+            max(rank_times[idx] for rank_times in tncc_times_by_rank)
+            for idx in range(len(tncc_times_by_rank[0]))
         ]
         nccl_aggregate_times = [
             max(rank_times[idx] for rank_times in nccl_times_by_rank)
             for idx in range(len(nccl_times_by_rank[0]))
         ]
 
-        xtile_summary = _bandwidth_summary(
+        tncc_summary = _bandwidth_summary(
             collective=collective,
             size_bytes=size_bytes,
             world_size=world_size,
-            times_ms=xtile_aggregate_times,
+            times_ms=tncc_aggregate_times,
         )
         nccl_summary = _bandwidth_summary(
             collective=collective,
@@ -857,7 +857,7 @@ def _aggregate_rank_results(
             times_ms=nccl_aggregate_times,
         )
         speedup = (
-            xtile_summary["median_bandwidth_gbps"] / nccl_summary["median_bandwidth_gbps"]
+            tncc_summary["median_bandwidth_gbps"] / nccl_summary["median_bandwidth_gbps"]
             if nccl_summary["median_bandwidth_gbps"] > 0
             else 0.0
         )
@@ -867,12 +867,12 @@ def _aggregate_rank_results(
             "size_bytes": size_bytes,
             "size_mib": float(size_bytes / (1024 ** 2)),
             "world_size": world_size,
-            "xtile": {
-                **xtile_summary,
-                **xtile_execution_metadata,
-                "correct_all_ranks": all(bool(entry["xtile"]["correct"]) for entry in per_rank),
-                "rank_times_ms": xtile_times_by_rank,
-                "aggregate_times_ms": xtile_aggregate_times,
+            "tncc": {
+                **tncc_summary,
+                **tncc_execution_metadata,
+                "correct_all_ranks": all(bool(entry["tncc"]["correct"]) for entry in per_rank),
+                "rank_times_ms": tncc_times_by_rank,
+                "aggregate_times_ms": tncc_aggregate_times,
             },
             "nccl": {
                 **nccl_summary,
@@ -880,41 +880,41 @@ def _aggregate_rank_results(
                 "rank_times_ms": nccl_times_by_rank,
                 "aggregate_times_ms": nccl_aggregate_times,
             },
-            "xtile_vs_nccl_bandwidth_ratio": float(speedup),
+            "tncc_vs_nccl_bandwidth_ratio": float(speedup),
         }
         cases.append(case)
 
         summary_entry = peak_summary.setdefault(
             collective,
             {
-                "peak_xtile_bandwidth_gbps": 0.0,
+                "peak_tncc_bandwidth_gbps": 0.0,
                 "peak_nccl_bandwidth_gbps": 0.0,
-                "best_xtile_vs_nccl_ratio": 0.0,
+                "best_tncc_vs_nccl_ratio": 0.0,
             },
         )
-        summary_entry["peak_xtile_bandwidth_gbps"] = max(
-            summary_entry["peak_xtile_bandwidth_gbps"],
-            case["xtile"]["median_bandwidth_gbps"],
+        summary_entry["peak_tncc_bandwidth_gbps"] = max(
+            summary_entry["peak_tncc_bandwidth_gbps"],
+            case["tncc"]["median_bandwidth_gbps"],
         )
         summary_entry["peak_nccl_bandwidth_gbps"] = max(
             summary_entry["peak_nccl_bandwidth_gbps"],
             case["nccl"]["median_bandwidth_gbps"],
         )
-        summary_entry["best_xtile_vs_nccl_ratio"] = max(
-            summary_entry["best_xtile_vs_nccl_ratio"],
-            case["xtile_vs_nccl_bandwidth_ratio"],
+        summary_entry["best_tncc_vs_nccl_ratio"] = max(
+            summary_entry["best_tncc_vs_nccl_ratio"],
+            case["tncc_vs_nccl_bandwidth_ratio"],
         )
 
-    best_case = max(cases, key=lambda item: item["xtile_vs_nccl_bandwidth_ratio"]) if cases else None
+    best_case = max(cases, key=lambda item: item["tncc_vs_nccl_bandwidth_ratio"]) if cases else None
     summary: dict[str, Any] = {
         "peak_by_collective": peak_summary,
     }
     if best_case is not None:
-        summary["best_xtile_vs_nccl_case"] = {
+        summary["best_tncc_vs_nccl_case"] = {
             "collective": best_case["collective"],
             "size_bytes": best_case["size_bytes"],
             "size_mib": best_case["size_mib"],
-            "ratio": best_case["xtile_vs_nccl_bandwidth_ratio"],
+            "ratio": best_case["tncc_vs_nccl_bandwidth_ratio"],
         }
     return cases, summary
 
@@ -981,11 +981,11 @@ def main() -> None:
     emit_benchmark_environment_warnings(environment_health)
 
     output_path = Path(args.output_json)
-    store_fd, store_path = tempfile.mkstemp(prefix="xtile_collective_comm_store_")
+    store_fd, store_path = tempfile.mkstemp(prefix="tncc_collective_comm_store_")
     os.close(store_fd)
     os.unlink(store_path)
 
-    with tempfile.TemporaryDirectory(prefix="xtile_collective_comm_rank_") as temp_output_dir:
+    with tempfile.TemporaryDirectory(prefix="tncc_collective_comm_rank_") as temp_output_dir:
         run_config = _RunConfig(
             collectives=config.collectives,
             message_sizes_bytes=config.message_sizes_bytes,
@@ -1109,13 +1109,13 @@ def main() -> None:
             continue
         best_case = max(
             collective_cases,
-            key=lambda item: item["xtile"]["median_bandwidth_gbps"],
+            key=lambda item: item["tncc"]["median_bandwidth_gbps"],
         )
         print(
             f"[{collective}] "
-            f"best_xtile={best_case['xtile']['median_bandwidth_gbps']:.2f} GB/s "
+            f"best_tncc={best_case['tncc']['median_bandwidth_gbps']:.2f} GB/s "
             f"best_nccl={best_case['nccl']['median_bandwidth_gbps']:.2f} GB/s "
-            f"best_ratio={best_case['xtile_vs_nccl_bandwidth_ratio']:.3f}x "
+            f"best_ratio={best_case['tncc_vs_nccl_bandwidth_ratio']:.3f}x "
             f"size={best_case['size_mib']:.4g} MiB",
             flush=True,
         )

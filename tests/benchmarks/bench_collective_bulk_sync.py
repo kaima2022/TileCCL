@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Communication-only collectives: XTile device path vs bulk_sync baseline.
+"""Communication-only collectives: TNCC device path vs bulk_sync baseline.
 
 This benchmark is intentionally different from the NCCL comparison:
 
 - execution mode: single-process ``peer_access``
-- optimized path: XTile device collective kernels
+- optimized path: TNCC device collective kernels
 - baseline: bulk-synchronous host orchestration that composes lower-level
   point-to-point primitives with explicit phase boundaries
 
-The goal is to answer a narrower question: how much speedup do XTile's
+The goal is to answer a narrower question: how much speedup do TNCC's
 collective-specific kernels provide over a naive internal bulk_sync
 composition built from simpler communication steps.
 """
@@ -26,16 +26,16 @@ import torch
 import triton
 import triton.language as tl
 
-import xtile
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.memory.translation import translate_ptr
-from xtile.primitives.collectives import (
+import tncc
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.memory.translation import translate_ptr
+from tncc.primitives.collectives import (
     _allgather_kernel,
     _broadcast_kernel,
     _reduce_scatter_kernel,
     _scatter_kernel,
 )
-from xtile.utils.benchmark_results import (
+from tncc.utils.benchmark_results import (
     canonical_benchmark_run,
     default_collective_bulk_sync_benchmark_path,
     runtime_metadata_snapshot,
@@ -306,7 +306,7 @@ def _benchmark_case(
         bulk_src = _alloc_symmetric(heaps, (block_elements,), dtype)
         bulk_dst = _alloc_symmetric(heaps, (block_elements * world_size,), dtype)
 
-        def prepare_xtile() -> None:
+        def prepare_tncc() -> None:
             for rank in range(world_size):
                 xt_src[rank].fill_(float((rank + 1) * 10))
                 xt_dst[rank].zero_()
@@ -316,7 +316,7 @@ def _benchmark_case(
                 bulk_src[rank].fill_(float((rank + 1) * 10))
                 bulk_dst[rank].zero_()
 
-        def run_xtile() -> None:
+        def run_tncc() -> None:
             for rank in range(world_size):
                 torch.cuda.set_device(rank)
                 with torch.cuda.stream(streams[rank]):
@@ -386,13 +386,13 @@ def _benchmark_case(
             for peer in range(world_size):
                 src_list[0][peer * block_elements:(peer + 1) * block_elements].fill_(float((peer + 1) * 10))
 
-        def prepare_xtile() -> None:
+        def prepare_tncc() -> None:
             _fill_scatter(xt_src, xt_dst)
 
         def prepare_bulk() -> None:
             _fill_scatter(bulk_src, bulk_dst)
 
-        def run_xtile() -> None:
+        def run_tncc() -> None:
             for rank in range(world_size):
                 torch.cuda.set_device(rank)
                 with torch.cuda.stream(streams[rank]):
@@ -444,13 +444,13 @@ def _benchmark_case(
             for rank in range(world_size):
                 buffers[rank].fill_(111.0 if rank == 0 else -1.0)
 
-        def prepare_xtile() -> None:
+        def prepare_tncc() -> None:
             _fill_broadcast(xt_buf)
 
         def prepare_bulk() -> None:
             _fill_broadcast(bulk_buf)
 
-        def run_xtile() -> None:
+        def run_tncc() -> None:
             for rank in range(world_size):
                 torch.cuda.set_device(rank)
                 with torch.cuda.stream(streams[rank]):
@@ -501,7 +501,7 @@ def _benchmark_case(
                         float(rank * world_size + chunk + 1)
                     )
 
-        def prepare_xtile() -> None:
+        def prepare_tncc() -> None:
             _fill_reduce_scatter(xt_full, xt_shard)
 
         def prepare_bulk() -> None:
@@ -509,7 +509,7 @@ def _benchmark_case(
             for rank in range(world_size):
                 bulk_stage[rank].zero_()
 
-        def run_xtile() -> None:
+        def run_tncc() -> None:
             for rank in range(world_size):
                 torch.cuda.set_device(rank)
                 with torch.cuda.stream(streams[rank]):
@@ -590,7 +590,7 @@ def _benchmark_case(
         bulk_stage = _alloc_symmetric(heaps, (block_elements * world_size,), dtype)
         bulk_gathered = _alloc_symmetric(heaps, (total_elements,), dtype)
 
-        def prepare_xtile() -> None:
+        def prepare_tncc() -> None:
             for rank in range(world_size):
                 xt_full[rank].fill_(float(rank + 1))
                 xt_shard[rank].zero_()
@@ -603,7 +603,7 @@ def _benchmark_case(
                 bulk_stage[rank].zero_()
                 bulk_gathered[rank].zero_()
 
-        def run_xtile() -> None:
+        def run_tncc() -> None:
             for rank in range(world_size):
                 torch.cuda.set_device(rank)
                 with torch.cuda.stream(streams[rank]):
@@ -715,8 +715,8 @@ def _benchmark_case(
         raise ValueError(f"unsupported collective: {collective}")
 
     xt_stats = _time_end_to_end(
-        prepare_xtile,
-        run_xtile,
+        prepare_tncc,
+        run_tncc,
         world_size=world_size,
         warmup=warmup,
         iters=iters,
@@ -729,8 +729,8 @@ def _benchmark_case(
         iters=iters,
     )
 
-    prepare_xtile()
-    run_xtile()
+    prepare_tncc()
+    run_tncc()
     _sync_all(world_size)
     prepare_bulk()
     run_bulk()
@@ -750,7 +750,7 @@ def _benchmark_case(
         "collective": collective,
         "size_bytes": size_bytes,
         "size_kib": float(size_bytes / 1024.0),
-        "xtile": {
+        "tncc": {
             **xt_stats,
             "median_bandwidth_gbps": xt_bw,
             "correct": xt_ok,
@@ -790,7 +790,7 @@ def main() -> None:
                 torch.cuda.set_device(rank)
                 streams.append(torch.cuda.Stream(device=rank))
 
-            ctx = xtile.init(
+            ctx = tncc.init(
                 backend="cuda",
                 rank=0,
                 world_size=world_size,
@@ -813,10 +813,10 @@ def main() -> None:
                         world_size=world_size,
                     )
                     cases.append(case)
-                    status = "PASS" if case["xtile"]["correct"] and case["bulk_sync"]["correct"] else "FAIL"
+                    status = "PASS" if case["tncc"]["correct"] and case["bulk_sync"]["correct"] else "FAIL"
                     print(
                         f"[{status}] {collective:14s} {size_bytes//1024:6.0f} KiB "
-                        f"xtile={case['xtile']['median_ms']:.3f} ms "
+                        f"tncc={case['tncc']['median_ms']:.3f} ms "
                         f"bulk={case['bulk_sync']['median_ms']:.3f} ms "
                         f"speedup={case['speedup_vs_bulk']:.3f}x",
                         flush=True,
@@ -830,7 +830,7 @@ def main() -> None:
                     continue
                 peak_by_collective[collective] = {
                     "best_speedup_vs_bulk": max(case["speedup_vs_bulk"] for case in current),
-                    "peak_xtile_bandwidth_gbps": max(case["xtile"]["median_bandwidth_gbps"] for case in current),
+                    "peak_tncc_bandwidth_gbps": max(case["tncc"]["median_bandwidth_gbps"] for case in current),
                     "peak_bulk_bandwidth_gbps": max(case["bulk_sync"]["median_bandwidth_gbps"] for case in current),
                 }
 

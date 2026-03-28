@@ -16,9 +16,9 @@ import torch
 import triton
 import triton.language as tl
 
-from xtile.memory.symmetric_heap import SymmetricHeap
-from xtile.memory.translation import translate_ptr
-from xtile.primitives.collectives import (
+from tncc.memory.symmetric_heap import SymmetricHeap
+from tncc.memory.translation import translate_ptr
+from tncc.primitives.collectives import (
     tile_allreduce,
     tile_allgather,
     tile_broadcast,
@@ -159,7 +159,7 @@ class TestCollectives:
         execution. We use the host-side launcher which handles this.
         We test the host-side API which uses a single CTA.
         """
-        from xtile.primitives.collectives import allreduce as host_allreduce
+        from tncc.primitives.collectives import allreduce as host_allreduce
 
         total_elements = BLOCK_SIZE * self.world_size
         data = self._symmetric_alloc((total_elements,), torch.float32)

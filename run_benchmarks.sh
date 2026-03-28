@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# XTile Phase 3: Run all benchmarks and collect results.
+# TNCC Phase 3: Run all benchmarks and collect results.
 #
 # Usage:
 #   ./run_benchmarks.sh          # full suite
@@ -31,7 +31,7 @@ done
 mkdir -p "$RESULTS_DIR"
 
 echo "============================================================"
-echo "  XTile Benchmark Suite"
+echo "  TNCC Benchmark Suite"
 echo "  $(date)"
 echo "  Mode: $BENCH_TYPE ${QUICK_FLAG:+(quick)}"
 echo "============================================================"

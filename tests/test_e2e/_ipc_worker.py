@@ -16,7 +16,7 @@ def ipc_test_worker(rank: int, world_size: int, results_dict: dict) -> None:
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
     try:
-        from xtile.memory.symmetric_heap import SymmetricHeap
+        from tncc.memory.symmetric_heap import SymmetricHeap
 
         heap = SymmetricHeap(size=4 * 1024 * 1024, rank=rank, world_size=world_size)
 

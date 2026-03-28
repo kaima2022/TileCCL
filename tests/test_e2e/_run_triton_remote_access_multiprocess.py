@@ -19,8 +19,8 @@ import torch.multiprocessing as mp
 import triton
 import triton.language as tl
 
-from xtile.memory.translation import translate_ptr
-from xtile.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.memory.translation import translate_ptr
+from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
 
 @dataclass(frozen=True)
@@ -149,7 +149,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,
@@ -334,7 +334,7 @@ def main() -> None:
         operation=args.operation,
     )
 
-    store_fd, store_path = tempfile.mkstemp(prefix="xtile_triton_remote_store_")
+    store_fd, store_path = tempfile.mkstemp(prefix="tncc_triton_remote_store_")
     os.close(store_fd)
     os.unlink(store_path)
 

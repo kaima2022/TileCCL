@@ -13,7 +13,7 @@ import sys
 
 import torch
 
-from xtile.utils.benchmark_results import write_json
+from tncc.utils.benchmark_results import write_json
 
 
 _AUTO_CASES: tuple[dict[str, object], ...] = (

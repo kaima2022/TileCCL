@@ -14,20 +14,20 @@
 ## 图上现象
 
 1. 小消息 latency 全部聚在 `2.39 ~ 2.41 ms`，随消息尺寸变化很小。
-2. 小消息段里，XTile 与 NCCL 基本持平。
+2. 小消息段里，TNCC 与 NCCL 基本持平。
 3. `256 KiB` 时，`allgather` 和 `scatter` 高于 NCCL，`broadcast` 基本持平。
 4. `256 KiB` 时，`allreduce` 明显落后，`reduce_scatter` 则出现断崖式塌缩。
-5. `allreduce` 从 `256 KiB` 拉到 `1 MiB / 2 MiB` 后，NCCL 带宽继续上升，XTile 没有随消息尺寸正常扩展。
+5. `allreduce` 从 `256 KiB` 拉到 `1 MiB / 2 MiB` 后，NCCL 带宽继续上升，TNCC 没有随消息尺寸正常扩展。
 
 ## 关键数值
 
-- `allreduce @ 256 KiB`：XTile `0.0175 GB/s`，NCCL `0.0557 GB/s`，约 `0.31x`
-- `allgather @ 256 KiB`：XTile `0.0556 GB/s`，NCCL `0.0378 GB/s`，约 `1.47x`
-- `scatter @ 256 KiB`：XTile `0.0554 GB/s`，NCCL `0.0378 GB/s`，约 `1.47x`
-- `reduce_scatter @ 256 KiB`：XTile `0.00056 GB/s`，NCCL `0.1090 GB/s`，约 `0.005x`
-- `broadcast @ 256 KiB`：XTile `0.1096 GB/s`，NCCL `0.1091 GB/s`，基本持平
-- `allreduce @ 1 MiB`：XTile `0.00312 GB/s`，NCCL `0.2223 GB/s`
-- `allreduce @ 2 MiB`：XTile `0.00580 GB/s`，NCCL `0.4435 GB/s`
+- `allreduce @ 256 KiB`：TNCC `0.0175 GB/s`，NCCL `0.0557 GB/s`，约 `0.31x`
+- `allgather @ 256 KiB`：TNCC `0.0556 GB/s`，NCCL `0.0378 GB/s`，约 `1.47x`
+- `scatter @ 256 KiB`：TNCC `0.0554 GB/s`，NCCL `0.0378 GB/s`，约 `1.47x`
+- `reduce_scatter @ 256 KiB`：TNCC `0.00056 GB/s`，NCCL `0.1090 GB/s`，约 `0.005x`
+- `broadcast @ 256 KiB`：TNCC `0.1096 GB/s`，NCCL `0.1091 GB/s`，基本持平
+- `allreduce @ 1 MiB`：TNCC `0.00312 GB/s`，NCCL `0.2223 GB/s`
+- `allreduce @ 2 MiB`：TNCC `0.00580 GB/s`，NCCL `0.4435 GB/s`
 
 ## 根因归因
 
@@ -38,7 +38,7 @@
 因此，上排能说明的是：
 
 - 公开调用路径没有出现数量级额外开销
-- 小消息段 XTile 与 NCCL 的调用侧成本接近
+- 小消息段 TNCC 与 NCCL 的调用侧成本接近
 
 上排不能直接推出“大消息协议已经接近 NCCL”。
 
@@ -54,7 +54,7 @@
 
 对应代码：
 
-- [xtile/primitives/collectives.py](../xtile/primitives/collectives.py)
+- [tncc/primitives/collectives.py](../tncc/primitives/collectives.py)
 
 ### 3. `reduce_scatter` 的塌缩不是画图问题，是实现本身当前就是 correctness-first
 
@@ -77,8 +77,8 @@
 
 对应代码与说明：
 
-- [xtile/primitives/collectives.py](../xtile/primitives/collectives.py)
-- [XTile现状流程_修订版.md](/home/makai/XTile/docs/XTile现状流程_修订版.md#L854)
+- [tncc/primitives/collectives.py](../tncc/primitives/collectives.py)
+- [TNCC现状流程_修订版.md](./TNCC现状流程_修订版.md#L854)
 
 ### 4. `allreduce` 已经从 host-side 组合路径收口，但新主路径仍然偏保守
 
@@ -97,20 +97,20 @@
 - 每个 chunk 都要做 sys-scope 的 publish/consume 握手
 - 还没有 pipelined forwarding、多 channel 并发、消息分层 protocol、拓扑感知
 
-因此，大消息段会暴露出很重的协议与同步成本，表现为：NCCL 随消息变大继续扩展，XTile 没有跟上。
+因此，大消息段会暴露出很重的协议与同步成本，表现为：NCCL 随消息变大继续扩展，TNCC 没有跟上。
 
 对应代码：
 
-- [xtile/primitives/collectives.py](/home/makai/XTile/xtile/primitives/collectives.py#L507)
-- [xtile/primitives/collectives.py](/home/makai/XTile/xtile/primitives/collectives.py#L1120)
-- [xtile/ops.py](/home/makai/XTile/xtile/ops.py#L1043)
+- [tncc/primitives/collectives.py](../tncc/primitives/collectives.py#L507)
+- [tncc/primitives/collectives.py](../tncc/primitives/collectives.py#L1120)
+- [tncc/ops.py](../tncc/ops.py#L1043)
 
 ### 5. 为什么小消息看起来接近，大消息又突然拉开
 
 不是结果自相矛盾，而是两个区域在看不同主导项：
 
 - 小消息：固定调用/同步成本主导，所以大家都被压在同一个 `~2.4 ms` 平台上
-- 大消息：协议组织能力主导，这时 XTile 当前的保守 allreduce / reduce_scatter 路径就会被放大出来
+- 大消息：协议组织能力主导，这时 TNCC 当前的保守 allreduce / reduce_scatter 路径就会被放大出来
 
 所以正确解读是：
 
@@ -119,7 +119,7 @@
 
 ## 结论
 
-`fig6` 当前最重要的结论不是“XTile collective 全面落后”，而是：
+`fig6` 当前最重要的结论不是“TNCC collective 全面落后”，而是：
 
 - 小消息调用侧已经接近可用
 - 简单 direct-write collective 在 `world_size=2` 下不差

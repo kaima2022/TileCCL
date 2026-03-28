@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the XTile test suite.
+"""Shared pytest fixtures for the TNCC test suite.
 
 Provides GPU detection, backend parametrization, and resource fixtures
 that other test modules consume.
@@ -115,7 +115,7 @@ def symmetric_heap(device_info: DeviceInfo) -> Generator:
     if not device_info.has_gpu:
         pytest.skip("No GPU available -- cannot create SymmetricHeap")
 
-    from xtile.memory.symmetric_heap import SymmetricHeap
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heap = SymmetricHeap(
         size=1024 * 1024,  # 1 MB
