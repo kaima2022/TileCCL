@@ -24,15 +24,7 @@ TNCC brings collective communication into the tile programming model. Instead of
 
 - **Plan-based execution.** Build an execution plan once (`build_gemm_allscatter_plan`), then reuse it across iterations. Planning overhead — pattern selection, contract validation, workspace allocation — is amortized to near zero.
 
-## How It Works
-
-Traditional collective libraries launch communication as a separate opaque step *after* computation finishes. TNCC eliminates this boundary: a single kernel computes a tile, immediately scatters it to peers, and moves on to the next tile — all within the compiler's view.
-
-<p align="center">
-  <img src="assets/architecture.png" width="720" alt="Traditional bulk-synchronous vs. TNCC tile-native overlap"/>
-</p>
-
-### Tile Primitive Groups
+## TNCC Tile Primitive Groups
 
 **Data Movement** — Two modes of cross-GPU tile transfer:
 - *Value-based* (`tile_remote_load`, `tile_remote_store`): register-to-remote, fine-grained, ideal for small tiles.
@@ -82,10 +74,6 @@ See [`examples/`](examples/) for single-process, multi-process, and pattern benc
 ## Compute-Communication Overlap Patterns
 
 TNCC implements four overlap strategies, inspired by [Iris](https://github.com/ROCm/iris) (AMD Research). Each trades off complexity for overlap opportunity — from a bulk-synchronous baseline to SM-partitioned workgroup specialization.
-
-<p align="center">
-  <img src="assets/overlap-patterns.png" width="680" alt="Overlap pattern taxonomy"/>
-</p>
 
 Auto-selection chooses the best pattern based on problem shape and hardware:
 
