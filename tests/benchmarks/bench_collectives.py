@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Collective communication bandwidth benchmark.
 
 Measures the bandwidth of allreduce, allgather, and broadcast operations

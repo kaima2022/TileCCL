@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """tncc.cli - Command-line interface for TNCC (Tile Native Collective Communication).
 
 Provides the ``tncc`` console entry point for hardware diagnostics and

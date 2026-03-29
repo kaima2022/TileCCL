@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for tncc.memory.symmetric_heap.SymmetricHeap.
 
 Comprehensive tests covering:

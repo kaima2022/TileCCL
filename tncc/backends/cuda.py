@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.backends.cuda - NVIDIA CUDA backend for TNCC.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.patterns.wg_specialized - Workgroup Specialization overlap pattern.
 

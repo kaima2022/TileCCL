@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.primitives.communication - Communication tile primitives.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Real multiprocess validation for gemm_reducescatter."""
 
 from __future__ import annotations

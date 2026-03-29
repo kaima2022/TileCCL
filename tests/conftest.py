@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Shared pytest fixtures for the TNCC test suite.
 
 Provides GPU detection, backend parametrization, and resource fixtures

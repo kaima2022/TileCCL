@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for tncc.memory.translation.PointerTranslator.
 
 Host-side pointer translation tests that do NOT require a GPU.

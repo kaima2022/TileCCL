@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for all 4 overlap patterns: GEMM correctness and scatter validation.
 
 Each pattern is tested for:

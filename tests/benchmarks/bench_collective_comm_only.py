@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Real communication-only collective benchmark: TNCC kernels vs NCCL.
 
 This benchmark measures the pure communication collectives exposed by TNCC's

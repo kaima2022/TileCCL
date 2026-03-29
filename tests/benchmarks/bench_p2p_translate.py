@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """P2P bandwidth microbenchmark using translate_ptr.
 
 Measures actual NVLink bandwidth achieved by translate_ptr-based remote

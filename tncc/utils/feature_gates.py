@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Feature gates for experimentally unsafe runtime paths."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Runtime support matrix for public TNCC surfaces.
 
 This module centralises the "what is actually supported right now"

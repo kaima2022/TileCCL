@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for tncc.patterns.BulkSyncPattern.
 
 The BulkSyncPattern is the simplest overlap strategy (no overlap -- just

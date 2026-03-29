@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for the runtime support matrix."""
 
 from __future__ import annotations

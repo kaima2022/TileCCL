@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """End-to-end P2P tests on real multi-GPU hardware.
 
 Validates that translate_ptr, remote_load/store, and signal/wait primitives

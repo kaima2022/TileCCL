@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """End-to-end tests for collective communication primitives.
 
 Validates that tile_allreduce, tile_allgather, tile_broadcast,

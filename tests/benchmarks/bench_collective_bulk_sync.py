@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Communication-only collectives: TNCC device path vs bulk_sync baseline.
 
 This benchmark is intentionally different from the NCCL comparison:

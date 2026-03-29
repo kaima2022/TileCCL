@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Pattern overlap efficiency benchmark.
 
 Measures the performance of all 4 overlap patterns across Iris-style

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Allocator backends for :mod:`tncc.memory.symmetric_heap`.
 
 The current repository still uses a single contiguous torch buffer as the

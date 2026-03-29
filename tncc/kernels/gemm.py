@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """tncc.kernels.gemm - Optimized Triton GEMM kernel.
 
 Provides a persistent-style GEMM (C = A @ B) aligned with the Iris

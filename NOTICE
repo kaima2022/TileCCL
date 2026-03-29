@@ -1,0 +1,11 @@
+TNCC (Tile Native Collective Communication)
+Copyright 2024 TNCC Contributors
+
+Licensed under the Apache License, Version 2.0.
+
+This project draws architectural inspiration from:
+
+  Iris - Triton-based Remote Memory Access framework
+  https://github.com/ROCm/iris
+  Copyright 2025 Advanced Micro Devices, Inc.
+  Licensed under the MIT License.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.patterns.producer_consumer - Producer-Consumer overlap pattern.
 

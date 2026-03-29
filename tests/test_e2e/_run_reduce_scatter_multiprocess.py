@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Real multiprocess reduce_scatter(device) validation.
 
 This script is meant to be launched as a standalone module so

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for TNCC runtime context construction and heap attachment."""
 
 from __future__ import annotations

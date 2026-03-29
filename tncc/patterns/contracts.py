@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Execution contracts for overlap patterns.
 
 This module centralises shape/layout validation so that pattern

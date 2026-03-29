@@ -1,6 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
 """High-level user-facing operations built on top of patterns."""
 
 from __future__ import annotations
+
+__all__ = [
+    # High-level ops
+    "gemm_allscatter",
+    "gemm_allscatter_sharded",
+    "gemm_allgather",
+    "gemm_reducescatter",
+    "allgather",
+    "allreduce",
+    "reduce_scatter",
+    # Plan builders
+    "build_gemm_allscatter_plan",
+    "build_gemm_allgather_plan",
+    "build_gemm_reducescatter_plan",
+    "build_allgather_plan",
+    "build_allreduce_plan",
+    "build_reduce_scatter_plan",
+    # Plan types
+    "GemmAllScatterPlan",
+    "GemmAllScatterMixedLayoutPlan",
+    "GemmAllGatherPlan",
+    "GemmReduceScatterPlan",
+    "AllGatherPlan",
+    "AllReducePlan",
+    "ReduceScatterPlan",
+    # Contract types
+    "GemmAllScatterContract",
+    "GemmAllGatherContract",
+    "GemmReduceScatterContract",
+]
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
@@ -824,9 +855,9 @@ def build_gemm_allscatter_plan(
 
 
 def gemm_allscatter(
-    A,
-    B,
-    C,
+    A: Any,
+    B: Any,
+    C: Any,
     *,
     ctx: tncc.TNCCContext | None = None,
     full_N: int | None = None,
@@ -836,11 +867,26 @@ def gemm_allscatter(
     hw_info: object | None = None,
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Run GEMM + all-scatter through the stable public full-buffer API.
+    """Run fused GEMM + all-scatter.
 
-    If ``b_layout`` / ``c_layout`` are omitted, the call is interpreted as
-    the canonical public ``full/full`` contract. Expert sharded usage should
-    prefer :func:`gemm_allscatter_sharded`.
+    Computes ``C = A @ B`` and scatters the result to all peers.
+
+    Args:
+        A: Left-hand side matrix, shape ``(M, K)``, on the symmetric heap.
+        B: Right-hand side matrix, shape ``(K, N)``, on the symmetric heap.
+        C: Output matrix, shape ``(M, N)``, on the symmetric heap.
+        ctx: Runtime context.  Defaults to the global context.
+        full_N: Logical full output width (required for sharded contracts).
+        b_layout: ``"full"`` or ``"shard"``.  Defaults to ``"full"``.
+        c_layout: ``"full"`` or ``"shard"``.  Defaults to ``"full"``.
+        pattern: Overlap pattern to use.  ``"auto"`` (default) selects
+            automatically.  Also accepts ``"bulk_sync"``, ``"fused_seq"``,
+            ``"pc"``, ``"wg_spec"``, or a pattern class/instance.
+        hw_info: Optional hardware info override for pattern selection.
+        storage_kind: Memory storage kind.  ``"symmetric"`` (default).
+
+    Returns:
+        The output tensor ``C``.
     """
     plan = build_gemm_allscatter_plan(
         A,
@@ -868,7 +914,12 @@ def gemm_allscatter_sharded(
     hw_info: object | None = None,
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Expert API for shard/shard GEMM + all-scatter execution."""
+    """Expert API for shard/shard GEMM + all-scatter execution.
+
+    Both ``B_shard`` and ``C_shard`` are rank-local column shards of shape
+    ``(K, N / world_size)`` and ``(M, N / world_size)`` respectively.
+    ``full_N`` must be supplied explicitly.
+    """
     plan = build_gemm_allscatter_plan(
         A,
         B_shard,
@@ -942,7 +993,21 @@ def gemm_allgather(
     ctx: tncc.TNCCContext | None = None,
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Run GEMM + allgather through the stable high-level host contract."""
+    """Run fused GEMM + allgather.
+
+    Computes a local GEMM on the rank-local RHS shard, then allgathers
+    the partial results into a full output matrix.
+
+    Args:
+        A: Full LHS matrix, shape ``(M, K)``.
+        B_shard: Rank-local RHS column shard, shape ``(K, N / world_size)``.
+        C: Full output matrix, shape ``(M, N)``.
+        ctx: Runtime context.  Defaults to the global context.
+        storage_kind: Memory storage kind.  ``"symmetric"`` (default).
+
+    Returns:
+        The output tensor ``C``.
+    """
     plan = build_gemm_allgather_plan(
         A,
         B_shard,
@@ -1017,7 +1082,22 @@ def gemm_reducescatter(
     implementation: str = "auto",
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Run GEMM + reduce-scatter through the stable high-level host contract."""
+    """Run fused GEMM + reduce-scatter.
+
+    Computes a local GEMM, then reduce-scatters the full result so each
+    rank receives its output column shard.
+
+    Args:
+        A: Local rank contribution, shape ``(M, K)``.
+        B: Full RHS matrix, shape ``(K, N)``.
+        C: Rank-local output shard, shape ``(M, N / world_size)``.
+        ctx: Runtime context.  Defaults to the global context.
+        implementation: Reduce-scatter backend selection.  ``"auto"`` (default).
+        storage_kind: Memory storage kind.  ``"symmetric"`` (default).
+
+    Returns:
+        The output tensor ``C``.
+    """
     plan = build_gemm_reducescatter_plan(
         A,
         B,
@@ -1036,7 +1116,17 @@ def allgather(
     ctx: tncc.TNCCContext | None = None,
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Run the stable high-level allgather collective."""
+    """Allgather: each rank contributes ``src`` and receives all shards in ``output``.
+
+    Args:
+        src: Rank-local input tensor.
+        output: Output tensor sized to hold all gathered shards.
+        ctx: Runtime context.  Defaults to the global context.
+        storage_kind: Memory storage kind.  ``"symmetric"`` (default).
+
+    Returns:
+        The output tensor.
+    """
     plan = build_allgather_plan(
         src,
         output,
@@ -1053,7 +1143,17 @@ def allreduce(
     op: str = "sum",
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Run the stable high-level in-place allreduce collective."""
+    """In-place allreduce: sum-reduce ``tensor`` across all ranks.
+
+    Args:
+        tensor: Contiguous tensor on the symmetric heap.  Modified in place.
+        ctx: Runtime context.  Defaults to the global context.
+        op: Reduction operator.  ``"sum"`` (default).
+        storage_kind: Memory storage kind.  ``"symmetric"`` (default).
+
+    Returns:
+        The input tensor, now containing the reduced result.
+    """
     plan = build_allreduce_plan(
         tensor,
         ctx=ctx,
@@ -1071,7 +1171,18 @@ def reduce_scatter(
     implementation: str = "auto",
     storage_kind: str = "symmetric",
 ) -> Any:
-    """Run the stable high-level reduce_scatter collective."""
+    """Reduce-scatter: sum-reduce and scatter so each rank gets its shard.
+
+    Args:
+        src: Input tensor (or packed rank-major shards).
+        output: Rank-local output shard.
+        ctx: Runtime context.  Defaults to the global context.
+        implementation: Backend selection.  ``"auto"`` (default).
+        storage_kind: Memory storage kind.  ``"symmetric"`` (default).
+
+    Returns:
+        The output tensor.
+    """
     plan = build_reduce_scatter_plan(
         src,
         output,

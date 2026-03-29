@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """tncc.utils.profiling - Profiling and benchmarking utilities.
 
 Provides a context-manager profiler for tile kernels, bandwidth normalisation

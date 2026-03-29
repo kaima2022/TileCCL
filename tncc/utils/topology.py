@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """tncc.utils.topology - Hardware topology detection utilities.
 
 Provides functions to detect the GPU backend, query device properties, and

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Structured multiprocess gemm_allscatter auto-pattern coverage."""
 
 from __future__ import annotations

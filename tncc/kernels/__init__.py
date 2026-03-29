@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """tncc.kernels - Triton kernel implementations.
 
 This sub-package contains JIT-compiled Triton kernels used by the

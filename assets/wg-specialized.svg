@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 400" font-family="'SF Mono', 'Fira Code', 'Consolas', monospace" font-size="11">
+  <defs>
+    <style>
+      .outer { fill: #fafafa; stroke: #333; stroke-width: 1.4; rx: 5; }
+      .compute-box { fill: #f0f0f0; stroke: #555; stroke-width: 1; rx: 4; }
+      .comm-box { fill: #e8e8e8; stroke: #555; stroke-width: 1; rx: 4; }
+      .step-box { fill: #fff; stroke: #aaa; stroke-width: 0.8; rx: 3; }
+      .title { font-size: 12px; fill: #222; font-weight: 700; }
+      .subtitle { font-size: 10px; fill: #777; font-weight: 600; }
+      .code { font-size: 10px; fill: #333; }
+      .label { font-size: 9.5px; fill: #999; font-weight: 600; letter-spacing: 0.4px; }
+      .arrow { stroke: #666; stroke-width: 1.2; fill: none; marker-end: url(#ah); }
+      .signal-arrow { stroke: #444; stroke-width: 1.6; fill: none; marker-end: url(#ah); stroke-dasharray: 6,3; }
+      .signal-label { font-size: 9px; fill: #444; font-weight: 700; font-style: italic; }
+    </style>
+    <marker id="ah" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#666"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="340" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#111">WG-Specialized Pattern: Single Kernel, SM-Partitioned Overlap</text>
+
+  <!-- Outer kernel box -->
+  <rect class="outer" x="30" y="36" width="620" height="350"/>
+  <text class="label" x="46" y="54">SINGLE TRITON KERNEL LAUNCH</text>
+
+  <!-- Compute Workgroups -->
+  <rect class="compute-box" x="50" y="66" width="260" height="300"/>
+  <text class="title" x="180" y="86" text-anchor="middle">Compute Workgroups</text>
+  <text class="subtitle" x="180" y="100" text-anchor="middle">SM 0 .. C-1</text>
+
+  <rect class="step-box" x="70" y="116" width="220" height="32"/>
+  <text class="code" x="180" y="136" text-anchor="middle">C_tile = tile_dot(A, B)</text>
+
+  <line class="arrow" x1="180" y1="148" x2="180" y2="164"/>
+
+  <rect class="step-box" x="70" y="166" width="220" height="32"/>
+  <text class="code" x="180" y="186" text-anchor="middle">tile_store(local_C, C_tile)</text>
+
+  <line class="arrow" x1="180" y1="198" x2="180" y2="214"/>
+
+  <rect class="step-box" x="70" y="216" width="220" height="32"/>
+  <text class="code" x="180" y="236" text-anchor="middle">tile_signal(locks, tile_id)</text>
+
+  <!-- Loop arrow on compute side -->
+  <path d="M 290 236 Q 310 236 310 176 Q 310 116 290 116" class="arrow" style="stroke: #aaa; stroke-width: 0.9;"/>
+  <text x="318" y="180" font-size="9" fill="#999">tile loop</text>
+
+  <!-- Communication Workgroups -->
+  <rect class="comm-box" x="370" y="66" width="260" height="300"/>
+  <text class="title" x="500" y="86" text-anchor="middle">Comm Workgroups</text>
+  <text class="subtitle" x="500" y="100" text-anchor="middle">SM C .. N-1</text>
+
+  <rect class="step-box" x="390" y="116" width="220" height="32"/>
+  <text class="code" x="500" y="136" text-anchor="middle">tile_wait(locks, tile_id)</text>
+
+  <line class="arrow" x1="500" y1="148" x2="500" y2="164"/>
+
+  <rect class="step-box" x="390" y="166" width="220" height="32"/>
+  <text class="code" x="500" y="186" text-anchor="middle">tile_load(local_C, tile)</text>
+
+  <line class="arrow" x1="500" y1="198" x2="500" y2="214"/>
+
+  <rect class="step-box" x="390" y="216" width="220" height="44"/>
+  <text class="code" x="500" y="232" text-anchor="middle">ptr = translate_ptr(C, peer)</text>
+  <text class="code" x="500" y="248" text-anchor="middle">tile_store(remote_ptr, C_tile)</text>
+
+  <!-- Loop arrow on comm side -->
+  <path d="M 610 240 Q 630 240 630 176 Q 630 116 610 116" class="arrow" style="stroke: #aaa; stroke-width: 0.9;"/>
+  <text x="638" y="180" font-size="9" fill="#999">tile loop</text>
+
+  <!-- Signal arrow connecting compute to comm -->
+  <line class="signal-arrow" x1="292" y1="232" x2="388" y2="132"/>
+  <text class="signal-label" x="326" y="170" transform="rotate(-30, 326, 170)">signal / wait</text>
+
+  <!-- Bottom annotations -->
+  <text x="180" y="340" text-anchor="middle" font-size="9.5" fill="#777">Produces tiles into</text>
+  <text x="180" y="352" text-anchor="middle" font-size="9.5" fill="#777">local symmetric heap</text>
+
+  <text x="500" y="340" text-anchor="middle" font-size="9.5" fill="#777">Scatters tiles to peer GPUs</text>
+  <text x="500" y="352" text-anchor="middle" font-size="9.5" fill="#777">via pointer translation</text>
+</svg>

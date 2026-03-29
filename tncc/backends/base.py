@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.backends.base - Abstract base class for hardware backends.
 

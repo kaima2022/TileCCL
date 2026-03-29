@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tncc"
 version = "0.1.0"
-description = "TNCC (Tile Native Collective Communication): cross-platform tile communication library with full compiler visibility"
+description = "Experimental framework for tile-native compute-communication overlap on multi-GPU systems, built entirely in Triton"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
@@ -78,3 +78,6 @@ markers = [
     "benchmark: benchmark tests (deselect with -m 'not benchmark')",
 ]
 addopts = "-v --tb=short"
+
+[project.urls]
+Repository = "https://github.com/MaKai-Research/tncc"

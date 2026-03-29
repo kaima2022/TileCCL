@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Representative multiprocess auto-pattern validation for gemm_allscatter."""
 
 from __future__ import annotations

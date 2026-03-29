@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """P2P bandwidth benchmark for TNCC.
 
 Measures normalized bandwidth (% of theoretical peak) for:

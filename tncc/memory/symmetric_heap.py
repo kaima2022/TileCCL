@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.memory.symmetric_heap - Symmetric memory heap for multi-GPU communication.
 

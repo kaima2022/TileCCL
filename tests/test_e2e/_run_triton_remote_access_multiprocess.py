@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Real multiprocess Triton remote-access validation matrix worker.
 
 This isolates the minimal device-side requirement behind GEMM scatter and

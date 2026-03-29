@@ -1,81 +1,169 @@
-# TNCC (Tile Native Collective Communication)
+# TNCC &mdash; Tile-Native Compute-Communication Overlap
 
-**Tile Native Collective Communication with full compiler visibility.**
+**Experimental framework for fusing collective communication with tiled computation on multi-GPU systems, built entirely in [Triton](https://github.com/triton-lang/triton).**
 
-TNCC (Tile Native Collective Communication) combines the best ideas from [Iris](https://github.com/ROCm/iris), TileScale, TileLink, and [ThunderKittens](https://github.com/HazyResearch/ThunderKittens) to provide a unified tile communication library for GPU-accelerated distributed computing.
+TNCC treats communication as a first-class device-side primitive &mdash; not an opaque runtime call between kernels. It expresses allgather, reduce-scatter, allreduce, and GEMM+collective patterns as compiler-visible Triton programs, enabling tile-granularity compute-communication overlap within a single device-side program.
 
-## Key Features
+Inspired by [Iris](https://github.com/ROCm/iris) (AMD Research).
 
-- **Communication as First-Class Primitive** -- alongside compute and memory, not an afterthought
-- **Full Compiler Visibility** -- pure Triton implementation, compiler can optimize across compute-communication boundaries
-- **Hardware Portability** -- single API for NVIDIA (Hopper/Blackwell) and AMD (CDNA3/CDNA4)
-- **Built-in Overlap Patterns** -- bulk-sync, fused sequential, producer-consumer, workgroup specialization
-- **Auto Pattern Selection** -- automatically choose the best overlap strategy for your workload
+> **Status:** Pre-alpha. Validated on 2&times; NVIDIA H100 (NVLink). Not a production-ready communication library.
+
+---
 
 ## Architecture
 
-```
-User API          tncc.init / tncc.Tile / tncc.SymmetricHeap
-Pattern Library   BulkSync / FusedSequential / ProducerConsumer / WGSpecialized
-Core Primitives   compute (tile_dot) / memory (tile_load) / communication (tile_remote_store)
-Synchronization   acquire/release semantics / tile_signal / tile_wait
-Memory Mgmt       SymmetricHeap / Pointer Translation
-HAL               NVIDIA (CUDA IPC, NVLink) / AMD (HIP IPC, Infinity Fabric)
+<p align="center">
+  <img src="assets/architecture.svg" width="680" alt="TNCC layered architecture"/>
+</p>
+
+TNCC is organized as a layered stack:
+
+- **User API** (`tncc.ops`) &mdash; high-level fused operations with explicit execution contracts
+- **Plan Builder** &mdash; separates host-side validation from device-side execution; plans are reusable
+- **Overlap Patterns** &mdash; four strategies for compute-communication overlap (see below)
+- **Tile Primitives** &mdash; compute, memory, and communication as co-equal `@triton.jit` building blocks
+- **Synchronization** &mdash; acquire/release signal-wait primitives and remote atomics
+- **Symmetric Memory** &mdash; cross-GPU addressable heap with pointer translation
+- **HAL** &mdash; hardware abstraction over CUDA and HIP backends
+
+## Overlap Patterns
+
+TNCC implements four compute-communication overlap strategies. Each is a concrete, runnable execution mode &mdash; not an abstract interface.
+
+| Pattern | Mechanism | Overlap Granularity |
+|---------|-----------|-------------------|
+| **BulkSync** | GEMM &rarr; barrier &rarr; scatter | None (baseline) |
+| **FusedSequential** | Single persistent kernel; compute tile then scatter tile | Tile-level, sequential |
+| **ProducerConsumer** | Dual-stream; one computes, one scatters | Tile-level, parallel |
+| **WG-Specialized** | Single kernel; SMs partitioned into compute and comm workgroups | SM-level, parallel |
+
+<p align="center">
+  <img src="assets/wg-specialized.svg" width="640" alt="WG-Specialized pattern: SM-partitioned single kernel"/>
+</p>
+
+Auto-selection chooses among these based on problem shape and hardware topology:
+
+```python
+pattern = ctx.auto_select_pattern("gemm_allscatter", M=M, N=N, K=K)
 ```
 
+## Supported Operations
+
+| Operation | Contract | Status |
+|-----------|----------|--------|
+| `gemm_allscatter` | full/full | Supported |
+| `gemm_allscatter` | shard/shard | Supported (via `gemm_allscatter_sharded`) |
+| `gemm_allscatter` | full/shard | Supported |
+| `gemm_allgather` | shard/full | Supported |
+| `gemm_reducescatter` | full/shard | Supported |
+| `allgather` | &mdash; | Supported |
+| `allreduce` | in-place | Supported |
+| `reduce_scatter` | &mdash; | Supported |
+
+**Validated surface:** `world_size=2`, single-process peer-access and multi-process `ctypes_ipc` transport over NVLink.
+
 ## Quick Start
+
+### Installation
 
 ```bash
 pip install -e ".[dev]"
 ```
 
+### Single-Process Multi-GPU
+
 ```python
 import torch
 import tncc
 
-# Single GPU / distributed rank-local initialization
-ctx = tncc.init(backend="auto", heap_size=1 << 30)
+# Initialize with 2 GPUs in a single process
+ctxs = tncc.init_local(world_size=2, heap_size=512 * 1024 * 1024)
+ctx = ctxs[0]
 
-# Tensors now come directly from the attached symmetric heap
-A = ctx.randn(8192, 8192, dtype=torch.float16)
-B = ctx.randn(8192, 8192, dtype=torch.float16)
-C = ctx.zeros(8192, 8192, dtype=torch.float16)
+M, K, N = 4096, 4096, 8192
+A = ctx.randn(M, K, dtype=torch.float16)
+B = ctx.randn(K, N, dtype=torch.float16)
+C = ctx.zeros(M, N, dtype=torch.float16)
 
-# Use patterns for fused compute-communication
-from tncc.patterns import auto_select
-pattern = auto_select("gemm_allscatter", M=8192, N=8192, K=8192, world_size=ctx.world_size, ctx=ctx)
-pattern.execute(A, B, C)
+# Fused GEMM + all-scatter with automatic pattern selection
+tncc.ops.gemm_allscatter(A, B, C, ctx=ctx)
 ```
 
-For single-process multi-GPU experiments, use:
+### Multi-Process (torchrun)
 
 ```python
-contexts = tncc.init_local(world_size=2, heap_size=1 << 30)
-ctx0 = contexts[0]
-ctx1 = contexts[1]
+import torch
+import tncc
+
+# Each process initializes its own rank
+ctx = tncc.init(backend="auto", heap_size=1 << 30)
+
+A = ctx.randn(4096, 4096, dtype=torch.float16)
+B = ctx.randn(4096, 8192, dtype=torch.float16)
+C = ctx.zeros(4096, 8192, dtype=torch.float16)
+
+tncc.ops.gemm_allscatter(A, B, C, ctx=ctx)
 ```
 
-Pattern benchmark now auto-sizes the symmetric heap from the tested shape:
+```bash
+torchrun --nproc_per_node=2 your_script.py
+```
+
+### Reusable Execution Plans
+
+```python
+from tncc.ops import build_gemm_allscatter_plan
+
+# Build once (host-side validation + pattern selection)
+plan = build_gemm_allscatter_plan(A, B, C, ctx=ctx)
+
+# Execute many times (device-side only)
+for _ in range(100):
+    plan.execute(A, B, C)
+```
+
+## Hardware Requirements
+
+- 2&times; NVIDIA GPUs with NVLink interconnect
+- Verified on: H100 80GB PCIe (NV12 bridge)
+- CUDA 12.x, PyTorch &ge; 2.4, Triton &ge; 3.0
+
+AMD HIP backend exists but is not validated on current hardware.
+
+## Benchmarks
+
+TNCC includes a CLI for benchmarking:
 
 ```bash
-tncc bench pattern --quick --warmup 2 --iters 5
-tncc bench pattern --heap-size-mb 1024
+tncc bench pattern --quick       # Compare overlap patterns
+tncc bench gemm                  # GEMM kernel vs torch.matmul
+tncc bench p2p                   # P2P bandwidth sweep
+tncc bench collective            # Collective bandwidth
+tncc bench all                   # Run all benchmarks
 ```
 
 ## Development
 
 ```bash
-make install-dev   # Install with dev dependencies
-make test          # Run tests
-make lint          # Lint check
-make bench         # Run benchmarks
+make install-dev   # Install with dev + benchmark dependencies
+make test          # Run all tests (requires 2x GPUs)
+make test-unit     # CPU-only unit tests
+make lint          # Ruff linter
+make format        # Auto-format
+make typecheck     # mypy
 ```
 
-## Status
+## Project Status
 
-**Phase 7** -- Unified runtime context, benchmark hardening, and full-size pattern reruns.
-See [CLAUDE.md](CLAUDE.md) for the current engineering status and measured baselines.
+TNCC is an experimental research project in pre-alpha. Current scope and known limitations:
+
+- Validated on `world_size=2` only; larger configurations are untested
+- Overlap patterns are validated for `gemm_allscatter`; other ops use host-side collective launchers
+- Memory subsystem uses copy-based import; zero-copy fd-passing / DMA-BUF mapping is not yet implemented
+- AMD HIP backend is structurally present but not hardware-validated
+
+Contributions, bug reports, and discussions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Apache 2.0
+[Apache 2.0](LICENSE)

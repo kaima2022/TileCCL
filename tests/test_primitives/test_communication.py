@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for cross-GPU communication primitives using real Triton kernels.
 
 All tests in this module require at least 2 GPUs and use

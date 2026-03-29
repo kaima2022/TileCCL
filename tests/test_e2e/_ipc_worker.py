@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Worker function for multi-GPU IPC tests (must be importable for mp.spawn)."""
 
 import ctypes

@@ -1,4 +1,4 @@
-.PHONY: install install-dev test bench lint typecheck audit clean help
+.PHONY: install install-dev test bench lint typecheck clean help
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -33,9 +33,6 @@ format:  ## Format code with ruff
 
 typecheck:  ## Run mypy type checker
 	mypy tncc/
-
-audit:  ## Run Iris source code audit
-	python scripts/audit_iris.py
 
 clean:  ## Remove build artifacts
 	rm -rf build/ dist/ *.egg-info .pytest_cache .mypy_cache .ruff_cache

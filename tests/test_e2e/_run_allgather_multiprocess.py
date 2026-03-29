@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Real multiprocess allgather validation."""
 
 from __future__ import annotations

@@ -1,14 +1,17 @@
-"""TNCC (Tile Native Collective Communication): cross-platform tile communication library with full compiler visibility.
+# SPDX-License-Identifier: Apache-2.0
+"""TNCC -- Tile-Native Compute-Communication Overlap.
 
-TNCC (Tile Native Collective Communication) combines the best ideas from Iris, TileScale, TileLink, and ThunderKittens
-to provide a unified tile communication library that works across NVIDIA and AMD GPUs.
+Experimental framework for fusing collective communication with tiled
+computation on multi-GPU systems, built entirely in Triton with full
+compiler visibility.
 
-Key features:
-- Communication as first-class primitive (alongside compute and memory)
-- Full compiler visibility (pure Triton implementation)
-- Hardware portability (NVIDIA Hopper/Blackwell + AMD CDNA3/CDNA4)
-- Multi-scale unified abstraction
-- Built-in compute-communication overlap patterns
+Public entry points::
+
+    tncc.init(...)          # distributed or single-rank initialization
+    tncc.init_local(...)    # single-process multi-GPU setup
+    tncc.ops.*              # high-level fused operations
+
+See the README for usage examples.
 """
 
 from __future__ import annotations

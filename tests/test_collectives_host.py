@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tests for host-side collective launchers."""
 
 from __future__ import annotations

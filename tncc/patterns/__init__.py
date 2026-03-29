@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 tncc.patterns - Pre-built compute-communication overlap patterns.
 

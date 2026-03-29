@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """tncc.utils - Utility modules for topology detection and profiling."""
 
 from tncc.utils.topology import TopologyDetector

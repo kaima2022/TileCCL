@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Structured multiprocess reduce_scatter(device) benchmark/diagnostic matrix."""
 
 from __future__ import annotations

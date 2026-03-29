@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """GEMM performance benchmark.
 
 Compares tncc.kernels.gemm against torch.matmul across various
