@@ -12,17 +12,39 @@ TNCC brings collective communication into the tile programming model. Instead of
 
 ## Key Features
 
-Traditional collective libraries (NCCL, NVSHMEM) treat communication as opaque runtime calls invisible to the compiler. TNCC takes a fundamentally different approach — communication is a first-class tile primitive.
+- **Three primitive groups, one compiler view.** Data movement (`tile_put`, `tile_get`, `tile_remote_store`), synchronization (`tile_signal`, `tile_wait`, remote atomics), and collectives (`tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`) — all `@triton.jit` functions the Triton compiler can see and optimize end-to-end.
 
-- **Three primitive groups form the core.** Data movement (`tile_put`, `tile_get`, `tile_remote_store`), synchronization (`tile_signal`, `tile_wait`, remote atomics), and collectives (`tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`) — all expressed as `@triton.jit` functions that the compiler can see and optimize end-to-end.
+- **symmetric memory.** A 5-instruction `translate_ptr` maps any local heap offset to a peer GPU's address space. No staging buffers, no memcpy, no host round-trips — kernels directly read and write remote memory over NVLink or xGMI.
 
-- **Zero-copy remote access.** A 5-instruction pointer translation (`translate_ptr`) maps any local heap offset to a peer GPU's address space. No staging buffers, no memcpy intermediaries — the kernel directly reads and writes remote memory.
-
-- **Tile-granularity overlap.** Communication begins the moment a tile is produced, not after the entire matrix is computed. This is the key to hiding communication latency behind useful compute.
+- **Tile-granularity overlap.** Communication begins the moment a tile is produced, not after the entire matrix is computed. Within a single persistent kernel, compute and communication interleave at tile boundaries, hiding latency behind useful work.
 
 - **No opaque runtime.** Ring allreduce, direct-write allgather, atomic reduce-scatter — all implemented as pure Triton programs. The compiler optimizes the full compute-communication graph as a single program.
 
-- **Symmetric memory model.** Identical heaps across GPUs make address translation trivial and enable hardware-level peer access over NVLink or xGMI.
+- **Cross-vendor from single source.** The same Triton primitive code compiles for NVIDIA (CUDA / NVLink) and AMD (HIP / xGMI). Backend abstraction handles IPC, topology detection, and peer access without changing the kernel source.
+
+- **Plan-based execution.** Build an execution plan once (`build_gemm_allscatter_plan`), then reuse it across iterations. Planning overhead — pattern selection, contract validation, workspace allocation — is amortized to near zero.
+
+## How It Works
+
+Traditional collective libraries launch communication as a separate opaque step *after* computation finishes. TNCC eliminates this boundary: a single kernel computes a tile, immediately scatters it to peers, and moves on to the next tile — all within the compiler's view.
+
+<p align="center">
+  <img src="assets/architecture.png" width="720" alt="Traditional bulk-synchronous vs. TNCC tile-native overlap"/>
+</p>
+
+### Tile Primitive Groups
+
+**Data Movement** — Two modes of cross-GPU tile transfer:
+- *Value-based* (`tile_remote_load`, `tile_remote_store`): register-to-remote, fine-grained, ideal for small tiles.
+- *Pointer-based* (`tile_put`, `tile_get`): memory-to-remote, RDMA-style, bulk throughput.
+
+**Synchronization** — Tile-level coordination with explicit memory ordering:
+- Producer-consumer: `tile_signal` / `tile_wait` (acquire-release semantics).
+- Remote atomics: `tile_atomic_add`, `cas`, `xchg`, `min`, `max`, `and`, `or`, `xor` — all with configurable scope (`gpu` / `sys`).
+
+**Tile Collectives** — Standard collective algorithms as pure Triton JIT code:
+- `tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`, `tile_broadcast`, `tile_scatter`.
+- Implemented as ring protocols — fully visible to the compiler, no NCCL dependency.
 
 ## Quick Start
 
@@ -46,29 +68,6 @@ tncc.ops.gemm_allscatter(A, B, C, ctx=ctx)
 
 See [`examples/`](examples/) for single-process, multi-process, and pattern benchmarking scripts.
 
-## Compute-Communication Overlap
-
-TNCC implements four overlap strategies. Each trades off implementation complexity for overlap opportunity — from a bulk-synchronous baseline to SM-partitioned workgroup specialization.
-
-Inspired by [Iris](https://github.com/ROCm/iris) (AMD Research).
-
-<p align="center">
-  <img src="assets/architecture.png" width="720" alt="Tile-native compute-communication overlap"/>
-</p>
-
-| Pattern | Mechanism | Overlap |
-|---------|-----------|---------|
-| **BulkSync** | GEMM, barrier, then scatter | None (baseline) |
-| **FusedSequential** | Single persistent kernel; compute tile then scatter tile | Tile-level, sequential |
-| **ProducerConsumer** | Dual-stream; compute and scatter in parallel | Tile-level, parallel |
-| **WG-Specialized** | Single kernel; SMs partitioned into compute and comm workgroups | SM-level, parallel |
-
-Auto-selection chooses the best pattern based on problem shape and hardware:
-
-```python
-pattern = ctx.auto_select_pattern("gemm_allscatter", M=M, N=N, K=K)
-```
-
 ## Supported Operations
 
 | Operation | Contract |
@@ -79,6 +78,20 @@ pattern = ctx.auto_select_pattern("gemm_allscatter", M=M, N=N, K=K)
 | `allgather` | &mdash; |
 | `allreduce` | in-place |
 | `reduce_scatter` | &mdash; |
+
+## Compute-Communication Overlap Patterns
+
+TNCC implements four overlap strategies, inspired by [Iris](https://github.com/ROCm/iris) (AMD Research). Each trades off complexity for overlap opportunity — from a bulk-synchronous baseline to SM-partitioned workgroup specialization.
+
+<p align="center">
+  <img src="assets/overlap-patterns.png" width="680" alt="Overlap pattern taxonomy"/>
+</p>
+
+Auto-selection chooses the best pattern based on problem shape and hardware:
+
+```python
+pattern = ctx.auto_select_pattern("gemm_allscatter", M=M, N=N, K=K)
+```
 
 ## Development
 
@@ -100,8 +113,8 @@ tncc bench all                # Run all benchmarks
 
 ## Requirements
 
-- NVIDIA GPUs with NVLink interconnect (verified on H100 PCIe)
-- CUDA 12.x, PyTorch >= 2.4, Triton >= 3.0
+- NVIDIA GPUs with NVLink interconnect (verified on H100 PCIe), or AMD GPUs with xGMI
+- CUDA 12.x / ROCm 6.x, PyTorch >= 2.4, Triton >= 3.0
 
 ## Contributing
 

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 440" font-family="'Helvetica Neue', 'Arial', sans-serif">
+  <defs>
+    <marker id="tf-arrow" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 9 3, 0 6" fill="#D07A28"/>
+    </marker>
+    <marker id="tf-arrow-blue" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 9 3, 0 6" fill="#3968A8"/>
+    </marker>
+  </defs>
+
+  <rect width="840" height="440" fill="#fff"/>
+
+  <!-- Title -->
+  <text x="420" y="30" text-anchor="middle" font-size="17" font-weight="700" fill="#111">Zero-Copy Tile Communication</text>
+  <text x="420" y="52" text-anchor="middle" font-size="11.5" fill="#888">Kernels directly read and write remote GPU memory — no staging buffers, no host copies</text>
+
+  <!-- ========== GPU 0 ========== -->
+  <rect x="38" y="76" width="290" height="268" rx="12" fill="#fafafa" stroke="#d0d0d0" stroke-width="1.2"/>
+  <text x="183" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#333" letter-spacing="0.5">GPU 0</text>
+
+  <!-- Heap -->
+  <rect x="58" y="112" width="250" height="210" rx="8" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="68" y="130" font-size="9" font-weight="600" fill="#bbb" letter-spacing="0.8">SYMMETRIC HEAP</text>
+
+  <!-- Segments in heap -->
+  <rect x="72" y="140" width="222" height="26" rx="4" fill="#f4f4f4" stroke="#e8e8e8" stroke-width="0.8"/>
+  <text x="183" y="157" text-anchor="middle" font-size="10" fill="#aaa">tensor A</text>
+
+  <rect x="72" y="172" width="222" height="26" rx="4" fill="#f4f4f4" stroke="#e8e8e8" stroke-width="0.8"/>
+  <text x="183" y="189" text-anchor="middle" font-size="10" fill="#aaa">tensor B</text>
+
+  <!-- HIGHLIGHTED tile being sent -->
+  <rect x="72" y="204" width="222" height="34" rx="4" fill="#FDF2E6" stroke="#E8963A" stroke-width="1.5"/>
+  <rect x="72" y="204" width="118" height="34" rx="4" fill="#E8963A" opacity="0.88"/>
+  <text x="131" y="225" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">tile [i]</text>
+  <text x="220" y="225" text-anchor="middle" font-size="9.5" fill="#D07A28" font-weight="600">← src</text>
+
+  <rect x="72" y="244" width="222" height="26" rx="4" fill="#f4f4f4" stroke="#e8e8e8" stroke-width="0.8"/>
+  <text x="183" y="261" text-anchor="middle" font-size="10" fill="#aaa">tensor C</text>
+
+  <rect x="72" y="276" width="222" height="30" rx="4" fill="#fbfbfb" stroke="#eee" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="183" y="295" text-anchor="middle" font-size="9.5" fill="#ccc">free</text>
+
+  <!-- base[0] -->
+  <text x="183" y="332" text-anchor="middle" font-size="10.5" font-weight="500" fill="#777">heap_base[0]</text>
+
+  <!-- ========== GPU 1 ========== -->
+  <rect x="512" y="76" width="290" height="268" rx="12" fill="#fafafa" stroke="#d0d0d0" stroke-width="1.2"/>
+  <text x="657" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#333" letter-spacing="0.5">GPU 1</text>
+
+  <!-- Heap -->
+  <rect x="532" y="112" width="250" height="210" rx="8" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="542" y="130" font-size="9" font-weight="600" fill="#bbb" letter-spacing="0.8">SYMMETRIC HEAP</text>
+
+  <!-- Segments (IDENTICAL LAYOUT) -->
+  <rect x="546" y="140" width="222" height="26" rx="4" fill="#f4f4f4" stroke="#e8e8e8" stroke-width="0.8"/>
+  <text x="657" y="157" text-anchor="middle" font-size="10" fill="#aaa">tensor A</text>
+
+  <rect x="546" y="172" width="222" height="26" rx="4" fill="#f4f4f4" stroke="#e8e8e8" stroke-width="0.8"/>
+  <text x="657" y="189" text-anchor="middle" font-size="10" fill="#aaa">tensor B</text>
+
+  <!-- HIGHLIGHTED tile being received -->
+  <rect x="546" y="204" width="222" height="34" rx="4" fill="#EBF1F8" stroke="#4A7FC7" stroke-width="1.5"/>
+  <rect x="546" y="204" width="118" height="34" rx="4" fill="#4A7FC7" opacity="0.88"/>
+  <text x="605" y="225" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">tile [i]</text>
+  <text x="696" y="225" text-anchor="middle" font-size="9.5" fill="#3968A8" font-weight="600">dst →</text>
+
+  <rect x="546" y="244" width="222" height="26" rx="4" fill="#f4f4f4" stroke="#e8e8e8" stroke-width="0.8"/>
+  <text x="657" y="261" text-anchor="middle" font-size="10" fill="#aaa">tensor C</text>
+
+  <rect x="546" y="276" width="222" height="30" rx="4" fill="#fbfbfb" stroke="#eee" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="657" y="295" text-anchor="middle" font-size="9.5" fill="#ccc">free</text>
+
+  <!-- base[1] -->
+  <text x="657" y="332" text-anchor="middle" font-size="10.5" font-weight="500" fill="#777">heap_base[1]</text>
+
+  <!-- ========== Center: translate_ptr ========== -->
+
+  <!-- Main transfer arrow -->
+  <line x1="294" y1="221" x2="543" y2="221" stroke="#D07A28" stroke-width="2.2" marker-end="url(#tf-arrow)"/>
+
+  <!-- translate_ptr pill -->
+  <rect x="350" y="176" width="140" height="30" rx="15" fill="#FDF2E6" stroke="#E8963A" stroke-width="1.2"/>
+  <text x="420" y="196" text-anchor="middle" font-size="12" font-weight="700" fill="#D07A28">translate_ptr</text>
+
+  <!-- Formula box -->
+  <rect x="345" y="244" width="150" height="52" rx="6" fill="#fafafa" stroke="#e0e0e0" stroke-width="0.8"/>
+  <text x="420" y="264" text-anchor="middle" font-size="10" fill="#555" font-family="'SF Mono', 'Consolas', 'Menlo', monospace" font-weight="500">off = ptr − base[0]</text>
+  <text x="420" y="284" text-anchor="middle" font-size="10" fill="#555" font-family="'SF Mono', 'Consolas', 'Menlo', monospace" font-weight="500">rem = base[1] + off</text>
+
+  <!-- "5 instructions" badge -->
+  <rect x="374" y="303" width="92" height="20" rx="10" fill="#f0f0f0" stroke="#ccc" stroke-width="0.8"/>
+  <text x="420" y="317" text-anchor="middle" font-size="9" font-weight="600" fill="#888">5 instructions</text>
+
+  <!-- "identical layout" annotation -->
+  <text x="420" y="352" text-anchor="middle" font-size="10" font-weight="600" fill="#999">← identical heap layout →</text>
+  <text x="420" y="368" text-anchor="middle" font-size="9.5" fill="#bbb">same offset on every rank = same tile</text>
+
+  <!-- ========== Bottom annotation ========== -->
+  <rect x="115" y="390" width="610" height="40" rx="10" fill="#f0f7f3" stroke="#b8d9c5" stroke-width="1"/>
+  <text x="420" y="410" text-anchor="middle" font-size="11.5" font-weight="600" fill="#3a7a55">No staging buffers  ·  No memcpy  ·  No host round-trips</text>
+  <text x="420" y="425" text-anchor="middle" font-size="10" fill="#5BA87B">Direct hardware peer access over NVLink / xGMI</text>
+
+</svg>
