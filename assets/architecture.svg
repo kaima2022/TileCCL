@@ -1,92 +1,149 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 520" font-family="'SF Mono', 'Fira Code', 'Consolas', monospace" font-size="11">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 420" font-family="'Helvetica Neue', 'Arial', sans-serif">
   <defs>
     <style>
-      .layer-box { fill: #f8f8f8; stroke: #333; stroke-width: 1.2; rx: 4; }
-      .layer-label { font-size: 10px; fill: #888; font-weight: 600; letter-spacing: 0.5px; }
-      .title-text { font-size: 12px; fill: #222; font-weight: 700; }
-      .body-text { font-size: 10.5px; fill: #444; }
-      .accent-box { fill: #ededed; stroke: #999; stroke-width: 0.8; rx: 3; }
-      .arrow { stroke: #666; stroke-width: 1.2; fill: none; marker-end: url(#arrowhead); }
-      .divider { stroke: #ccc; stroke-width: 0.6; stroke-dasharray: 4,3; }
+      .bg { fill: #fff; }
+      .fig-title { font-size: 16px; fill: #111; font-weight: 700; }
+      .section-title { font-size: 13px; fill: #333; font-weight: 700; }
+      .sub-label { font-size: 10.5px; fill: #555; font-weight: 600; }
+      .desc { font-size: 10px; fill: #777; }
+      .gemm-fill { fill: #4A7FC7; }
+      .comm-fill { fill: #E8963A; }
+      .barrier-fill { fill: #ccc; }
+      .fused-fill { fill: #5BA87B; }
+      .box-stroke { stroke: #444; stroke-width: 1; fill: none; rx: 3; }
+      .arrow { stroke: #555; stroke-width: 1.2; fill: none; marker-end: url(#ah2); }
+      .time-arrow { stroke: #999; stroke-width: 1; fill: none; marker-end: url(#ah3); }
+      .dashed { stroke-dasharray: 5,3; }
+      .legend-text { font-size: 10px; fill: #444; }
     </style>
-    <marker id="arrowhead" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
-      <polygon points="0 0, 7 2.5, 0 5" fill="#666"/>
+    <marker id="ah2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+    <marker id="ah3" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
+      <polygon points="0 0, 6 2.5, 0 5" fill="#999"/>
     </marker>
   </defs>
 
-  <!-- Title -->
-  <text x="360" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#111">TNCC Architecture</text>
+  <rect class="bg" width="820" height="420"/>
 
-  <!-- Layer 0: User API -->
-  <rect class="layer-box" x="40" y="40" width="640" height="62"/>
-  <text class="layer-label" x="56" y="56">USER API</text>
-  <text class="title-text" x="56" y="72">tncc.ops</text>
-  <text class="body-text" x="56" y="90">gemm_allscatter  ·  gemm_allgather  ·  gemm_reducescatter  ·  allgather  ·  allreduce  ·  reduce_scatter</text>
+  <!-- Figure title -->
+  <text class="fig-title" x="410" y="28" text-anchor="middle">Tile-Native Compute-Communication Overlap</text>
 
-  <line class="arrow" x1="360" y1="102" x2="360" y2="118"/>
+  <!-- Divider line -->
+  <line x1="400" y1="44" x2="400" y2="390" stroke="#ddd" stroke-width="1" stroke-dasharray="6,4"/>
 
-  <!-- Layer 1: Plan Builder -->
-  <rect class="layer-box" x="40" y="120" width="640" height="50"/>
-  <text class="layer-label" x="56" y="136">PLAN BUILDER</text>
-  <text class="body-text" x="56" y="154">build_*_plan()  →  PatternExecutionSpec  →  plan.execute()</text>
+  <!-- ========== LEFT: Traditional Approach ========== -->
+  <text class="section-title" x="200" y="58" text-anchor="middle">Traditional Approach</text>
+  <text class="desc" x="200" y="74" text-anchor="middle">Sequential kernel launches, opaque runtime calls</text>
 
-  <line class="arrow" x1="360" y1="170" x2="360" y2="186"/>
+  <!-- Time arrow -->
+  <line class="time-arrow" x1="52" y1="100" x2="52" y2="370"/>
+  <text class="desc" x="46" y="240" text-anchor="middle" transform="rotate(-90, 46, 240)">time</text>
 
-  <!-- Layer 2: Pattern Library — 4 boxes side by side -->
-  <rect class="layer-box" x="40" y="188" width="640" height="82"/>
-  <text class="layer-label" x="56" y="204">OVERLAP PATTERNS</text>
+  <!-- GPU 0 column -->
+  <text class="sub-label" x="140" y="96">GPU 0</text>
+  <!-- GEMM block -->
+  <rect class="gemm-fill" x="80" y="105" width="120" height="100" rx="3" opacity="0.85"/>
+  <text x="140" y="160" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">GEMM</text>
+  <text x="140" y="176" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">full matrix</text>
 
-  <rect class="accent-box" x="56" y="212" width="142" height="48"/>
-  <text class="title-text" x="127" y="228" text-anchor="middle">BulkSync</text>
-  <text class="body-text" x="127" y="244" text-anchor="middle" font-size="9.5" fill="#666">sequential baseline</text>
+  <!-- Barrier -->
+  <rect class="barrier-fill" x="80" y="210" width="120" height="24" rx="2"/>
+  <text x="140" y="226" text-anchor="middle" fill="#666" font-size="10">barrier</text>
 
-  <rect class="accent-box" x="210" y="212" width="142" height="48"/>
-  <text class="title-text" x="281" y="228" text-anchor="middle">FusedSequential</text>
-  <text class="body-text" x="281" y="244" text-anchor="middle" font-size="9.5" fill="#666">single kernel, tile-seq</text>
+  <!-- Scatter -->
+  <rect class="comm-fill" x="80" y="239" width="120" height="70" rx="3" opacity="0.85"/>
+  <text x="140" y="278" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Scatter</text>
 
-  <rect class="accent-box" x="364" y="212" width="142" height="48"/>
-  <text class="title-text" x="435" y="228" text-anchor="middle">ProducerConsumer</text>
-  <text class="body-text" x="435" y="244" text-anchor="middle" font-size="9.5" fill="#666">dual-stream parallel</text>
+  <!-- GPU 1 column -->
+  <text class="sub-label" x="280" y="96">GPU 1</text>
+  <rect class="gemm-fill" x="220" y="105" width="120" height="100" rx="3" opacity="0.85"/>
+  <text x="280" y="160" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">GEMM</text>
+  <text x="280" y="176" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9">full matrix</text>
+  <rect class="barrier-fill" x="220" y="210" width="120" height="24" rx="2"/>
+  <text x="280" y="226" text-anchor="middle" fill="#666" font-size="10">barrier</text>
+  <rect class="comm-fill" x="220" y="239" width="120" height="70" rx="3" opacity="0.85"/>
+  <text x="280" y="278" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Scatter</text>
 
-  <rect class="accent-box" x="518" y="212" width="148" height="48"/>
-  <text class="title-text" x="592" y="228" text-anchor="middle">WG-Specialized</text>
-  <text class="body-text" x="592" y="244" text-anchor="middle" font-size="9.5" fill="#666">SM-partitioned kernel</text>
+  <!-- Arrows between GPUs (traditional) -->
+  <line class="arrow" x1="200" y1="274" x2="218" y2="274"/>
+  <line class="arrow" x1="218" y1="262" x2="200" y2="262"/>
 
-  <line class="arrow" x1="360" y1="270" x2="360" y2="286"/>
+  <!-- Idle annotation -->
+  <rect x="80" y="314" width="260" height="40" rx="2" fill="#f5f5f5" stroke="#ddd" stroke-width="0.8"/>
+  <text x="210" y="330" text-anchor="middle" fill="#888" font-size="10">Communication cannot begin</text>
+  <text x="210" y="344" text-anchor="middle" fill="#888" font-size="10">until all compute tiles finish</text>
 
-  <!-- Layer 3: Tile Primitives — 3 sub-boxes -->
-  <rect class="layer-box" x="40" y="288" width="640" height="72"/>
-  <text class="layer-label" x="56" y="304">TILE PRIMITIVES</text>
+  <!-- ========== RIGHT: TNCC Approach ========== -->
+  <text class="section-title" x="620" y="58" text-anchor="middle">TNCC: Tile-Native Overlap</text>
+  <text class="desc" x="620" y="74" text-anchor="middle">Compute and communicate tile-by-tile within one kernel</text>
 
-  <rect class="accent-box" x="56" y="312" width="194" height="38"/>
-  <text class="title-text" x="153" y="326" text-anchor="middle">Compute</text>
-  <text class="body-text" x="153" y="340" text-anchor="middle" font-size="9.5" fill="#666">tile_dot · tile_reduce</text>
+  <!-- Time arrow -->
+  <line class="time-arrow" x1="452" y1="100" x2="452" y2="370"/>
+  <text class="desc" x="446" y="240" text-anchor="middle" transform="rotate(-90, 446, 240)">time</text>
 
-  <rect class="accent-box" x="263" y="312" width="194" height="38"/>
-  <text class="title-text" x="360" y="326" text-anchor="middle">Memory</text>
-  <text class="body-text" x="360" y="340" text-anchor="middle" font-size="9.5" fill="#666">tile_load · tile_store</text>
+  <!-- GPU 0 -->
+  <text class="sub-label" x="540" y="96">GPU 0</text>
+  <!-- Fused kernel outline -->
+  <rect x="480" y="105" width="120" height="240" rx="3" fill="none" stroke="#666" stroke-width="1.2"/>
 
-  <rect class="accent-box" x="470" y="312" width="196" height="38"/>
-  <text class="title-text" x="568" y="326" text-anchor="middle">Communication</text>
-  <text class="body-text" x="568" y="340" text-anchor="middle" font-size="9.5" fill="#666">tile_remote_store · tile_put</text>
+  <!-- Interleaved tiles -->
+  <rect class="gemm-fill" x="484" y="109" width="112" height="28" rx="2" opacity="0.8"/>
+  <text x="540" y="127" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 0</text>
+  <rect class="comm-fill" x="484" y="141" width="112" height="20" rx="2" opacity="0.8"/>
+  <text x="540" y="155" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 0</text>
 
-  <line class="arrow" x1="360" y1="360" x2="360" y2="376"/>
+  <rect class="gemm-fill" x="484" y="165" width="112" height="28" rx="2" opacity="0.8"/>
+  <text x="540" y="183" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 1</text>
+  <rect class="comm-fill" x="484" y="197" width="112" height="20" rx="2" opacity="0.8"/>
+  <text x="540" y="211" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 1</text>
 
-  <!-- Layer 4: Synchronization -->
-  <rect class="layer-box" x="40" y="378" width="640" height="42"/>
-  <text class="layer-label" x="56" y="394">SYNCHRONIZATION</text>
-  <text class="body-text" x="56" y="410">tile_signal  ·  tile_wait  ·  tile_barrier  ·  tile_atomic_{add, cas, xchg}      acquire / release semantics</text>
+  <rect class="gemm-fill" x="484" y="221" width="112" height="28" rx="2" opacity="0.8"/>
+  <text x="540" y="239" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 2</text>
+  <rect class="comm-fill" x="484" y="253" width="112" height="20" rx="2" opacity="0.8"/>
+  <text x="540" y="267" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 2</text>
 
-  <line class="arrow" x1="360" y1="420" x2="360" y2="434"/>
+  <rect class="gemm-fill" x="484" y="277" width="112" height="28" rx="2" opacity="0.75"/>
+  <text x="540" y="295" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 3</text>
+  <rect class="comm-fill" x="484" y="309" width="112" height="20" rx="2" opacity="0.75"/>
+  <text x="540" y="323" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 3</text>
 
-  <!-- Layer 5: Memory -->
-  <rect class="layer-box" x="40" y="436" width="640" height="36"/>
-  <text class="layer-label" x="56" y="454">SYMMETRIC MEMORY</text>
-  <text class="body-text" x="200" y="454">SymmetricHeap  ·  Pointer Translation  ·  Allocators</text>
+  <!-- GPU 1 -->
+  <text class="sub-label" x="680" y="96">GPU 1</text>
+  <rect x="620" y="105" width="120" height="240" rx="3" fill="none" stroke="#666" stroke-width="1.2"/>
 
-  <line class="arrow" x1="360" y1="472" x2="360" y2="484"/>
+  <rect class="gemm-fill" x="624" y="109" width="112" height="28" rx="2" opacity="0.8"/>
+  <text x="680" y="127" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 0</text>
+  <rect class="comm-fill" x="624" y="141" width="112" height="20" rx="2" opacity="0.8"/>
+  <text x="680" y="155" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 0</text>
 
-  <!-- Layer 6: HAL -->
-  <rect class="layer-box" x="40" y="486" width="640" height="28" style="fill: #efefef;"/>
-  <text class="body-text" x="360" y="504" text-anchor="middle" font-weight="600" fill="#555">CUDA  (NVLink · IPC)                                          HIP  (xGMI · IPC)</text>
+  <rect class="gemm-fill" x="624" y="165" width="112" height="28" rx="2" opacity="0.8"/>
+  <text x="680" y="183" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 1</text>
+  <rect class="comm-fill" x="624" y="197" width="112" height="20" rx="2" opacity="0.8"/>
+  <text x="680" y="211" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 1</text>
+
+  <rect class="gemm-fill" x="624" y="221" width="112" height="28" rx="2" opacity="0.8"/>
+  <text x="680" y="239" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 2</text>
+  <rect class="comm-fill" x="624" y="253" width="112" height="20" rx="2" opacity="0.8"/>
+  <text x="680" y="267" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 2</text>
+
+  <rect class="gemm-fill" x="624" y="277" width="112" height="28" rx="2" opacity="0.75"/>
+  <text x="680" y="295" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="500">compute tile 3</text>
+  <rect class="comm-fill" x="624" y="309" width="112" height="20" rx="2" opacity="0.75"/>
+  <text x="680" y="323" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 3</text>
+
+  <!-- Cross-GPU arrows (TNCC side) — tile-by-tile -->
+  <line class="arrow" x1="596" y1="151" x2="622" y2="151" stroke="#E8963A" stroke-width="1"/>
+  <line class="arrow" x1="622" y1="207" x2="596" y2="207" stroke="#E8963A" stroke-width="1"/>
+
+  <!-- TNCC annotation -->
+  <rect x="480" y="352" width="260" height="40" rx="2" fill="#f0f7f3" stroke="#5BA87B" stroke-width="0.8"/>
+  <text x="610" y="368" text-anchor="middle" fill="#3a7a55" font-size="10" font-weight="600">Communication begins as soon as</text>
+  <text x="610" y="382" text-anchor="middle" fill="#3a7a55" font-size="10" font-weight="600">each tile is produced</text>
+
+  <!-- Legend -->
+  <rect class="gemm-fill" x="200" y="380" width="14" height="10" rx="2" opacity="0.85"/>
+  <text class="legend-text" x="218" y="389">Compute</text>
+  <rect class="comm-fill" x="280" y="380" width="14" height="10" rx="2" opacity="0.85"/>
+  <text class="legend-text" x="298" y="389">Communication</text>
 </svg>

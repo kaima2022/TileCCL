@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TNCC -- Tile-Native Compute-Communication Overlap.
+"""TNCC -- Tile-Native Collective Communication.
 
-Experimental framework for fusing collective communication with tiled
-computation on multi-GPU systems, built entirely in Triton with full
-compiler visibility.
+Collective communication as compiler-visible tile primitives in Triton,
+with built-in compute-communication overlap patterns.
 
 Public entry points::
 

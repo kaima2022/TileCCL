@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tncc"
 version = "0.1.0"
-description = "Experimental framework for tile-native compute-communication overlap on multi-GPU systems, built entirely in Triton"
+description = "Tile-native collective communication for multi-GPU systems, built entirely in Triton"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
