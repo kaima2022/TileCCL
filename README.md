@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="420" alt="TNCC"/>
+</p>
+
 # TNCC: Tile-Native Collective Communication
 
 TNCC brings collective communication into the tile programming model. Instead of treating communication as opaque runtime calls between kernels, TNCC expresses allgather, reduce-scatter, allreduce, and GEMM+collective patterns as compiler-visible Triton programs, where compute and communication operate at the same tile granularity within a single device-side program.
@@ -14,6 +18,12 @@ Inspired by [Iris](https://github.com/ROCm/iris) (AMD Research).
 - **Overlap at tile granularity.** Communication can begin as soon as a tile is produced, not after the entire matrix is computed.
 - **Four overlap patterns.** From bulk-synchronous baseline to SM-partitioned workgroup specialization, each a concrete executable strategy.
 - **Plan-based execution.** Host-side validation is separated from device-side execution. Plans are built once and reused.
+
+## Architecture
+
+<p align="center">
+  <img src="assets/system-overview.png" width="680" alt="TNCC system architecture"/>
+</p>
 
 ## Overlap Patterns
 
