@@ -356,6 +356,9 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             "transport_strategy": heap.transport_strategy,
             "mode": heap.mode,
             "heap_size_mb": heap_size_bytes // (1024 * 1024),
+            "plan_queue_slots": plan.execution.slot_count,
+            "plan_credit_window": plan.execution.credit_window,
+            "plan_tile_rows": plan.execution.tile_rows,
             "plan_ok": plan_ok,
             "plan_max_abs_diff": plan_max_abs_diff,
             "plan_sample": plan_sample,
@@ -456,4 +459,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -344,6 +344,10 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
         assert plan.runtime.signal_mode == "binary"
         assert plan.runtime.role_order == ("compute", "gather")
         assert plan.runtime.stage_count == 2
+        assert plan.execution.slot_count == 1
+        assert plan.execution.credit_window == 1
+        assert plan.execution.tile_rows == M
+        assert plan.execution.workspace_owners == ("compute", "gather")
         assert payload["op"] == "gemm_allgather"
         assert payload["runtime"]["scheduler"] == "tile_scheduler_v1"
         assert payload["runtime"]["role_order"] == ["compute", "gather"]
@@ -352,6 +356,10 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
             "gemm_allgather.local_output_shard",
             "gemm_allgather.gathered_output_shards",
         ]
+        assert payload["execution"]["queue"]["policy"] == "credit_gated_segmented"
+        assert payload["execution"]["queue"]["slot_count"] == 1
+        assert payload["execution"]["queue"]["credit_window"] == 1
+        assert payload["execution"]["workspace_owners"] == ["compute", "gather"]
         assert payload["contract"]["full_N"] == N
         assert payload["allgather_plan"]["block_size"] == M * N
     finally:
@@ -398,6 +406,10 @@ def test_gemm_allgather_multigpu(
             B_shard = B_shards_host[rank].to(device=ctx.device, dtype=torch.float16)
             C = ctx.zeros(M, N, dtype=torch.float16)
 
+            plan = tncc.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
+            assert plan.execution.slot_count == 2
+            assert plan.execution.credit_window == 2
+            assert plan.execution.tile_rows == 32
             tncc.ops.gemm_allgather(A, B_shard, C, ctx=ctx)
             outputs.append(C)
 
@@ -517,6 +529,10 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
         assert plan.runtime.role_order == ("compute", "scatter")
         assert plan.runtime.stage_count == 2
         assert plan.implementation == "reference"
+        assert plan.execution.slot_count == 1
+        assert plan.execution.credit_window == 1
+        assert plan.execution.tile_rows == M
+        assert plan.execution.workspace_owners == ("compute", "scatter")
         assert payload["op"] == "gemm_reducescatter"
         assert payload["implementation"] == "reference"
         assert payload["runtime"]["communication"] == "reduce_scatter"
@@ -526,6 +542,10 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
             "gemm_reducescatter.local_full_output",
             "gemm_reducescatter.packed_input",
         ]
+        assert payload["execution"]["queue"]["policy"] == "credit_gated_segmented"
+        assert payload["execution"]["queue"]["slot_count"] == 1
+        assert payload["execution"]["queue"]["credit_window"] == 1
+        assert payload["execution"]["workspace_owners"] == ["compute", "scatter"]
         assert payload["contract"]["full_N"] == N
         assert payload["reduce_scatter_plan"]["implementation"] == "reference"
     finally:
@@ -577,6 +597,10 @@ def test_gemm_reducescatter_multigpu(
             B = B_host[rank].to(device=ctx.device, dtype=torch.float16)
             C = ctx.zeros(M, shard_cols, dtype=torch.float16)
 
+            plan = tncc.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
+            assert plan.execution.slot_count == 2
+            assert plan.execution.credit_window == 2
+            assert plan.execution.tile_rows == 32
             tncc.ops.gemm_reducescatter(A, B, C, ctx=ctx)
             outputs.append(C)
 

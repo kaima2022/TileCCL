@@ -46,7 +46,12 @@ from tncc.patterns import (
 )
 from tncc.patterns.auto_select import auto_select
 from tncc.patterns.contracts import PatternExecutionSpec, resolve_pattern_execution
-from tncc.patterns.runtime import TileCollectiveRuntime, resolve_tile_collective_runtime
+from tncc.patterns.runtime import (
+    TileCollectiveExecution,
+    TileCollectiveRuntime,
+    resolve_tile_collective_execution,
+    resolve_tile_collective_runtime,
+)
 from tncc.utils.feature_gates import (
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
@@ -81,6 +86,7 @@ _PENDING_GEMM_ALLGATHER_SINGLE_PROCESS: dict[
     tuple[object, ...],
     dict[int, tuple["GemmAllGatherPlan", Any, Any, Any]],
 ] = {}
+_STAGED_PIPELINE_STREAMS: dict[tuple[str, int], tuple[Any, Any]] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -300,6 +306,7 @@ class GemmAllGatherPlan:
     contract: GemmAllGatherContract
     allgather_plan: "AllGatherPlan" = field(repr=False)
     runtime: TileCollectiveRuntime = field(repr=False)
+    execution: TileCollectiveExecution = field(repr=False)
     materialization: str = "local_gemm_plus_allgather"
     pack_layout: str = "rank_major_column_shards"
     storage_kind: str = "symmetric"
@@ -330,44 +337,12 @@ class GemmAllGatherPlan:
         """Execute the pre-resolved host GEMM + allgather plan."""
         if validate:
             self.validate_tensors(A, B_shard, C)
-
-        local_shard = self.ctx.workspace(
-            self.runtime.workspace_names[0],
-            self.contract.M,
-            self.contract.shard_cols,
-            dtype=C.dtype,
+        return _execute_segmented_gemm_allgather(
+            self,
+            A,
+            B_shard,
+            C,
         )
-        _run_local_gemm(A, B_shard, out=local_shard)
-        gather_output = C
-        if self.contract.world_size > 1:
-            gather_output = self.ctx.workspace(
-                self.runtime.workspace_names[1],
-                self.contract.world_size,
-                self.contract.M,
-                self.contract.shard_cols,
-                dtype=C.dtype,
-            )
-        if (
-            self.contract.world_size > 1
-            and self.ctx.require_heap().mode == "single_process"
-        ):
-            return _execute_gemm_allgather_single_process(
-                self,
-                local_shard=local_shard,
-                gather_output=gather_output,
-                output=C,
-            )
-
-        self.allgather_plan.execute(local_shard, gather_output, validate=False)
-        if self.contract.world_size > 1:
-            self.ctx.barrier()
-            C.copy_(
-                gather_output.permute(1, 0, 2).reshape(
-                    self.contract.M,
-                    self.contract.full_N,
-                )
-            )
-        return C
 
     def to_dict(self) -> dict[str, object]:
         """Serialize the plan for docs, debug output, and benchmark metadata."""
@@ -383,6 +358,7 @@ class GemmAllGatherPlan:
             "materialization": self.materialization,
             "pack_layout": self.pack_layout,
             "runtime": self.runtime.to_dict(),
+            "execution": self.execution.to_dict(),
             "contract": self.contract.to_dict(),
             "allgather_plan": self.allgather_plan.to_dict(),
         }
@@ -661,6 +637,7 @@ class GemmReduceScatterPlan:
     contract: GemmReduceScatterContract
     reduce_scatter_plan: ReduceScatterPlan = field(repr=False)
     runtime: TileCollectiveRuntime = field(repr=False)
+    execution: TileCollectiveExecution = field(repr=False)
     implementation: str = "auto"
     pack_layout: str = "rank_major_column_shards"
     storage_kind: str = "symmetric"
@@ -691,45 +668,12 @@ class GemmReduceScatterPlan:
         """Execute the pre-resolved host GEMM + reduce-scatter plan."""
         if validate:
             self.validate_tensors(A, B, C)
-
-        local_full = self.ctx.workspace(
-            self.runtime.workspace_names[0],
-            self.contract.M,
-            self.contract.full_N,
-            dtype=C.dtype,
+        return _execute_segmented_gemm_reducescatter(
+            self,
+            A,
+            B,
+            C,
         )
-        _run_local_gemm(A, B, out=local_full)
-
-        reduce_src = local_full
-        if self.contract.world_size > 1:
-            packed = self.ctx.workspace(
-                self.runtime.workspace_names[1],
-                self.contract.world_size,
-                self.contract.M,
-                self.contract.output_cols,
-                dtype=C.dtype,
-            )
-            packed.copy_(
-                local_full.view(
-                    self.contract.M,
-                    self.contract.world_size,
-                    self.contract.output_cols,
-                ).permute(1, 0, 2)
-            )
-            reduce_src = packed
-
-        if (
-            self.contract.world_size > 1
-            and self.ctx.require_heap().mode == "single_process"
-        ):
-            return _execute_gemm_reducescatter_single_process(
-                self,
-                reduce_src=reduce_src,
-                output=C,
-            )
-
-        self.reduce_scatter_plan.execute(reduce_src, C, validate=False)
-        return C
 
     def to_dict(self) -> dict[str, object]:
         """Serialize the plan for debug output and benchmark metadata."""
@@ -745,6 +689,7 @@ class GemmReduceScatterPlan:
             "implementation": self.implementation,
             "pack_layout": self.pack_layout,
             "runtime": self.runtime.to_dict(),
+            "execution": self.execution.to_dict(),
             "contract": self.contract.to_dict(),
             "reduce_scatter_plan": self.reduce_scatter_plan.to_dict(),
         }
@@ -971,6 +916,12 @@ def build_gemm_allgather_plan(
         storage_kind=storage_kind,
     )
     runtime = resolve_tile_collective_runtime("gemm_allgather")
+    execution = resolve_tile_collective_execution(
+        "gemm_allgather",
+        total_sms=resolved_ctx.backend.get_device_properties().compute_units,
+        rows=contract.M,
+        world_size=contract.world_size,
+    )
     allgather_plan = AllGatherPlan(
         ctx=resolved_ctx,
         input_shape=(contract.M, contract.shard_cols),
@@ -987,6 +938,7 @@ def build_gemm_allgather_plan(
         contract=contract,
         allgather_plan=allgather_plan,
         runtime=runtime,
+        execution=execution,
         storage_kind=storage_kind,
     )
 
@@ -1054,6 +1006,12 @@ def build_gemm_reducescatter_plan(
         storage_kind=storage_kind,
     )
     runtime = resolve_tile_collective_runtime("gemm_reducescatter")
+    execution = resolve_tile_collective_execution(
+        "gemm_reducescatter",
+        total_sms=resolved_ctx.backend.get_device_properties().compute_units,
+        rows=contract.M,
+        world_size=contract.world_size,
+    )
     resolved_implementation = _resolve_reduce_scatter_implementation(
         resolved_ctx,
         implementation=implementation,
@@ -1076,6 +1034,7 @@ def build_gemm_reducescatter_plan(
         contract=contract,
         reduce_scatter_plan=reduce_scatter_plan,
         runtime=runtime,
+        execution=execution,
         implementation=resolved_implementation,
         storage_kind=storage_kind,
     )
@@ -1711,6 +1670,226 @@ def _single_process_gemm_allgather_key(
         str(output.dtype),
         plan.storage_kind,
     )
+
+
+def _get_staged_pipeline_streams(device: Any) -> tuple[Any, Any]:
+    """Return reusable compute/collective streams for segmented host plans."""
+    import torch
+
+    device_obj = torch.device(device)
+    device_index = (
+        device_obj.index
+        if device_obj.index is not None
+        else torch.cuda.current_device()
+    )
+    key = (device_obj.type, device_index)
+    streams = _STAGED_PIPELINE_STREAMS.get(key)
+    if streams is None:
+        streams = (
+            torch.cuda.Stream(device=device_obj),
+            torch.cuda.Stream(device=device_obj),
+        )
+        _STAGED_PIPELINE_STREAMS[key] = streams
+    return streams
+
+
+def _execute_segmented_gemm_allgather(
+    plan: GemmAllGatherPlan,
+    A: Any,
+    B_shard: Any,
+    output: Any,
+) -> Any:
+    """Execute GEMM + allgather through a bounded staged workspace queue."""
+    import torch
+    from tncc.primitives.collectives import allgather as collective_allgather
+
+    if plan.contract.world_size > 1 and plan.ctx.require_heap().mode == "single_process":
+        local_shard = plan.ctx.workspace(
+            plan.runtime.workspace_names[0],
+            plan.contract.M,
+            plan.contract.shard_cols,
+            dtype=output.dtype,
+        )
+        _run_local_gemm(A, B_shard, out=local_shard)
+        gather_output = plan.ctx.workspace(
+            plan.runtime.workspace_names[1],
+            plan.contract.world_size,
+            plan.contract.M,
+            plan.contract.shard_cols,
+            dtype=output.dtype,
+        )
+        return _execute_gemm_allgather_single_process(
+            plan,
+            local_shard=local_shard,
+            gather_output=gather_output,
+            output=output,
+        )
+
+    compute_stream, collective_stream = _get_staged_pipeline_streams(output.device)
+    ready_events = [
+        torch.cuda.Event(blocking=False) for _ in range(plan.execution.slot_count)
+    ]
+    done_events = [
+        torch.cuda.Event(blocking=False) for _ in range(plan.execution.slot_count)
+    ]
+    slot_in_use = [False] * plan.execution.slot_count
+    heap = plan.ctx.require_heap()
+
+    for stage_index, row_start in enumerate(
+        range(0, plan.contract.M, plan.execution.tile_rows)
+    ):
+        slot = stage_index % plan.execution.credit_window
+        if slot_in_use[slot]:
+            done_events[slot].synchronize()
+
+        row_stop = min(plan.contract.M, row_start + plan.execution.tile_rows)
+        row_count = row_stop - row_start
+        slot_workspaces = plan.execution.slot_workspace_names(slot)
+        local_shard = plan.ctx.workspace(
+            slot_workspaces[0],
+            row_count,
+            plan.contract.shard_cols,
+            dtype=output.dtype,
+        )
+        gather_output = None
+        if plan.contract.world_size > 1:
+            gather_output = plan.ctx.workspace(
+                slot_workspaces[1],
+                plan.contract.world_size,
+                row_count,
+                plan.contract.shard_cols,
+                dtype=output.dtype,
+            )
+
+        with torch.cuda.stream(compute_stream):
+            _run_local_gemm(A[row_start:row_stop], B_shard, out=local_shard)
+            ready_events[slot].record(compute_stream)
+
+        with torch.cuda.stream(collective_stream):
+            collective_stream.wait_event(ready_events[slot])
+            if gather_output is None:
+                output[row_start:row_stop].copy_(local_shard)
+            else:
+                collective_allgather(local_shard, gather_output, heap)
+                output[row_start:row_stop].copy_(
+                    gather_output.permute(1, 0, 2).reshape(
+                        row_count,
+                        plan.contract.full_N,
+                    )
+                )
+            done_events[slot].record(collective_stream)
+        slot_in_use[slot] = True
+
+    for slot, in_use in enumerate(slot_in_use):
+        if in_use:
+            done_events[slot].synchronize()
+    return output
+
+
+def _execute_segmented_gemm_reducescatter(
+    plan: GemmReduceScatterPlan,
+    A: Any,
+    B: Any,
+    output: Any,
+) -> Any:
+    """Execute GEMM + reduce-scatter through a bounded staged workspace queue."""
+    import torch
+    from tncc.primitives.collectives import reduce_scatter as collective_reduce_scatter
+
+    if plan.contract.world_size > 1 and plan.ctx.require_heap().mode == "single_process":
+        local_full = plan.ctx.workspace(
+            plan.runtime.workspace_names[0],
+            plan.contract.M,
+            plan.contract.full_N,
+            dtype=output.dtype,
+        )
+        _run_local_gemm(A, B, out=local_full)
+        packed = plan.ctx.workspace(
+            plan.runtime.workspace_names[1],
+            plan.contract.world_size,
+            plan.contract.M,
+            plan.contract.output_cols,
+            dtype=output.dtype,
+        )
+        packed.copy_(
+            local_full.view(
+                plan.contract.M,
+                plan.contract.world_size,
+                plan.contract.output_cols,
+            ).permute(1, 0, 2)
+        )
+        return _execute_gemm_reducescatter_single_process(
+            plan,
+            reduce_src=packed,
+            output=output,
+        )
+
+    compute_stream, collective_stream = _get_staged_pipeline_streams(output.device)
+    ready_events = [
+        torch.cuda.Event(blocking=False) for _ in range(plan.execution.slot_count)
+    ]
+    done_events = [
+        torch.cuda.Event(blocking=False) for _ in range(plan.execution.slot_count)
+    ]
+    slot_in_use = [False] * plan.execution.slot_count
+    heap = plan.ctx.require_heap()
+
+    for stage_index, row_start in enumerate(
+        range(0, plan.contract.M, plan.execution.tile_rows)
+    ):
+        slot = stage_index % plan.execution.credit_window
+        if slot_in_use[slot]:
+            done_events[slot].synchronize()
+
+        row_stop = min(plan.contract.M, row_start + plan.execution.tile_rows)
+        row_count = row_stop - row_start
+        slot_workspaces = plan.execution.slot_workspace_names(slot)
+        local_full = plan.ctx.workspace(
+            slot_workspaces[0],
+            row_count,
+            plan.contract.full_N,
+            dtype=output.dtype,
+        )
+        packed = None
+        if plan.contract.world_size > 1:
+            packed = plan.ctx.workspace(
+                slot_workspaces[1],
+                plan.contract.world_size,
+                row_count,
+                plan.contract.output_cols,
+                dtype=output.dtype,
+            )
+
+        with torch.cuda.stream(compute_stream):
+            _run_local_gemm(A[row_start:row_stop], B, out=local_full)
+            if packed is not None:
+                packed.copy_(
+                    local_full.view(
+                        row_count,
+                        plan.contract.world_size,
+                        plan.contract.output_cols,
+                    ).permute(1, 0, 2)
+                )
+            ready_events[slot].record(compute_stream)
+
+        with torch.cuda.stream(collective_stream):
+            collective_stream.wait_event(ready_events[slot])
+            if packed is None:
+                output[row_start:row_stop].copy_(local_full)
+            else:
+                collective_reduce_scatter(
+                    packed,
+                    output[row_start:row_stop],
+                    heap,
+                    implementation=plan.implementation,
+                )
+            done_events[slot].record(collective_stream)
+        slot_in_use[slot] = True
+
+    for slot, in_use in enumerate(slot_in_use):
+        if in_use:
+            done_events[slot].synchronize()
+    return output
 
 
 def _run_local_gemm(A: Any, B: Any, *, out: Any) -> None:

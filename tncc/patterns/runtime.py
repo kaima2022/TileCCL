@@ -10,7 +10,8 @@ This module centralises three pieces of policy that were previously duplicated:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +102,77 @@ class TileCollectiveRuntime:
             "workspace_names": list(self.workspace_names),
             "role_order": list(self.role_order),
             "stage_count": self.stage_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TileCollectiveExecution:
+    """Resolved staged execution policy for one tile-collective plan.
+
+    This is the shared bridge between runtime metadata and the actual
+    bounded workspace protocol used by segmented host plans. It keeps the
+    queue/credit policy explicit so benchmark payloads and roadmap notes
+    can describe more than the bare collective contract.
+    """
+
+    runtime: TileCollectiveRuntime = field(repr=False)
+    scheduler: DualRoleScheduler | StageRoleScheduler = field(repr=False)
+    queue_name: str
+    slot_count: int
+    credit_window: int
+    tile_rows: int
+    workspace_owners: tuple[str, ...]
+    queue_policy: str = "credit_gated_segmented"
+
+    def __post_init__(self) -> None:
+        if self.slot_count < 1:
+            raise ValueError(
+                f"slot_count must be >= 1, got {self.slot_count}."
+            )
+        if self.credit_window < 1:
+            raise ValueError(
+                f"credit_window must be >= 1, got {self.credit_window}."
+            )
+        if self.credit_window > self.slot_count:
+            raise ValueError(
+                "credit_window cannot exceed slot_count: "
+                f"{self.credit_window} > {self.slot_count}."
+            )
+        if self.tile_rows < 1:
+            raise ValueError(
+                f"tile_rows must be >= 1, got {self.tile_rows}."
+            )
+        if len(self.workspace_owners) != len(self.runtime.workspace_names):
+            raise ValueError(
+                "workspace_owners must align with runtime.workspace_names: "
+                f"{len(self.workspace_owners)} != {len(self.runtime.workspace_names)}."
+            )
+
+    def slot_workspace_names(self, slot_index: int) -> tuple[str, ...]:
+        """Return the stage workspaces allocated for one queue slot."""
+        if slot_index < 0 or slot_index >= self.slot_count:
+            raise ValueError(
+                "slot_index is out of range for this execution policy: "
+                f"{slot_index} not in [0, {self.slot_count})."
+            )
+        return tuple(
+            f"{workspace_name}.slot{slot_index}"
+            for workspace_name in self.runtime.workspace_names
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the execution policy for plan metadata and docs."""
+        return {
+            "scheduler_kind": self.runtime.scheduler,
+            "scheduler": self.scheduler.to_dict(),
+            "queue": {
+                "name": self.queue_name,
+                "policy": self.queue_policy,
+                "slot_count": self.slot_count,
+                "credit_window": self.credit_window,
+                "tile_rows": self.tile_rows,
+            },
+            "workspace_owners": list(self.workspace_owners),
         }
 
 
@@ -265,3 +337,47 @@ def resolve_tile_collective_runtime(op: str) -> TileCollectiveRuntime:
             role_order=("gather", "compute", "scatter"),
         )
     raise ValueError(f"Unsupported tile collective runtime op {op!r}")
+
+
+def resolve_tile_collective_execution(
+    op: str,
+    *,
+    total_sms: int,
+    rows: int,
+    world_size: int,
+) -> TileCollectiveExecution:
+    """Resolve the staged queue/workspace protocol for one collective op."""
+    if rows < 1:
+        raise ValueError(f"rows must be >= 1, got {rows}.")
+    if world_size < 1:
+        raise ValueError(f"world_size must be >= 1, got {world_size}.")
+
+    runtime = resolve_tile_collective_runtime(op)
+    if runtime.stage_count == 2:
+        scheduler: DualRoleScheduler | StageRoleScheduler = resolve_dual_role_scheduler(
+            total_sms
+        )
+    else:
+        scheduler = resolve_stage_role_scheduler(total_sms)
+
+    slot_count = 1 if world_size == 1 else min(rows, runtime.stage_count)
+    tile_rows = max(1, math.ceil(rows / slot_count))
+
+    if op == "gemm_allgather":
+        workspace_owners = ("compute", "gather")
+    elif op == "gemm_reducescatter":
+        workspace_owners = ("compute", "scatter")
+    elif op == "allgather_gemm_reducescatter":
+        workspace_owners = ("gather", "gather", "compute", "scatter")
+    else:
+        raise ValueError(f"Unsupported tile collective execution op {op!r}")
+
+    return TileCollectiveExecution(
+        runtime=runtime,
+        scheduler=scheduler,
+        queue_name=f"{op}.stage_queue",
+        slot_count=slot_count,
+        credit_window=slot_count,
+        tile_rows=tile_rows,
+        workspace_owners=workspace_owners,
+    )

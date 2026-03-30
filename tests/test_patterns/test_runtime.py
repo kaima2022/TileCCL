@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from tncc.patterns.runtime import (
+    resolve_tile_collective_execution,
     resolve_dual_role_scheduler,
     resolve_stage_role_scheduler,
     resolve_tile_collective_runtime,
@@ -140,3 +141,53 @@ def test_resolve_tile_collective_runtime_exposes_chained_contract() -> None:
         "allgather_gemm_reducescatter.stage_accumulators",
         "allgather_gemm_reducescatter.stage_scatter_output",
     )
+
+
+def test_resolve_tile_collective_execution_exposes_dual_role_queue() -> None:
+    """Two-stage runtimes should resolve one bounded queue/workspace protocol."""
+    execution = resolve_tile_collective_execution(
+        "gemm_allgather",
+        total_sms=20,
+        rows=128,
+        world_size=2,
+    )
+
+    assert execution.queue_name == "gemm_allgather.stage_queue"
+    assert execution.slot_count == 2
+    assert execution.credit_window == 2
+    assert execution.tile_rows == 64
+    assert execution.workspace_owners == ("compute", "gather")
+    assert execution.slot_workspace_names(1) == (
+        "gemm_allgather.local_output_shard.slot1",
+        "gemm_allgather.gathered_output_shards.slot1",
+    )
+    payload = execution.to_dict()
+    assert payload["scheduler_kind"] == "tile_scheduler_v1"
+    assert payload["scheduler"]["comm_sms"] == 4
+    assert payload["queue"]["policy"] == "credit_gated_segmented"
+
+
+def test_resolve_tile_collective_execution_exposes_stage_role_queue() -> None:
+    """Three-stage runtimes should bind the stage-role scheduler to one queue contract."""
+    execution = resolve_tile_collective_execution(
+        "allgather_gemm_reducescatter",
+        total_sms=20,
+        rows=96,
+        world_size=2,
+    )
+
+    assert execution.queue_name == "allgather_gemm_reducescatter.stage_queue"
+    assert execution.slot_count == 3
+    assert execution.credit_window == 3
+    assert execution.tile_rows == 32
+    assert execution.workspace_owners == ("gather", "gather", "compute", "scatter")
+    assert execution.slot_workspace_names(2) == (
+        "allgather_gemm_reducescatter.stage_gather_input.slot2",
+        "allgather_gemm_reducescatter.stage_gather_tiles.slot2",
+        "allgather_gemm_reducescatter.stage_accumulators.slot2",
+        "allgather_gemm_reducescatter.stage_scatter_output.slot2",
+    )
+    payload = execution.to_dict()
+    assert payload["scheduler_kind"] == "stage_role_scheduler_v1"
+    assert payload["scheduler"]["gather_sms"] == 2
+    assert payload["scheduler"]["scatter_sms"] == 2
