@@ -342,8 +342,12 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
         assert plan.contract.shard_cols == N
         assert plan.runtime.communication == "software_multicast"
         assert plan.runtime.signal_mode == "binary"
+        assert plan.runtime.role_order == ("compute", "gather")
+        assert plan.runtime.stage_count == 2
         assert payload["op"] == "gemm_allgather"
         assert payload["runtime"]["scheduler"] == "tile_scheduler_v1"
+        assert payload["runtime"]["role_order"] == ["compute", "gather"]
+        assert payload["runtime"]["stage_count"] == 2
         assert payload["runtime"]["workspace_names"] == [
             "gemm_allgather.local_output_shard",
             "gemm_allgather.gathered_output_shards",
@@ -510,10 +514,14 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
         assert plan.contract.output_cols == N
         assert plan.runtime.signal_mode == "counting"
         assert plan.runtime.wait_mode == "wait_ge"
+        assert plan.runtime.role_order == ("compute", "scatter")
+        assert plan.runtime.stage_count == 2
         assert plan.implementation == "reference"
         assert payload["op"] == "gemm_reducescatter"
         assert payload["implementation"] == "reference"
         assert payload["runtime"]["communication"] == "reduce_scatter"
+        assert payload["runtime"]["role_order"] == ["compute", "scatter"]
+        assert payload["runtime"]["stage_count"] == 2
         assert payload["runtime"]["workspace_names"] == [
             "gemm_reducescatter.local_full_output",
             "gemm_reducescatter.packed_input",
