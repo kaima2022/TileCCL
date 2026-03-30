@@ -529,7 +529,7 @@ def _describe_gemm_allgather_support(
     if heap_mode == "single_process":
         return SupportStatus(
             "supported",
-            "Shared staged runtime is validated on single-process peer-access heaps "
+            "High-level host plan is validated on single-process peer-access heaps "
             "via local GEMM materialization plus allgather execution.",
         )
     if allgather_status.state == "unsupported":
@@ -543,8 +543,8 @@ def _describe_gemm_allgather_support(
         )
     return SupportStatus(
         "supported",
-        "Shared staged GEMM + allgather runtime is validated on the current "
-        "public multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
+        "Host GEMM + allgather contract is validated on the current public "
+        "multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
     )
 
 
@@ -571,8 +571,8 @@ def _describe_gemm_reducescatter_support(
     if heap_mode == "single_process":
         return SupportStatus(
             "supported",
-            "Shared staged runtime is validated on single-process peer-access heaps "
-            "via local GEMM materialization plus reduce_scatter execution.",
+            "High-level host plan is validated on single-process peer-access heaps "
+            "via local GEMM materialization plus reduce_scatter reference execution.",
         )
     if reduce_scatter_state == "unsupported":
         return SupportStatus(
@@ -584,7 +584,7 @@ def _describe_gemm_reducescatter_support(
         )
     return SupportStatus(
         "supported",
-        "Shared staged GEMM + reduce_scatter runtime is validated on the current "
+        "Host GEMM + packed reduce_scatter contract is validated on the current "
         "public multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
     )
 

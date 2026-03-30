@@ -58,8 +58,5 @@ def test_gemm_reducescatter_multiprocess_default_transport(
         assert payload["mode"] == "multiprocess"
         assert payload["transport_strategy"] == "ctypes_ipc"
         assert payload["plan_implementation"] == "device"
-        assert payload["plan_runtime"]["execution_model"] == "shared_staged_runtime_v1"
-        assert payload["plan_runtime"]["workspace_protocol"] == "ctx_workspace_cache_v1"
-        assert payload["plan_runtime"]["role_order"] == ["compute", "scatter"]
         assert payload["plan_ok"] is True
         assert payload["high_level_ok"] is True

@@ -348,60 +348,12 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
         assert payload["runtime"]["scheduler"] == "tile_scheduler_v1"
         assert payload["runtime"]["role_order"] == ["compute", "gather"]
         assert payload["runtime"]["stage_count"] == 2
-        assert payload["runtime"]["execution_model"] == "shared_staged_runtime_v1"
-        assert payload["runtime"]["workspace_protocol"] == "ctx_workspace_cache_v1"
         assert payload["runtime"]["workspace_names"] == [
             "gemm_allgather.local_output_shard",
             "gemm_allgather.gathered_output_shards",
         ]
         assert payload["contract"]["full_N"] == N
         assert payload["allgather_plan"]["block_size"] == M * N
-    finally:
-        for heap in heaps:
-            heap.cleanup()
-
-
-def test_gemm_allgather_plan_execute_delegates_to_shared_staged_runtime(
-    skip_no_multigpu,
-    device_info,
-    monkeypatch,
-) -> None:
-    """Plan execution should route through the shared staged runtime helper."""
-    from tncc.memory.symmetric_heap import SymmetricHeap
-
-    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
-    try:
-        ctx = tncc.init(
-            backend=device_info.backend,
-            rank=0,
-            world_size=1,
-            heap=heaps[0],
-            force_backend=True,
-        )
-        A = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
-        B_shard = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
-        C = ctx.zeros(32, 32, dtype=torch.float16)
-        plan = tncc.ops.build_gemm_allgather_plan(A, B_shard, C, ctx=ctx)
-        calls: dict[str, object] = {}
-
-        def _fake_execute(**kwargs):
-            calls.update(kwargs)
-            return "shared-runtime-result"
-
-        monkeypatch.setattr(tncc.ops, "execute_staged_tile_collective", _fake_execute)
-
-        result = plan.execute(A, B_shard, C)
-
-        assert result == "shared-runtime-result"
-        assert calls["ctx"] is ctx
-        assert calls["runtime"] == plan.runtime
-        assert calls["local_shape"] == (32, 32)
-        assert calls["dtype"] == C.dtype
-        assert callable(calls["run_local_stage"])
-        assert callable(calls["prepare_collective"])
-        assert callable(calls["execute_collective"])
-        assert callable(calls["single_process_execute"])
-        assert callable(calls["finalize_output"])
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -570,60 +522,12 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
         assert payload["runtime"]["communication"] == "reduce_scatter"
         assert payload["runtime"]["role_order"] == ["compute", "scatter"]
         assert payload["runtime"]["stage_count"] == 2
-        assert payload["runtime"]["execution_model"] == "shared_staged_runtime_v1"
-        assert payload["runtime"]["workspace_protocol"] == "ctx_workspace_cache_v1"
         assert payload["runtime"]["workspace_names"] == [
             "gemm_reducescatter.local_full_output",
             "gemm_reducescatter.packed_input",
         ]
         assert payload["contract"]["full_N"] == N
         assert payload["reduce_scatter_plan"]["implementation"] == "reference"
-    finally:
-        for heap in heaps:
-            heap.cleanup()
-
-
-def test_gemm_reducescatter_plan_execute_delegates_to_shared_staged_runtime(
-    skip_no_multigpu,
-    device_info,
-    monkeypatch,
-) -> None:
-    """Reduce-scatter plans should share the staged runtime helper too."""
-    from tncc.memory.symmetric_heap import SymmetricHeap
-
-    heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
-    try:
-        ctx = tncc.init(
-            backend=device_info.backend,
-            rank=0,
-            world_size=1,
-            heap=heaps[0],
-            force_backend=True,
-        )
-        A = torch.randn(32, 32, device=ctx.device, dtype=torch.float16)
-        B = torch.randn(32, 64, device=ctx.device, dtype=torch.float16)
-        C = ctx.zeros(32, 64, dtype=torch.float16)
-        plan = tncc.ops.build_gemm_reducescatter_plan(A, B, C, ctx=ctx)
-        calls: dict[str, object] = {}
-
-        def _fake_execute(**kwargs):
-            calls.update(kwargs)
-            return "shared-runtime-result"
-
-        monkeypatch.setattr(tncc.ops, "execute_staged_tile_collective", _fake_execute)
-
-        result = plan.execute(A, B, C)
-
-        assert result == "shared-runtime-result"
-        assert calls["ctx"] is ctx
-        assert calls["runtime"] == plan.runtime
-        assert calls["local_shape"] == (32, 64)
-        assert calls["dtype"] == C.dtype
-        assert callable(calls["run_local_stage"])
-        assert callable(calls["prepare_collective"])
-        assert callable(calls["execute_collective"])
-        assert callable(calls["single_process_execute"])
-        assert "finalize_output" not in calls
     finally:
         for heap in heaps:
             heap.cleanup()

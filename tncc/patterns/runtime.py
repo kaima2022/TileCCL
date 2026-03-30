@@ -5,13 +5,12 @@ This module centralises three pieces of policy that were previously duplicated:
 
 1. Dual-role SM partitioning for compute/communication worker pools.
 2. Stage-role SM partitioning for gather/compute/scatter chains.
-3. Stable runtime metadata plus a shared staged executor for GEMM+collective plans.
+3. Stable runtime metadata for staged GEMM+collective plans.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,8 +83,6 @@ class TileCollectiveRuntime:
     flow_control: str
     workspace_names: tuple[str, ...]
     role_order: tuple[str, ...] = ()
-    execution_model: str = "shared_staged_runtime_v1"
-    workspace_protocol: str = "ctx_workspace_cache_v1"
 
     @property
     def stage_count(self) -> int:
@@ -104,58 +101,7 @@ class TileCollectiveRuntime:
             "workspace_names": list(self.workspace_names),
             "role_order": list(self.role_order),
             "stage_count": self.stage_count,
-            "execution_model": self.execution_model,
-            "workspace_protocol": self.workspace_protocol,
         }
-
-
-def execute_staged_tile_collective(
-    *,
-    ctx: Any,
-    runtime: TileCollectiveRuntime,
-    local_shape: tuple[int, ...],
-    dtype: Any,
-    run_local_stage: Callable[[Any], None],
-    prepare_collective: Callable[[Any], tuple[Any, Any]],
-    execute_collective: Callable[[Any, Any], Any],
-    final_output: Any,
-    single_process_execute: Callable[[Any, Any, Any], Any] | None = None,
-    finalize_output: Callable[[Any, Any], Any] | None = None,
-) -> Any:
-    """Run one shared staged GEMM+collective execution path.
-
-    The caller supplies the operation-specific pieces:
-    1. how to populate the local GEMM workspace,
-    2. how to materialize collective input/output buffers, and
-    3. how to launch/finalize the collective stage.
-
-    This keeps workspace lifecycle, single-process coordination, and staged
-    control flow consistent across ``gemm_allgather`` and
-    ``gemm_reducescatter``.
-    """
-    local_buffer = ctx.workspace(
-        runtime.workspace_names[0],
-        *local_shape,
-        dtype=dtype,
-    )
-    run_local_stage(local_buffer)
-    collective_input, collective_output = prepare_collective(local_buffer)
-
-    if (
-        ctx.world_size > 1
-        and single_process_execute is not None
-        and ctx.require_heap().mode == "single_process"
-    ):
-        return single_process_execute(
-            collective_input,
-            collective_output,
-            final_output,
-        )
-
-    execute_collective(collective_input, collective_output)
-    if finalize_output is not None:
-        return finalize_output(collective_output, final_output)
-    return collective_output
 
 
 def resolve_dual_role_scheduler(
