@@ -46,7 +46,11 @@ from tncc.patterns import (
 )
 from tncc.patterns.auto_select import auto_select
 from tncc.patterns.contracts import PatternExecutionSpec, resolve_pattern_execution
-from tncc.patterns.runtime import TileCollectiveRuntime, resolve_tile_collective_runtime
+from tncc.patterns.runtime import (
+    TileCollectiveRuntime,
+    execute_staged_tile_collective,
+    resolve_tile_collective_runtime,
+)
 from tncc.utils.feature_gates import (
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
@@ -331,43 +335,58 @@ class GemmAllGatherPlan:
         if validate:
             self.validate_tensors(A, B_shard, C)
 
-        local_shard = self.ctx.workspace(
-            self.runtime.workspace_names[0],
-            self.contract.M,
-            self.contract.shard_cols,
-            dtype=C.dtype,
-        )
-        _run_local_gemm(A, B_shard, out=local_shard)
-        gather_output = C
-        if self.contract.world_size > 1:
-            gather_output = self.ctx.workspace(
-                self.runtime.workspace_names[1],
-                self.contract.world_size,
-                self.contract.M,
-                self.contract.shard_cols,
-                dtype=C.dtype,
-            )
-        if (
-            self.contract.world_size > 1
-            and self.ctx.require_heap().mode == "single_process"
-        ):
+        def _prepare_collective(local_shard: Any) -> tuple[Any, Any]:
+            gather_output = C
+            if self.contract.world_size > 1:
+                gather_output = self.ctx.workspace(
+                    self.runtime.workspace_names[1],
+                    self.contract.world_size,
+                    self.contract.M,
+                    self.contract.shard_cols,
+                    dtype=C.dtype,
+                )
+            return local_shard, gather_output
+
+        def _execute_collective(local_shard: Any, gather_output: Any) -> Any:
+            self.allgather_plan.execute(local_shard, gather_output, validate=False)
+            if self.contract.world_size > 1:
+                self.ctx.barrier()
+            return gather_output
+
+        def _finalize_output(gather_output: Any, output: Any) -> Any:
+            if self.contract.world_size > 1:
+                output.copy_(
+                    gather_output.permute(1, 0, 2).reshape(
+                        self.contract.M,
+                        self.contract.full_N,
+                    )
+                )
+            return output
+
+        def _single_process_execute(
+            local_shard: Any,
+            gather_output: Any,
+            output: Any,
+        ) -> Any:
             return _execute_gemm_allgather_single_process(
                 self,
                 local_shard=local_shard,
                 gather_output=gather_output,
-                output=C,
+                output=output,
             )
 
-        self.allgather_plan.execute(local_shard, gather_output, validate=False)
-        if self.contract.world_size > 1:
-            self.ctx.barrier()
-            C.copy_(
-                gather_output.permute(1, 0, 2).reshape(
-                    self.contract.M,
-                    self.contract.full_N,
-                )
-            )
-        return C
+        return execute_staged_tile_collective(
+            ctx=self.ctx,
+            runtime=self.runtime,
+            local_shape=(self.contract.M, self.contract.shard_cols),
+            dtype=C.dtype,
+            run_local_stage=lambda local_shard: _run_local_gemm(A, B_shard, out=local_shard),
+            prepare_collective=_prepare_collective,
+            execute_collective=_execute_collective,
+            final_output=C,
+            single_process_execute=_single_process_execute,
+            finalize_output=_finalize_output,
+        )
 
     def to_dict(self) -> dict[str, object]:
         """Serialize the plan for docs, debug output, and benchmark metadata."""
@@ -692,44 +711,52 @@ class GemmReduceScatterPlan:
         if validate:
             self.validate_tensors(A, B, C)
 
-        local_full = self.ctx.workspace(
-            self.runtime.workspace_names[0],
-            self.contract.M,
-            self.contract.full_N,
-            dtype=C.dtype,
-        )
-        _run_local_gemm(A, B, out=local_full)
-
-        reduce_src = local_full
-        if self.contract.world_size > 1:
-            packed = self.ctx.workspace(
-                self.runtime.workspace_names[1],
-                self.contract.world_size,
-                self.contract.M,
-                self.contract.output_cols,
-                dtype=C.dtype,
-            )
-            packed.copy_(
-                local_full.view(
-                    self.contract.M,
+        def _prepare_collective(local_full: Any) -> tuple[Any, Any]:
+            reduce_src = local_full
+            if self.contract.world_size > 1:
+                packed = self.ctx.workspace(
+                    self.runtime.workspace_names[1],
                     self.contract.world_size,
+                    self.contract.M,
                     self.contract.output_cols,
-                ).permute(1, 0, 2)
-            )
-            reduce_src = packed
+                    dtype=C.dtype,
+                )
+                packed.copy_(
+                    local_full.view(
+                        self.contract.M,
+                        self.contract.world_size,
+                        self.contract.output_cols,
+                    ).permute(1, 0, 2)
+                )
+                reduce_src = packed
+            return reduce_src, C
 
-        if (
-            self.contract.world_size > 1
-            and self.ctx.require_heap().mode == "single_process"
-        ):
+        def _execute_collective(reduce_src: Any, output: Any) -> Any:
+            self.reduce_scatter_plan.execute(reduce_src, output, validate=False)
+            return output
+
+        def _single_process_execute(
+            reduce_src: Any,
+            _collective_output: Any,
+            output: Any,
+        ) -> Any:
             return _execute_gemm_reducescatter_single_process(
                 self,
                 reduce_src=reduce_src,
-                output=C,
+                output=output,
             )
 
-        self.reduce_scatter_plan.execute(reduce_src, C, validate=False)
-        return C
+        return execute_staged_tile_collective(
+            ctx=self.ctx,
+            runtime=self.runtime,
+            local_shape=(self.contract.M, self.contract.full_N),
+            dtype=C.dtype,
+            run_local_stage=lambda local_full: _run_local_gemm(A, B, out=local_full),
+            prepare_collective=_prepare_collective,
+            execute_collective=_execute_collective,
+            final_output=C,
+            single_process_execute=_single_process_execute,
+        )
 
     def to_dict(self) -> dict[str, object]:
         """Serialize the plan for debug output and benchmark metadata."""
@@ -947,16 +974,17 @@ def build_gemm_allgather_plan(
     ctx: tncc.TNCCContext | None = None,
     storage_kind: str = "symmetric",
 ) -> GemmAllGatherPlan:
-    """Resolve a reusable host-side plan for GEMM + allgather.
+    """Resolve a reusable staged-runtime plan for GEMM + allgather.
 
     Public contract:
     - ``A``: full LHS matrix of shape ``(M, K)``
     - ``B_shard``: rank-local RHS column shard of shape ``(K, N / world_size)``
     - ``C``: full output matrix of shape ``(M, N)``
 
-    The current implementation is intentionally conservative. It performs one
-    local GEMM into a heap-backed shard workspace and then reuses the validated
-    high-level :func:`allgather` contract to assemble the full output.
+    The current implementation resolves one shared staged runtime contract:
+    local GEMM writes into a heap-backed shard workspace, then the validated
+    high-level :func:`allgather` plan completes the gather stage under the same
+    workspace and single-process coordination protocol.
     """
     resolved_ctx = ctx if ctx is not None else tncc.current_context()
     _require_device_remote_access_runtime(
@@ -1033,17 +1061,18 @@ def build_gemm_reducescatter_plan(
     implementation: str = "auto",
     storage_kind: str = "symmetric",
 ) -> GemmReduceScatterPlan:
-    """Resolve a reusable host-side plan for GEMM + reduce-scatter.
+    """Resolve a reusable staged-runtime plan for GEMM + reduce-scatter.
 
     Public contract:
     - ``A``: local rank contribution of shape ``(M, K)``
     - ``B``: full RHS matrix of shape ``(K, N)``
     - ``C``: rank-local output shard of shape ``(M, N / world_size)``
 
-    The current implementation is intentionally conservative. It performs
-    local GEMM into a heap-backed workspace, repacks the full result into a
-    rank-major contiguous reduce-scatter input, then reuses the validated
-    high-level :func:`reduce_scatter` contract.
+    The current implementation resolves one shared staged runtime contract:
+    local GEMM writes into a heap-backed workspace, repacks the full result
+    into a rank-major contiguous reduce-scatter input when needed, then reuses
+    the validated high-level :func:`reduce_scatter` plan under the same
+    workspace and single-process coordination protocol.
     """
     resolved_ctx = ctx if ctx is not None else tncc.current_context()
     contract = _resolve_gemm_reducescatter_contract(

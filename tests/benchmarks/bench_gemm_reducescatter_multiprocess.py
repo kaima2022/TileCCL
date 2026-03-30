@@ -5,13 +5,13 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import statistics
 import subprocess
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 import torch
 
@@ -75,6 +75,7 @@ def _aggregate_rank_payloads(payloads: list[dict[str, object]]) -> dict[str, obj
         "transport_strategy": payloads[0]["transport_strategy"],
         "mode": payloads[0]["mode"],
         "plan_implementation": payloads[0]["plan_implementation"],
+        "plan_runtime": payloads[0]["plan_runtime"],
         "plan_mean_ms_across_ranks": statistics.mean(plan_means),
         "high_level_mean_ms_across_ranks": statistics.mean(high_level_means),
         "max_rank_skew_ms": abs(max(high_level_means) - min(high_level_means)),
@@ -176,6 +177,7 @@ def main() -> None:
                 print(
                     f"[PASS] dtype={dtype_name:8s} requested={transport:28s} "
                     f"actual={summary['transport_strategy']:28s} "
+                    f"runtime={summary['plan_runtime']['execution_model']:24s} "
                     f"plan={summary['plan_mean_ms_across_ranks']:.3f} ms "
                     f"high_level={summary['high_level_mean_ms_across_ranks']:.3f} ms",
                     flush=True,
