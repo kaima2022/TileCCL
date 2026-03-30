@@ -101,7 +101,7 @@ tncc bench all                # Run all benchmarks
 
 ## Requirements
 
-- NVIDIA GPUs with NVLink interconnect (verified on H100 PCIe), or AMD GPUs with xGMI
+- NVIDIA GPUs with NVLink interconnect (verified on H100), or AMD GPUs with xGMI
 - CUDA 12.x / ROCm 6.x, PyTorch >= 2.4, Triton >= 3.0
 
 ## Contributing

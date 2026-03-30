@@ -9,9 +9,7 @@ communication patterns and kernel launch parameters.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

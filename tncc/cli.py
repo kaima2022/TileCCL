@@ -395,6 +395,7 @@ def _handle_bench(args: argparse.Namespace) -> None:
 def _run_pattern_bench(M: int, N: int, K: int, pattern: str) -> None:
     """Run pattern benchmark with auto-select."""
     import torch
+
     import tncc
     from tncc.patterns.auto_select import auto_select, benchmark_all_patterns
 
@@ -471,7 +472,7 @@ def _handle_compare(args: argparse.Namespace) -> None:
         return
 
     # Compare the two most recent results
-    print(f"Comparing last 2 results:")
+    print("Comparing last 2 results:")
     print(f"  Old: {files[-2].name}")
     print(f"  New: {files[-1].name}")
 
@@ -551,7 +552,7 @@ def main() -> None:
     p2p_parser = bench_sub.add_parser("p2p", help="P2P bandwidth benchmark")
     p2p_parser.add_argument("--quick", action="store_true", help="Quick mode")
 
-    coll_parser = bench_sub.add_parser("collective", help="Collective bandwidth benchmark")
+    bench_sub.add_parser("collective", help="Collective bandwidth benchmark")
 
     pat_parser = bench_sub.add_parser("pattern", help="Pattern overlap efficiency benchmark")
     pat_parser.add_argument("--quick", action="store_true", help="Quick mode")
@@ -570,7 +571,7 @@ def main() -> None:
         help="Structured JSON output path for benchmark results",
     )
 
-    gemm_parser = bench_sub.add_parser("gemm", help="GEMM vs torch.matmul benchmark")
+    bench_sub.add_parser("gemm", help="GEMM vs torch.matmul benchmark")
 
     all_parser = bench_sub.add_parser("all", help="Run all benchmarks")
     all_parser.add_argument("--quick", action="store_true", help="Quick mode for P2P and pattern")

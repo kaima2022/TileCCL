@@ -23,7 +23,6 @@ import triton.language as tl
 
 from tncc.memory.translation import translate_ptr
 
-
 # -----------------------------------------------------------------------
 # Value-based operations (register <-> remote memory)
 # -----------------------------------------------------------------------

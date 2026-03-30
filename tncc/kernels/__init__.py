@@ -6,7 +6,7 @@ communication-overlap patterns.  The kernels are written in pure Triton
 so that the compiler has full visibility for fusion and scheduling.
 """
 
-from tncc.kernels.gemm import gemm_kernel, gemm
+from tncc.kernels.gemm import gemm, gemm_kernel
 
 __all__ = [
     "gemm_kernel",

@@ -18,8 +18,14 @@ import triton.language as tl
 
 from tncc.memory.symmetric_heap import SymmetricHeap
 from tncc.memory.translation import translate_ptr
-from tncc.sync.primitives import tile_signal, tile_wait
-
+from tncc.patterns._helpers import multicast_tile_to_peers
+from tncc.sync.primitives import (
+    tile_acquire_credit,
+    tile_release_credit,
+    tile_signal,
+    tile_try_wait,
+    tile_wait,
+)
 
 pytestmark = pytest.mark.multigpu
 
@@ -146,6 +152,75 @@ def _signal_wait_consumer_kernel(
     tile_wait(locks_ptr, 0)
     data = tl.load(data_ptr + offsets, mask=mask, other=0.0)
     tl.store(result_ptr + offsets, data, mask=mask)
+
+
+@triton.jit
+def _try_wait_kernel(
+    locks_ptr,
+    result_ptr,
+    MAX_SPINS: tl.constexpr,
+):
+    """Probe a tile lock without blocking forever."""
+    status = tile_try_wait(locks_ptr, 0, max_spins=MAX_SPINS)
+    tl.store(result_ptr, status)
+
+
+@triton.jit
+def _credit_consumer_kernel(
+    credit_ptr,
+    data_ptr,
+    result_ptr,
+):
+    """Consume one credit, then read one scalar payload."""
+    tile_acquire_credit(credit_ptr, 0)
+    value = tl.load(data_ptr)
+    tl.store(result_ptr, value)
+
+
+@triton.jit
+def _credit_release_kernel(
+    credit_ptr,
+    heap_bases,
+    rank,
+    peer,
+):
+    """Release one remote credit to a peer rank."""
+    tile_release_credit(credit_ptr, 0, peer, rank, heap_bases)
+
+
+@triton.jit
+def _software_multicast_kernel(
+    C_ptr,
+    heap_bases,
+    M,
+    N,
+    stride_cm,
+    stride_cn,
+    rank,
+    world_size,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+):
+    """Multicast one local tile to all peers."""
+    offs_m = tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+    mask = (offs_m[:, None] < M) & (offs_n[None, :] < N)
+    tile_data = tl.load(ptrs, mask=mask, other=0.0)
+    multicast_tile_to_peers(
+        C_ptr,
+        tile_data,
+        offs_m,
+        offs_n,
+        rank,
+        world_size,
+        heap_bases,
+        0,
+        N,
+        stride_cm,
+        0,
+        mask,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -420,6 +495,102 @@ class TestTileSignalWait:
         assert torch.allclose(result, expected, atol=1e-5), (
             f"Multi-tile signal/wait failed: result={result.tolist()}"
         )
+
+
+class TestNonBlockingWaitAndCredits:
+    """Test the P0 synchronization additions: try_wait and credits."""
+
+    def test_tile_try_wait_success_and_timeout(self) -> None:
+        _skip_if_no_multigpu()
+        torch.cuda.set_device(0)
+
+        locks = torch.zeros(1, dtype=torch.int32, device="cuda:0")
+        result = torch.zeros(1, dtype=torch.int32, device="cuda:0")
+
+        locks.fill_(1)
+        _try_wait_kernel[(1,)](locks, result, MAX_SPINS=8)
+        torch.cuda.synchronize(0)
+        assert result.item() == 1
+        assert locks.item() == 0
+
+        result.zero_()
+        _try_wait_kernel[(1,)](locks, result, MAX_SPINS=8)
+        torch.cuda.synchronize(0)
+        assert result.item() == 0
+        assert locks.item() == 0
+
+    def test_tile_acquire_credit_consumes_local_credit(self) -> None:
+        _skip_if_no_multigpu()
+        torch.cuda.set_device(0)
+
+        credits = torch.ones(1, dtype=torch.int32, device="cuda:0")
+        data = torch.tensor([7.0], dtype=torch.float32, device="cuda:0")
+        result = torch.zeros(1, dtype=torch.float32, device="cuda:0")
+
+        _credit_consumer_kernel[(1,)](credits, data, result)
+        torch.cuda.synchronize(0)
+
+        assert result.item() == pytest.approx(7.0)
+        assert credits.item() == 0
+
+    def test_tile_release_credit_updates_remote_peer(self) -> None:
+        _skip_if_no_multigpu()
+        heaps = SymmetricHeap.create_all(size=4 * 1024 * 1024, world_size=2)
+        try:
+            credits = []
+            for rank in range(2):
+                torch.cuda.set_device(rank)
+                credits.append(heaps[rank].allocate_tensor((1,), torch.int32))
+                credits[rank].zero_()
+
+            torch.cuda.set_device(1)
+            bases = heaps[1].get_heap_bases()
+            _credit_release_kernel[(1,)](credits[1], bases, 1, 0)
+            torch.cuda.synchronize(0)
+            torch.cuda.synchronize(1)
+
+            assert credits[0].item() == 1
+            assert credits[1].item() == 0
+        finally:
+            for heap in heaps:
+                heap.cleanup()
+
+
+class TestSoftwareMulticast:
+    """Test the portable software tile-multicast helper."""
+
+    def test_multicast_tile_to_peer(self) -> None:
+        _skip_if_no_multigpu()
+        heaps = SymmetricHeap.create_all(size=4 * 1024 * 1024, world_size=2)
+        try:
+            matrices = []
+            for rank in range(2):
+                torch.cuda.set_device(rank)
+                matrices.append(heaps[rank].allocate_tensor((16, 16), torch.float32))
+                matrices[rank].zero_()
+
+            torch.cuda.set_device(0)
+            matrices[0].copy_(torch.arange(16 * 16, device="cuda:0", dtype=torch.float32).view(16, 16))
+            bases = heaps[0].get_heap_bases()
+            _software_multicast_kernel[(1,)](
+                matrices[0],
+                bases,
+                16,
+                16,
+                matrices[0].stride(0),
+                matrices[0].stride(1),
+                0,
+                2,
+                BLOCK_M=16,
+                BLOCK_N=16,
+            )
+            torch.cuda.synchronize(0)
+            torch.cuda.synchronize(1)
+
+            assert torch.allclose(matrices[1].cpu(), matrices[0].cpu(), atol=1e-5)
+        finally:
+            for heap in heaps:
+                heap.cleanup()
 
 
 if __name__ == "__main__":

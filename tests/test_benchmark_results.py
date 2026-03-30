@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-import subprocess
-import sys
 import importlib.util
 import io
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import tncc
 from tncc.utils.benchmark_results import (

@@ -20,7 +20,6 @@ from tncc.patterns import (
     WGSpecializedPattern,
 )
 
-
 # -----------------------------------------------------------------------
 # GEMM correctness (single GPU, no scatter)
 # -----------------------------------------------------------------------

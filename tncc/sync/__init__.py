@@ -17,10 +17,13 @@ from tncc.sync.primitives import (
     tile_atomic_min,
     tile_atomic_or,
     tile_atomic_xchg,
+    tile_acquire_credit,
     tile_atomic_xor,
     tile_barrier,
+    tile_release_credit,
     tile_signal,
     tile_signal_add,
+    tile_try_wait,
     tile_wait,
     tile_wait_ge,
 )
@@ -35,9 +38,12 @@ __all__ = [
     "tile_atomic_and",
     "tile_atomic_or",
     "tile_atomic_xor",
+    "tile_acquire_credit",
+    "tile_release_credit",
     # signal primitives
     "tile_signal",
     "tile_wait",
+    "tile_try_wait",
     "tile_signal_add",
     "tile_wait_ge",
     # barrier

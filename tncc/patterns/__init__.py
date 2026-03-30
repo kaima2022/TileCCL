@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import abc
 import time
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 from tncc.utils.feature_gates import (
     multiprocess_device_remote_access_detail,
@@ -41,6 +41,7 @@ from tncc.utils.feature_gates import (
 
 if TYPE_CHECKING:
     import torch
+
     from tncc.patterns.contracts import PatternExecutionSpec
 
 
@@ -188,12 +189,16 @@ class Pattern(abc.ABC):
 # Public imports -- concrete patterns and utilities
 # ---------------------------------------------------------------------------
 
+from tncc.patterns.auto_select import auto_select, benchmark_all_patterns
 from tncc.patterns.bulk_sync import BulkSyncPattern
-from tncc.patterns.contracts import PatternExecutionSpec, PatternTensorSpec, resolve_pattern_execution
+from tncc.patterns.contracts import (
+    PatternExecutionSpec,
+    PatternTensorSpec,
+    resolve_pattern_execution,
+)
 from tncc.patterns.fused_sequential import FusedSequentialPattern
 from tncc.patterns.producer_consumer import ProducerConsumerPattern
 from tncc.patterns.wg_specialized import WGSpecializedPattern
-from tncc.patterns.auto_select import auto_select, benchmark_all_patterns
 
 __all__ = [
     "Pattern",

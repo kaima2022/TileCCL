@@ -46,6 +46,7 @@ from tncc.patterns import (
 )
 from tncc.patterns.auto_select import auto_select
 from tncc.patterns.contracts import PatternExecutionSpec, resolve_pattern_execution
+from tncc.patterns.runtime import TileCollectiveRuntime, resolve_tile_collective_runtime
 from tncc.utils.feature_gates import (
     multiprocess_device_collectives_detail,
     multiprocess_device_collectives_enabled,
@@ -53,7 +54,6 @@ from tncc.utils.feature_gates import (
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
     multiprocess_device_remote_access_runtime_supported,
-    multiprocess_device_remote_access_transport_supported,
 )
 
 if TYPE_CHECKING:
@@ -299,6 +299,7 @@ class GemmAllGatherPlan:
     ctx: tncc.TNCCContext
     contract: GemmAllGatherContract
     allgather_plan: "AllGatherPlan" = field(repr=False)
+    runtime: TileCollectiveRuntime = field(repr=False)
     materialization: str = "local_gemm_plus_allgather"
     pack_layout: str = "rank_major_column_shards"
     storage_kind: str = "symmetric"
@@ -331,7 +332,7 @@ class GemmAllGatherPlan:
             self.validate_tensors(A, B_shard, C)
 
         local_shard = self.ctx.workspace(
-            "gemm_allgather.local_output_shard",
+            self.runtime.workspace_names[0],
             self.contract.M,
             self.contract.shard_cols,
             dtype=C.dtype,
@@ -340,7 +341,7 @@ class GemmAllGatherPlan:
         gather_output = C
         if self.contract.world_size > 1:
             gather_output = self.ctx.workspace(
-                "gemm_allgather.gathered_output_shards",
+                self.runtime.workspace_names[1],
                 self.contract.world_size,
                 self.contract.M,
                 self.contract.shard_cols,
@@ -381,6 +382,7 @@ class GemmAllGatherPlan:
             "storage_kind": self.storage_kind,
             "materialization": self.materialization,
             "pack_layout": self.pack_layout,
+            "runtime": self.runtime.to_dict(),
             "contract": self.contract.to_dict(),
             "allgather_plan": self.allgather_plan.to_dict(),
         }
@@ -658,6 +660,7 @@ class GemmReduceScatterPlan:
     ctx: tncc.TNCCContext
     contract: GemmReduceScatterContract
     reduce_scatter_plan: ReduceScatterPlan = field(repr=False)
+    runtime: TileCollectiveRuntime = field(repr=False)
     implementation: str = "auto"
     pack_layout: str = "rank_major_column_shards"
     storage_kind: str = "symmetric"
@@ -690,7 +693,7 @@ class GemmReduceScatterPlan:
             self.validate_tensors(A, B, C)
 
         local_full = self.ctx.workspace(
-            "gemm_reducescatter.local_full_output",
+            self.runtime.workspace_names[0],
             self.contract.M,
             self.contract.full_N,
             dtype=C.dtype,
@@ -700,7 +703,7 @@ class GemmReduceScatterPlan:
         reduce_src = local_full
         if self.contract.world_size > 1:
             packed = self.ctx.workspace(
-                "gemm_reducescatter.packed_input",
+                self.runtime.workspace_names[1],
                 self.contract.world_size,
                 self.contract.M,
                 self.contract.output_cols,
@@ -741,6 +744,7 @@ class GemmReduceScatterPlan:
             "storage_kind": self.storage_kind,
             "implementation": self.implementation,
             "pack_layout": self.pack_layout,
+            "runtime": self.runtime.to_dict(),
             "contract": self.contract.to_dict(),
             "reduce_scatter_plan": self.reduce_scatter_plan.to_dict(),
         }
@@ -966,6 +970,7 @@ def build_gemm_allgather_plan(
         ctx=resolved_ctx,
         storage_kind=storage_kind,
     )
+    runtime = resolve_tile_collective_runtime("gemm_allgather")
     allgather_plan = AllGatherPlan(
         ctx=resolved_ctx,
         input_shape=(contract.M, contract.shard_cols),
@@ -981,6 +986,7 @@ def build_gemm_allgather_plan(
         ctx=resolved_ctx,
         contract=contract,
         allgather_plan=allgather_plan,
+        runtime=runtime,
         storage_kind=storage_kind,
     )
 
@@ -1047,6 +1053,7 @@ def build_gemm_reducescatter_plan(
         ctx=resolved_ctx,
         storage_kind=storage_kind,
     )
+    runtime = resolve_tile_collective_runtime("gemm_reducescatter")
     resolved_implementation = _resolve_reduce_scatter_implementation(
         resolved_ctx,
         implementation=implementation,
@@ -1068,6 +1075,7 @@ def build_gemm_reducescatter_plan(
         ctx=resolved_ctx,
         contract=contract,
         reduce_scatter_plan=reduce_scatter_plan,
+        runtime=runtime,
         implementation=resolved_implementation,
         storage_kind=storage_kind,
     )
@@ -1728,7 +1736,7 @@ def _validate_allgather_contract(
     """Validate an allgather contract and return the logical block size."""
     del storage_kind  # Reserved for future non-symmetric storage backends.
 
-    heap = ctx.require_heap()
+    ctx.require_heap()
     if src.device != output.device:
         raise ValueError(
             f"allgather expects src/output on the same device, got {src.device} vs {output.device}"

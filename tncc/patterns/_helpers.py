@@ -15,7 +15,6 @@ import triton.language as tl
 
 from tncc.memory.translation import translate_ptr
 
-
 @triton.jit
 def scatter_tile_to_peer(
     C_ptr,
@@ -89,3 +88,45 @@ def scatter_tile_to_peer(
         tl.store(remote_C + offsets, tile_data, mask=final_mask, cache_modifier=".wt")
     else:
         tl.store(remote_C + offsets, tile_data, mask=final_mask)
+
+
+@triton.jit
+def multicast_tile_to_peers(
+    C_ptr,
+    tile_data,
+    offs_m,
+    offs_n,
+    rank,
+    world_size,
+    heap_bases,
+    src_col_offset,
+    valid_cols,
+    dst_leading_dim,
+    dst_col_offset,
+    mask,
+    CACHE_MODIFIER: tl.constexpr = ".wt",
+    MAX_PEERS: tl.constexpr = 33,
+):
+    """Fan one prepared tile out to every peer via software multicast.
+
+    This is the portable fallback for hardware multicast. The tile is loaded
+    once and then remote-stored to each peer according to the execution
+    contract.
+    """
+    for peer in tl.static_range(0, MAX_PEERS):
+        if peer < world_size and peer != rank:
+            scatter_tile_to_peer(
+                C_ptr,
+                tile_data,
+                offs_m,
+                offs_n,
+                rank,
+                peer,
+                heap_bases,
+                src_col_offset,
+                valid_cols,
+                dst_leading_dim,
+                dst_col_offset,
+                mask,
+                CACHE_MODIFIER=CACHE_MODIFIER,
+            )

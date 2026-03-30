@@ -12,10 +12,11 @@ given problem and return a comparison table.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     import torch
+
     from tncc.patterns import Pattern
 
 
@@ -231,11 +232,11 @@ def benchmark_all_patterns(
             print(f"{r['pattern']:25s}  {r['mean_ms']:.3f} ms")
         print(f"Best: {results['best']}")
     """
+    from tncc.ops import build_gemm_allscatter_plan
     from tncc.patterns.bulk_sync import BulkSyncPattern
     from tncc.patterns.fused_sequential import FusedSequentialPattern
     from tncc.patterns.producer_consumer import ProducerConsumerPattern
     from tncc.patterns.wg_specialized import WGSpecializedPattern
-    from tncc.ops import build_gemm_allscatter_plan
 
     execution = spec
     if execution is None:

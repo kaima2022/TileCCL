@@ -29,13 +29,14 @@ Overlap mechanism:
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import triton
 import triton.language as tl
 
 from tncc.patterns import Pattern
-from tncc.patterns._helpers import scatter_tile_to_peer
+from tncc.patterns._helpers import multicast_tile_to_peers
+from tncc.patterns.runtime import resolve_dual_role_scheduler
 from tncc.sync.primitives import tile_signal, tile_wait
 
 if TYPE_CHECKING:
@@ -92,12 +93,13 @@ class WGSpecializedPattern(Pattern):
               bandwidth requirements, which varies with M, N, K and the
               interconnect bandwidth.
         """
-        total_sms = self.ctx.backend.get_device_properties().compute_units
-        if self.COMPUTE_SMS > 0 and self.COMM_SMS > 0:
-            return self.COMPUTE_SMS, self.COMM_SMS
-        comm = max(1, int(total_sms * self._COMM_SM_FRACTION))
-        compute = total_sms - comm
-        return compute, comm
+        scheduler = resolve_dual_role_scheduler(
+            self.ctx.backend.get_device_properties().compute_units,
+            compute_sms=self.COMPUTE_SMS,
+            comm_sms=self.COMM_SMS,
+            comm_sm_fraction=self._COMM_SM_FRACTION,
+        )
+        return scheduler.compute_sms, scheduler.comm_sms
 
     def _get_locks(self, total_tiles: int, device: "torch.device") -> "torch.Tensor":
         """Return a zeroed lock buffer, reusing storage across launches."""
@@ -139,7 +141,6 @@ class WGSpecializedPattern(Pattern):
             B: Input matrix ``(K, N)``.
             C: Output matrix ``(M, N_local)``.
         """
-        import torch
 
         self.require_device_remote_access_runtime(
             operation="wg_specialized pattern execution"
@@ -244,7 +245,7 @@ class WGSpecializedPattern(Pattern):
 
         Program instances COMPUTE_SMS..COMPUTE_SMS+COMM_SMS-1 are
         **comm workers** that wait via tile_wait (acquire semantics)
-        and scatter tiles to peers via scatter_tile_to_peer.
+        and multicast tiles to peers via the shared helper.
 
         Uses Iris-style mask-free K-loop with modular index wrapping
         and compiler vectorization hints.
@@ -333,12 +334,17 @@ class WGSpecializedPattern(Pattern):
                 tile_data = tl.load(c_ptrs, mask=c_mask, other=0.0)
 
                 # ---- Scatter to all peers via translate_ptr ----
-                for peer in range(world_size):
-                    if peer != rank:
-                        scatter_tile_to_peer(
-                            C_ptr, tile_data, offs_m, offs_n,
-                            rank, peer, heap_bases,
-                            scatter_src_col_offset, scatter_cols,
-                            scatter_dst_leading_dim, scatter_dst_col_offset,
-                            c_mask,
-                        )
+                multicast_tile_to_peers(
+                    C_ptr,
+                    tile_data,
+                    offs_m,
+                    offs_n,
+                    rank,
+                    world_size,
+                    heap_bases,
+                    scatter_src_col_offset,
+                    scatter_cols,
+                    scatter_dst_leading_dim,
+                    scatter_dst_col_offset,
+                    c_mask,
+                )

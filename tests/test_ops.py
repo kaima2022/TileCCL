@@ -340,7 +340,14 @@ def test_build_gemm_allgather_plan_exposes_stable_metadata(
 
         assert plan.contract.full_N == N
         assert plan.contract.shard_cols == N
+        assert plan.runtime.communication == "software_multicast"
+        assert plan.runtime.signal_mode == "binary"
         assert payload["op"] == "gemm_allgather"
+        assert payload["runtime"]["scheduler"] == "tile_scheduler_v1"
+        assert payload["runtime"]["workspace_names"] == [
+            "gemm_allgather.local_output_shard",
+            "gemm_allgather.gathered_output_shards",
+        ]
         assert payload["contract"]["full_N"] == N
         assert payload["allgather_plan"]["block_size"] == M * N
     finally:
@@ -501,9 +508,16 @@ def test_build_gemm_reducescatter_plan_exposes_stable_metadata(
 
         assert plan.contract.full_N == N
         assert plan.contract.output_cols == N
+        assert plan.runtime.signal_mode == "counting"
+        assert plan.runtime.wait_mode == "wait_ge"
         assert plan.implementation == "reference"
         assert payload["op"] == "gemm_reducescatter"
         assert payload["implementation"] == "reference"
+        assert payload["runtime"]["communication"] == "reduce_scatter"
+        assert payload["runtime"]["workspace_names"] == [
+            "gemm_reducescatter.local_full_output",
+            "gemm_reducescatter.packed_input",
+        ]
         assert payload["contract"]["full_N"] == N
         assert payload["reduce_scatter_plan"]["implementation"] == "reference"
     finally:
@@ -668,8 +682,8 @@ def test_allreduce_plan_execute_reuses_resolved_execution(
     monkeypatch,
 ) -> None:
     """AllReducePlan.execute should launch with the pre-resolved execution spec."""
-    from tncc.memory.symmetric_heap import SymmetricHeap
     import tncc.primitives.collectives as collectives
+    from tncc.memory.symmetric_heap import SymmetricHeap
 
     heaps = SymmetricHeap.create_all(size=64 * 1024 * 1024, world_size=1)
     try:

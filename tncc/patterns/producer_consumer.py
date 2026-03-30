@@ -27,13 +27,14 @@ Overlap mechanism:
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import triton
 import triton.language as tl
 
 from tncc.patterns import Pattern
-from tncc.patterns._helpers import scatter_tile_to_peer
+from tncc.patterns._helpers import multicast_tile_to_peers
+from tncc.patterns.runtime import resolve_dual_role_scheduler
 from tncc.sync.primitives import tile_signal, tile_wait
 
 if TYPE_CHECKING:
@@ -89,12 +90,13 @@ class ProducerConsumerPattern(Pattern):
         Returns:
             (compute_sms, comm_sms) tuple.
         """
-        total_sms = self.ctx.backend.get_device_properties().compute_units
-        if self.COMPUTE_SMS > 0 and self.COMM_SMS > 0:
-            return self.COMPUTE_SMS, self.COMM_SMS
-        comm = max(1, int(total_sms * self._COMM_SM_FRACTION))
-        compute = total_sms - comm
-        return compute, comm
+        scheduler = resolve_dual_role_scheduler(
+            self.ctx.backend.get_device_properties().compute_units,
+            compute_sms=self.COMPUTE_SMS,
+            comm_sms=self.COMM_SMS,
+            comm_sm_fraction=self._COMM_SM_FRACTION,
+        )
+        return scheduler.compute_sms, scheduler.comm_sms
 
     def _get_locks(self, total_tiles: int, device: "torch.device") -> "torch.Tensor":
         """Return a zeroed lock buffer, reusing storage across launches."""
@@ -353,7 +355,7 @@ class ProducerConsumerPattern(Pattern):
         For each tile (round-robin), waits via
         :func:`~tncc.sync.primitives.tile_wait` (acquire semantics) until
         the producer signals completion, then scatters the tile to all
-        peer GPUs via :func:`~tncc.patterns._helpers.scatter_tile_to_peer`.
+        peer GPUs via the shared software-multicast helper.
         """
         pid = tl.program_id(0)
 
@@ -375,12 +377,17 @@ class ProducerConsumerPattern(Pattern):
             tile_data = tl.load(c_ptrs, mask=c_mask, other=0.0)
 
             # ---- Scatter to all peers via translate_ptr ----
-            for peer in range(world_size):
-                if peer != rank:
-                    scatter_tile_to_peer(
-                        C_ptr, tile_data, offs_m, offs_n,
-                        rank, peer, heap_bases,
-                        scatter_src_col_offset, scatter_cols,
-                        scatter_dst_leading_dim, scatter_dst_col_offset,
-                        c_mask,
-                    )
+            multicast_tile_to_peers(
+                C_ptr,
+                tile_data,
+                offs_m,
+                offs_n,
+                rank,
+                world_size,
+                heap_bases,
+                scatter_src_col_offset,
+                scatter_cols,
+                scatter_dst_leading_dim,
+                scatter_dst_col_offset,
+                c_mask,
+            )

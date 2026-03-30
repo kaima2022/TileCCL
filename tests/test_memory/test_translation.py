@@ -13,7 +13,6 @@ import torch
 
 from tncc.memory.translation import PointerTranslator
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers / fixtures
 # ---------------------------------------------------------------------------

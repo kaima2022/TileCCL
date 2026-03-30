@@ -21,13 +21,13 @@ reference and performance lower-bound.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import triton
 import triton.language as tl
 
 from tncc.patterns import Pattern
-from tncc.patterns._helpers import scatter_tile_to_peer
+from tncc.patterns._helpers import multicast_tile_to_peers
 
 if TYPE_CHECKING:
     import torch
@@ -79,7 +79,6 @@ class BulkSyncPattern(Pattern):
             B: Input matrix of shape ``(K, N)`` on the local device.
             C: Output matrix of shape ``(M, N_local)`` on the local device.
         """
-        import torch
 
         self.require_device_remote_access_runtime(
             operation="bulk_sync pattern execution"
@@ -132,7 +131,7 @@ class BulkSyncPattern(Pattern):
         heap_bases = self.ctx.heap_bases  # (world_size,) int64 heap base pointers
         num_scatter_tiles_m = triton.cdiv(M, self.BLOCK_M)
         num_scatter_tiles_n = triton.cdiv(spec.scatter_cols, self.BLOCK_N)
-        total_scatter_tiles = num_scatter_tiles_m * num_scatter_tiles_n * world_size
+        total_scatter_tiles = num_scatter_tiles_m * num_scatter_tiles_n
 
         scatter_grid = (min(num_sms, total_scatter_tiles),)
         self._scatter_kernel[scatter_grid](
@@ -262,43 +261,39 @@ class BulkSyncPattern(Pattern):
         BLOCK_N: tl.constexpr,
         NUM_SMS: tl.constexpr,
     ):
-        """Scatter kernel: push local C tiles to every peer via translate_ptr.
+        """Scatter kernel: push each local C tile to every peer once.
 
-        Each program instance loops over (peer, tile_m, tile_n) triples in
-        round-robin order.  For each triple it reads a BLOCK_M x BLOCK_N
-        tile from the local C buffer and writes it to the corresponding
-        location in the peer's remote buffer using symmetric-heap pointer
-        translation.
+        Each program instance reads one local tile and fans it out to all
+        peers via the shared software-multicast helper. This avoids the
+        previous per-peer reload of the same tile.
         """
         pid = tl.program_id(0)
-        tiles_per_peer = num_scatter_tiles_m * num_scatter_tiles_n
-        total_tiles = tiles_per_peer * world_size
+        total_tiles = num_scatter_tiles_m * num_scatter_tiles_n
 
         for tile_id in range(pid, total_tiles, NUM_SMS):
-            # Decompose into (peer_idx, tile_m, tile_n)
-            peer_idx = tile_id // tiles_per_peer
-            local_tile = tile_id % tiles_per_peer
-            tile_m = local_tile // num_scatter_tiles_n
-            tile_n = local_tile % num_scatter_tiles_n
+            tile_m = tile_id // num_scatter_tiles_n
+            tile_n = tile_id % num_scatter_tiles_n
 
-            # Only scatter to peers (skip self -- local rank already has data)
-            if peer_idx != rank:
-                # Source offsets in local C
-                offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
-                offs_n = scatter_src_col_offset + tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
+            offs_m = tile_m * BLOCK_M + tl.arange(0, BLOCK_M)
+            offs_n = scatter_src_col_offset + tile_n * BLOCK_N + tl.arange(0, BLOCK_N)
 
-                # Load local tile
-                src_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
-                mask = (offs_m[:, None] < M) & (offs_n[None, :] < scatter_src_col_offset + scatter_cols)
-                tile_data = tl.load(src_ptrs, mask=mask, other=0.0)
+            src_ptrs = C_ptr + offs_m[:, None] * stride_cm + offs_n[None, :] * stride_cn
+            mask = (offs_m[:, None] < M) & (
+                offs_n[None, :] < scatter_src_col_offset + scatter_cols
+            )
+            tile_data = tl.load(src_ptrs, mask=mask, other=0.0)
 
-                # Scatter via symmetric-heap pointer translation.
-                # translate_ptr produces a typed pointer, so element offsets
-                # are used directly (no manual byte-size scaling).
-                scatter_tile_to_peer(
-                    C_ptr, tile_data, offs_m, offs_n,
-                    rank, peer_idx, heap_bases,
-                    scatter_src_col_offset, scatter_cols,
-                    scatter_dst_leading_dim, scatter_dst_col_offset,
-                    mask,
-                )
+            multicast_tile_to_peers(
+                C_ptr,
+                tile_data,
+                offs_m,
+                offs_n,
+                rank,
+                world_size,
+                heap_bases,
+                scatter_src_col_offset,
+                scatter_cols,
+                scatter_dst_leading_dim,
+                scatter_dst_col_offset,
+                mask,
+            )

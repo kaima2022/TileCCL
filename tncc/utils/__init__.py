@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """tncc.utils - Utility modules for topology detection and profiling."""
 
-from tncc.utils.topology import TopologyDetector
-from tncc.utils.profiling import TileProfiler
 from tncc.utils.benchmark_results import (
     benchmark_environment_health,
     canonical_benchmark_run,
@@ -34,6 +32,8 @@ from tncc.utils.feature_gates import (
     multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
 )
+from tncc.utils.profiling import TileProfiler
+from tncc.utils.topology import TopologyDetector
 
 __all__ = [
     "TopologyDetector",

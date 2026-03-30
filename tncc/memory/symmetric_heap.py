@@ -30,14 +30,14 @@ Supports two modes of operation:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Optional, TypeVar
 
 import torch
 import torch.distributed as dist
 
-from tncc.backends import get_backend, detect_hardware
+from tncc.backends import detect_hardware, get_backend
 from tncc.backends.base import BackendInterface
 from tncc.memory.allocators import (
     AllocatorMemoryModelDescriptor,

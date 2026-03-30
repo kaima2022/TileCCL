@@ -24,8 +24,8 @@ class TestBulkSyncPattern:
         Uses a single GPU (world_size=1) so the scatter is a no-op.
         Verifies that the persistent GEMM kernel is numerically correct.
         """
-        from tncc.patterns import BulkSyncPattern
         from tncc.memory.symmetric_heap import SymmetricHeap
+        from tncc.patterns import BulkSyncPattern
 
         M, N, K = 512, 512, 512
 
@@ -66,8 +66,8 @@ class TestBulkSyncPattern:
         if device_info.num_gpus < 2:
             pytest.skip("Requires 2+ GPUs")
 
-        from tncc.patterns import BulkSyncPattern
         from tncc.memory.symmetric_heap import SymmetricHeap
+        from tncc.patterns import BulkSyncPattern
 
         M, N, K = 256, 256, 256
         world_size = 2

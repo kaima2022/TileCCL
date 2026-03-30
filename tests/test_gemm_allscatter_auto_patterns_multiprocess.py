@@ -9,7 +9,6 @@ import sys
 
 import pytest
 
-
 _AUTO_CASES = (
     ("bulk_sync", 128, 512, 256, "bulk_sync"),
     ("fused_sequential", 512, 1024, 16384, "fused_sequential"),

@@ -21,7 +21,6 @@ import ctypes
 import ctypes.util
 import logging
 import os
-import struct
 from typing import Optional
 
 import torch

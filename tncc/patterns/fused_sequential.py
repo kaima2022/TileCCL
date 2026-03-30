@@ -23,13 +23,13 @@ in round-robin order, so the total grid size equals ``NUM_SMS``.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import triton
 import triton.language as tl
 
 from tncc.patterns import Pattern
-from tncc.patterns._helpers import scatter_tile_to_peer
+from tncc.patterns._helpers import multicast_tile_to_peers
 
 if TYPE_CHECKING:
     import torch
@@ -86,7 +86,6 @@ class FusedSequentialPattern(Pattern):
             C: Output matrix of shape ``(M, N_local)`` -- written locally
                and simultaneously scattered to peers.
         """
-        import torch
 
         self.require_device_remote_access_runtime(
             operation="fused_sequential pattern execution"
@@ -239,12 +238,17 @@ class FusedSequentialPattern(Pattern):
             tl.store(c_ptrs, result, mask=c_mask)
 
             # ---- Phase 3: Scatter to all peers (.wt write-through) ----
-            for peer in range(world_size):
-                if peer != rank:
-                    scatter_tile_to_peer(
-                        C_ptr, result, offs_m, offs_n,
-                        rank, peer, heap_bases,
-                        scatter_src_col_offset, scatter_cols,
-                        scatter_dst_leading_dim, scatter_dst_col_offset,
-                        c_mask,
-                    )
+            multicast_tile_to_peers(
+                C_ptr,
+                result,
+                offs_m,
+                offs_n,
+                rank,
+                world_size,
+                heap_bases,
+                scatter_src_col_offset,
+                scatter_cols,
+                scatter_dst_leading_dim,
+                scatter_dst_col_offset,
+                c_mask,
+            )

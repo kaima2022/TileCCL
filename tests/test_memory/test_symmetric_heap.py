@@ -14,12 +14,10 @@ Multi-GPU tests are marked ``@pytest.mark.multigpu`` and need >= 2 GPUs.
 
 from __future__ import annotations
 
-import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import torch
-
 
 # ---------------------------------------------------------------------------
 # Constants used by the SymmetricHeap implementation

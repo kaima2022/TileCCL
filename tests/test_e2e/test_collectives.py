@@ -18,15 +18,13 @@ import triton
 import triton.language as tl
 
 from tncc.memory.symmetric_heap import SymmetricHeap
-from tncc.memory.translation import translate_ptr
 from tncc.primitives.collectives import (
-    tile_allreduce,
     tile_allgather,
+    tile_allreduce,
     tile_broadcast,
-    tile_scatter,
     tile_reduce_scatter,
+    tile_scatter,
 )
-
 
 BLOCK_SIZE = 256
 
@@ -187,7 +185,6 @@ class TestCollectives:
         # performs reads from remote heaps. Verify at least one rank got
         # values different from its original.
         r0_c0_val = data[0][0].item()
-        r0_c1_val = data[0][BLOCK_SIZE].item()
         # Rank 0 started with chunk0=1.0, chunk1=2.0
         # After allreduce, at least the reduce-scatter phase should have
         # read from remote rank and produced partial results.

@@ -113,8 +113,8 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
     import tncc
     from tncc.memory.symmetric_heap import SymmetricHeap
-    from tncc.primitives.collectives import _allreduce_kernel, resolve_allreduce_execution
     from tncc.primitives import allreduce as primitive_allreduce
+    from tncc.primitives.collectives import _allreduce_kernel, resolve_allreduce_execution
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,

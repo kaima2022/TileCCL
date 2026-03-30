@@ -9,7 +9,7 @@ along with dataclasses describing hardware topology and device properties.
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

@@ -22,7 +22,6 @@ import triton.language as tl
 from tncc.memory.symmetric_heap import SymmetricHeap
 from tncc.memory.translation import translate_ptr
 
-
 # ---------------------------------------------------------------------------
 # Skip if < 2 GPUs
 # ---------------------------------------------------------------------------

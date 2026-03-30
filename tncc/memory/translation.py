@@ -31,7 +31,6 @@ import torch
 import triton
 import triton.language as tl
 
-
 # ======================================================================
 # Device-side functions (all @triton.jit)
 # ======================================================================

@@ -7,12 +7,10 @@ that other test modules consume.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Generator, Optional
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Device / backend detection

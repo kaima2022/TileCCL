@@ -22,6 +22,7 @@ Conventions:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import torch
 import triton
@@ -35,8 +36,10 @@ from tncc.utils.feature_gates import (
     multiprocess_device_collectives_transport_supported,
     multiprocess_device_remote_access_detail,
     multiprocess_device_remote_access_runtime_supported,
-    multiprocess_device_remote_access_transport_supported,
 )
+
+if TYPE_CHECKING:
+    from tncc.memory import SymmetricHeap
 
 # Maximum supported world_size for collective operations.
 # Determined by tl.static_range upper bound (Triton unrolls statically).
@@ -48,6 +51,7 @@ _ALLREDUCE_MIN_CHUNK_ELEMS = 256
 _ALLREDUCE_MAX_CHUNK_ELEMS = 4096
 _ALLREDUCE_MAX_THROUGHPUT_PIPELINE_SLOTS = 4
 _ALLREDUCE_MAX_BANDWIDTH_PIPELINE_SLOTS = 16
+_HOST_COLLECTIVE_MAX_CHUNK_ELEMS = 4096
 
 
 @dataclass(frozen=True, slots=True)
@@ -907,9 +911,69 @@ def _scatter_kernel(
 # -----------------------------------------------------------------------
 
 
+def _host_collective_chunk_elems(block_size: int) -> int:
+    """Return the maximum workspace tile size for host collective launchers."""
+    return max(1, min(block_size, _HOST_COLLECTIVE_MAX_CHUNK_ELEMS))
+
+
+def _host_collective_kernel_block_elems(remaining: int) -> int:
+    """Return a Triton-safe power-of-two block size for the remaining tail."""
+    capped = _host_collective_chunk_elems(remaining)
+    return 1 << (capped.bit_length() - 1)
+
+
+def _is_power_of_two(value: int) -> bool:
+    """Return ``True`` when *value* is a power of two."""
+    return value > 0 and (value & (value - 1)) == 0
+
+
+def _host_collective_workspace(
+    heap: SymmetricHeap,
+    *,
+    numel: int,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Return a symmetric scratch buffer reused across chunked launchers."""
+    workspace_by_dtype = getattr(
+        heap,
+        "_collective_launcher_workspace_by_dtype",
+        None,
+    )
+    if workspace_by_dtype is None:
+        workspace_by_dtype = {}
+        setattr(
+            heap,
+            "_collective_launcher_workspace_by_dtype",
+            workspace_by_dtype,
+        )
+
+    workspace = workspace_by_dtype.get(dtype)
+    if workspace is None or workspace.numel() < numel:
+        workspace = heap.allocate_tensor((numel,), dtype)
+        workspace_by_dtype[dtype] = workspace
+    return workspace.narrow(0, 0, numel)
+
+
+def _host_collective_multiprocess_sync(
+    heap: SymmetricHeap,
+    *,
+    device: torch.device,
+) -> None:
+    """Synchronize chunked host launcher phases across multiprocess ranks."""
+    if heap.mode != "multiprocess":
+        return
+    torch.cuda.synchronize(device)
+    if not torch.distributed.is_initialized():
+        raise RuntimeError(
+            "Chunked multiprocess collective launchers require torch.distributed "
+            "to be initialized."
+        )
+    torch.distributed.barrier(device_ids=[device.index])
+
+
 def allreduce(
     tensor: torch.Tensor,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     op: str = "sum",
     *,
     _execution: AllReduceExecutionSpec | None = None,
@@ -977,7 +1041,7 @@ def allreduce(
 def allgather(
     tensor: torch.Tensor,
     output: torch.Tensor,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
 ) -> None:
     """Host-side launcher for :func:`tile_allgather` (testing / benchmarking).
 
@@ -1006,6 +1070,49 @@ def allgather(
     )
 
     heap_bases = heap.get_heap_bases()
+    chunk_elems = _host_collective_chunk_elems(block_size)
+
+    if heap.mode == "multiprocess" and (
+        block_size > chunk_elems or not _is_power_of_two(block_size)
+    ):
+        workspace = _host_collective_workspace(
+            heap,
+            numel=world_size * chunk_elems,
+            dtype=output.dtype,
+        )
+        tensor_flat = tensor.reshape(-1)
+        output_view = output.view(world_size, block_size)
+
+        chunk_start = 0
+        while chunk_start < block_size:
+            chunk = _host_collective_kernel_block_elems(
+                block_size - chunk_start
+            )
+            src_chunk = tensor_flat.narrow(0, chunk_start, chunk)
+            gathered_chunk = workspace.narrow(0, 0, world_size * chunk)
+
+            _allgather_kernel[(1,)](
+                src_chunk,
+                gathered_chunk,
+                heap_bases,
+                heap.rank,
+                world_size,
+                BLOCK_SIZE=chunk,
+            )
+            _host_collective_multiprocess_sync(
+                heap,
+                device=tensor.device,
+            )
+
+            output_view[:, chunk_start:chunk_start + chunk].copy_(
+                gathered_chunk.view(world_size, chunk)
+            )
+            _host_collective_multiprocess_sync(
+                heap,
+                device=output.device,
+            )
+            chunk_start += chunk
+        return
 
     _allgather_kernel[(1,)](
         tensor,
@@ -1019,7 +1126,7 @@ def allgather(
 
 def broadcast(
     tensor: torch.Tensor,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     root: int = 0,
 ) -> None:
     """Host-side launcher for :func:`tile_broadcast` (testing / benchmarking).
@@ -1045,6 +1152,26 @@ def broadcast(
 
     block_size = tensor.numel()
     heap_bases = heap.get_heap_bases()
+    chunk_elems = _host_collective_chunk_elems(block_size)
+
+    if block_size > chunk_elems or not _is_power_of_two(block_size):
+        chunk_start = 0
+        while chunk_start < block_size:
+            chunk = _host_collective_kernel_block_elems(
+                block_size - chunk_start
+            )
+            tensor_chunk = tensor.narrow(0, chunk_start, chunk)
+
+            _broadcast_kernel[(1,)](
+                tensor_chunk,
+                heap_bases,
+                heap.rank,
+                world_size,
+                root,
+                BLOCK_SIZE=chunk,
+            )
+            chunk_start += chunk
+        return
 
     _broadcast_kernel[(1,)](
         tensor,
@@ -1059,7 +1186,7 @@ def broadcast(
 def scatter(
     tensor: torch.Tensor,
     output: torch.Tensor,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     *,
     root: int = 0,
 ) -> None:
@@ -1103,6 +1230,49 @@ def scatter(
     )
 
     heap_bases = heap.get_heap_bases()
+    chunk_elems = _host_collective_chunk_elems(block_size)
+
+    if block_size > chunk_elems or not _is_power_of_two(block_size):
+        tensor_view = tensor.view(world_size, block_size)
+        packed_chunk = None
+        if heap.rank == root:
+            packed_chunk = torch.empty(
+                (world_size * chunk_elems,),
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+
+        chunk_start = 0
+        while chunk_start < block_size:
+            chunk = _host_collective_kernel_block_elems(
+                block_size - chunk_start
+            )
+            output_chunk = output.narrow(0, chunk_start, chunk)
+            if heap.rank == root:
+                assert packed_chunk is not None
+                packed_chunk_view = packed_chunk.narrow(0, 0, world_size * chunk).view(
+                    world_size,
+                    chunk,
+                )
+                packed_chunk_view.copy_(
+                    tensor_view[:, chunk_start:chunk_start + chunk]
+                )
+                src_chunk = packed_chunk.narrow(0, 0, world_size * chunk)
+            else:
+                src_chunk = tensor.narrow(0, 0, world_size * chunk)
+
+            _scatter_kernel[(1,)](
+                src_chunk,
+                output_chunk,
+                heap_bases,
+                heap.rank,
+                world_size,
+                root,
+                BLOCK_SIZE=chunk,
+            )
+            chunk_start += chunk
+        return
+
     _scatter_kernel[(1,)](
         tensor,
         output,
@@ -1117,7 +1287,7 @@ def scatter(
 def reduce_scatter(
     tensor: torch.Tensor,
     output: torch.Tensor,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     op: str = "sum",
     implementation: str = "auto",
 ) -> None:
@@ -1230,6 +1400,46 @@ def reduce_scatter(
         return
 
     heap_bases = heap.get_heap_bases()
+    chunk_elems = _host_collective_chunk_elems(block_size)
+
+    if block_size > chunk_elems or not _is_power_of_two(block_size):
+        tensor_view = tensor.view(world_size, block_size)
+        output_flat = output.reshape(-1)
+        workspace = _host_collective_workspace(
+            heap,
+            numel=world_size * chunk_elems,
+            dtype=tensor.dtype,
+        )
+
+        chunk_start = 0
+        while chunk_start < block_size:
+            chunk = _host_collective_kernel_block_elems(
+                block_size - chunk_start
+            )
+            packed_chunk = workspace.narrow(0, 0, world_size * chunk)
+            packed_chunk.view(world_size, chunk).copy_(
+                tensor_view[:, chunk_start:chunk_start + chunk]
+            )
+            _host_collective_multiprocess_sync(
+                heap,
+                device=tensor.device,
+            )
+
+            _reduce_scatter_kernel[(1,)](
+                packed_chunk,
+                output_flat.narrow(0, chunk_start, chunk),
+                heap_bases,
+                heap.rank,
+                world_size,
+                BLOCK_SIZE=chunk,
+            )
+            _host_collective_multiprocess_sync(
+                heap,
+                device=output.device,
+            )
+            chunk_start += chunk
+        return
+
     _reduce_scatter_kernel[(1,)](
         tensor,
         output,
@@ -1243,7 +1453,7 @@ def reduce_scatter(
 def _require_tensor_on_heap(
     tensor: torch.Tensor,
     *,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     name: str,
 ) -> None:
     """Ensure *tensor* resides in *heap*."""
@@ -1254,7 +1464,7 @@ def _require_tensor_on_heap(
 
 
 def _require_device_remote_access_transport(
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     *,
     operation: str,
 ) -> None:
@@ -1278,7 +1488,7 @@ def _require_device_remote_access_transport(
 def _reference_reduce_scatter_single_process(
     tensor: torch.Tensor,
     output: torch.Tensor,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
 ) -> None:
     """Reference reduce-scatter for single-process symmetric heaps.
 
@@ -1316,7 +1526,7 @@ def _reference_reduce_scatter_single_process(
 def resolve_allreduce_execution(
     tensor: torch.Tensor,
     *,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     op: str = "sum",
 ) -> AllReduceExecutionSpec:
     """Resolve the execution contract for the public allreduce launcher."""
@@ -1503,7 +1713,7 @@ def _select_allreduce_num_warps(
 def _validate_allreduce_launch_prereqs(
     tensor: torch.Tensor,
     *,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     op: str,
 ) -> int:
     """Validate the public allreduce runtime contract and return tensor numel."""
@@ -1530,7 +1740,7 @@ def _validate_allreduce_launch_prereqs(
 def _validate_allreduce_execution_spec(
     tensor: torch.Tensor,
     *,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     op: str,
     execution: AllReduceExecutionSpec,
 ) -> None:
@@ -1565,7 +1775,7 @@ def _validate_allreduce_execution_spec(
 def _allreduce_workspace_key(
     tensor: torch.Tensor,
     *,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     spec: AllReduceExecutionSpec,
 ) -> tuple[object, ...]:
     """Return a process-local key for cached allreduce workspaces."""
@@ -1586,7 +1796,7 @@ def _allreduce_workspace_key(
 def _allreduce_workspace(
     tensor: torch.Tensor,
     *,
-    heap: "tncc.memory.SymmetricHeap",
+    heap: SymmetricHeap,
     spec: AllReduceExecutionSpec,
 ) -> _AllReduceWorkspace:
     """Return the cached workspace for the staged allreduce fast path."""

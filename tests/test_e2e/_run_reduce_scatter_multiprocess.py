@@ -121,8 +121,8 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
     import tncc
     from tncc.memory.symmetric_heap import SymmetricHeap
-    from tncc.primitives.collectives import _reduce_scatter_kernel
     from tncc.primitives import reduce_scatter as primitive_reduce_scatter
+    from tncc.primitives.collectives import _reduce_scatter_kernel
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,

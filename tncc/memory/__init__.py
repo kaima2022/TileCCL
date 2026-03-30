@@ -20,9 +20,6 @@ Device-side ``@triton.jit`` translation primitives live in
     from tncc.memory.translation import translate_ptr, remote_load, remote_store
 """
 
-from tncc.memory.symmetric_heap import SymmetricHeap
-from tncc.memory.symmetric_heap import PeerMemoryMapEntry
-from tncc.memory.translation import PointerTranslator
 from tncc.memory.allocators import (
     BaseSymmetricAllocator,
     ImportedPeerMemory,
@@ -30,6 +27,8 @@ from tncc.memory.allocators import (
     PeerMemoryExportDescriptor,
     TorchBumpAllocator,
 )
+from tncc.memory.symmetric_heap import PeerMemoryMapEntry, SymmetricHeap
+from tncc.memory.translation import PointerTranslator
 
 __all__ = [
     "BaseSymmetricAllocator",

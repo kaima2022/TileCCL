@@ -23,13 +23,13 @@ bench:  ## Run benchmarks
 	pytest tests/benchmarks/ -v -m "benchmark" --no-header -rN
 
 lint:  ## Run ruff linter
-	ruff check tncc/ tests/
+	ruff check tncc/ tests/ examples/ scripts/_benchmark_reporting.py scripts/export_benchmark_summary.py scripts/plot_figures.py --exclude tests/benchmarks/
 
 lint-fix:  ## Run ruff linter with auto-fix
-	ruff check --fix tncc/ tests/
+	ruff check --fix tncc/ tests/ examples/ scripts/_benchmark_reporting.py scripts/export_benchmark_summary.py scripts/plot_figures.py --exclude tests/benchmarks/
 
 format:  ## Format code with ruff
-	ruff format tncc/ tests/
+	ruff format tncc/ tests/ examples/ scripts/_benchmark_reporting.py scripts/export_benchmark_summary.py scripts/plot_figures.py --exclude tests/benchmarks/
 
 typecheck:  ## Run mypy type checker
 	mypy tncc/

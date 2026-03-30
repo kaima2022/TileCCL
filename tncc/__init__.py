@@ -19,7 +19,7 @@ __version__ = "0.1.0"
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     import torch

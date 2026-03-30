@@ -6,8 +6,6 @@ from __future__ import annotations
 import pytest
 import torch
 
-import tncc
-
 
 def test_reduce_scatter_launcher_validates_input_shape(skip_no_gpu, device_info) -> None:
     """The host launcher should reject mismatched input/output sizes."""

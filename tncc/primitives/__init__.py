@@ -11,6 +11,24 @@ Exports all public primitives from the four sub-modules:
   broadcast, scatter, reduce_scatter).
 """
 
+from tncc.primitives.collectives import (
+    allgather,
+    allreduce,
+    broadcast,
+    reduce_scatter,
+    scatter,
+    tile_allgather,
+    tile_allreduce,
+    tile_broadcast,
+    tile_reduce_scatter,
+    tile_scatter,
+)
+from tncc.primitives.communication import (
+    tile_get,
+    tile_put,
+    tile_remote_load,
+    tile_remote_store,
+)
 from tncc.primitives.compute import (
     tile_cast,
     tile_dot,
@@ -26,24 +44,6 @@ from tncc.primitives.memory import (
     tile_copy,
     tile_load,
     tile_store,
-)
-from tncc.primitives.communication import (
-    tile_get,
-    tile_put,
-    tile_remote_load,
-    tile_remote_store,
-)
-from tncc.primitives.collectives import (
-    tile_allreduce,
-    tile_allgather,
-    tile_scatter,
-    tile_reduce_scatter,
-    tile_broadcast,
-    allreduce,
-    allgather,
-    broadcast,
-    scatter,
-    reduce_scatter,
 )
 
 __all__ = [

@@ -45,7 +45,6 @@ import triton.language as tl
 
 from tncc.memory.translation import translate_ptr
 
-
 # =====================================================================
 # Remote atomic operations
 # =====================================================================
@@ -421,6 +420,26 @@ def tile_wait(
 
 
 @triton.jit
+def tile_try_wait(
+    locks,
+    tile_id,
+    max_spins: tl.constexpr = 1024,
+    sem: tl.constexpr = "acquire",
+    scope: tl.constexpr = "gpu",
+):
+    """Attempt to consume a signal without blocking indefinitely.
+
+    Spins for at most ``max_spins`` CAS probes. Returns ``1`` on success and
+    resets the lock to ``0`` exactly like :func:`tile_wait`; returns ``0``
+    when the tile is still not ready.
+    """
+    for _ in tl.static_range(max_spins):
+        if tl.atomic_cas(locks + tile_id, 1, 0, sem=sem, scope=scope) == 1:
+            return 1
+    return 0
+
+
+@triton.jit
 def tile_signal_add(
     signals,
     tile_id,
@@ -479,6 +498,34 @@ def tile_wait_ge(
     """
     while tl.atomic_add(signals + tile_id, 0, sem=sem, scope=scope) < threshold:
         pass
+
+
+@triton.jit
+def tile_acquire_credit(
+    credit_ptr,
+    tile_id,
+    sem: tl.constexpr = "acquire",
+    scope: tl.constexpr = "sys",
+):
+    """Consume one available credit from a local credit counter."""
+    while tl.atomic_add(credit_ptr + tile_id, 0, sem=sem, scope=scope) < 1:
+        pass
+    tl.atomic_add(credit_ptr + tile_id, -1, sem="relaxed", scope=scope)
+
+
+@triton.jit
+def tile_release_credit(
+    credit_ptr,
+    tile_id,
+    peer,
+    rank,
+    heap_bases,
+    sem: tl.constexpr = "release",
+    scope: tl.constexpr = "sys",
+):
+    """Release one credit to a peer's mirrored credit counter."""
+    remote_credit = translate_ptr(credit_ptr, rank, peer, heap_bases)
+    tl.atomic_add(remote_credit + tile_id, 1, sem=sem, scope=scope)
 
 
 # =====================================================================
