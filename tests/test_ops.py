@@ -1391,3 +1391,103 @@ def test_reduce_scatter_high_level_api_multigpu(skip_no_multigpu, device_info) -
     finally:
         for heap in heaps:
             heap.cleanup()
+
+
+@pytest.mark.multigpu
+def test_ag_gemm_rs_single_process(skip_no_multigpu, device_info) -> None:
+    """AllGather → GEMM → Scatter should produce correct output in single-process mode."""
+    from tncc.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    M, K, N = 128, 256, 128
+    K_shard = K // world_size
+    heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
+    try:
+        contexts = [
+            tncc.init(
+                backend=device_info.backend,
+                rank=rank,
+                world_size=world_size,
+                heap=heaps[rank],
+                force_backend=True,
+            )
+            for rank in range(world_size)
+        ]
+
+        shards = []
+        outputs = []
+        for rank in range(world_size):
+            torch.cuda.set_device(rank)
+            shard = heaps[rank].allocate_tensor((M, K_shard), torch.float32)
+            torch.manual_seed(rank + 42)
+            shard.copy_(torch.randn(M, K_shard, device=f"cuda:{rank}"))
+            shards.append(shard)
+            out = heaps[rank].allocate_tensor((M, N), torch.float32)
+            out.zero_()
+            outputs.append(out)
+
+        torch.manual_seed(100)
+        W = torch.randn(K, N, device="cuda:0", dtype=torch.float32)
+
+        # Reference: concat shards → GEMM
+        full_input = torch.cat(
+            [s.to(device="cuda:0") for s in shards], dim=1
+        )
+        expected = torch.matmul(full_input, W)
+
+        for rank in range(world_size):
+            W_rank = W.to(device=f"cuda:{rank}")
+            tncc.ops.allgather_gemm_reducescatter(
+                shards[rank], W_rank, outputs[rank], ctx=contexts[rank]
+            )
+
+        for rank in range(world_size):
+            torch.cuda.synchronize(rank)
+            actual = outputs[rank].to(device="cuda:0")
+            assert torch.allclose(actual, expected, rtol=1e-3, atol=5e-2), (
+                f"Rank {rank}: max diff {(actual - expected).abs().max().item()}"
+            )
+    finally:
+        for heap in heaps:
+            heap.cleanup()
+
+
+def test_build_ag_gemm_rs_plan_exposes_stable_metadata(
+    skip_no_multigpu,
+    device_info,
+) -> None:
+    """AllGatherGemmReduceScatterPlan metadata should include stage-role scheduler."""
+    from tncc.memory.symmetric_heap import SymmetricHeap
+
+    world_size = 2
+    M, K, N = 64, 128, 64
+    K_shard = K // world_size
+    heaps = SymmetricHeap.create_all(size=128 * 1024 * 1024, world_size=world_size)
+    try:
+        ctx = tncc.init(
+            backend=device_info.backend,
+            rank=0,
+            world_size=world_size,
+            heap=heaps[0],
+            force_backend=True,
+        )
+        torch.cuda.set_device(0)
+        input_shard = heaps[0].allocate_tensor((M, K_shard), torch.float32)
+        W = torch.randn(K, N, device="cuda:0", dtype=torch.float32)
+        output = heaps[0].allocate_tensor((M, N), torch.float32)
+
+        plan = tncc.ops.build_allgather_gemm_reducescatter_plan(
+            input_shard, W, output, ctx=ctx
+        )
+        payload = plan.to_dict()
+
+        assert payload["op"] == "allgather_gemm_reducescatter"
+        assert plan.contract.K == K
+        assert plan.contract.K_shard == K_shard
+        assert plan.runtime.stage_count == 3
+        assert "gather" in plan.runtime.role_order
+        assert "compute" in plan.runtime.role_order
+        assert "scatter" in plan.runtime.role_order
+    finally:
+        for heap in heaps:
+            heap.cleanup()

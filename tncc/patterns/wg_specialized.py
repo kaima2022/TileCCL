@@ -37,7 +37,7 @@ import triton.language as tl
 from tncc.patterns import Pattern
 from tncc.patterns._helpers import multicast_tile_to_peers
 from tncc.patterns.runtime import resolve_dual_role_scheduler
-from tncc.sync.primitives import tile_signal, tile_wait
+from tncc.sync.primitives import tile_signal, tile_try_wait, tile_wait
 
 if TYPE_CHECKING:
     import torch
@@ -318,9 +318,11 @@ class WGSpecializedPattern(Pattern):
 
             for tile_id in range(comm_pid, total_tiles, COMM_SMS):
                 # ---- Wait for compute worker to signal tile completion ----
-                # Acquire semantics ensure we see the tile data written
-                # by the compute worker before its release-signal.
-                tile_wait(locks_ptr, tile_id)
+                # First attempt a bounded spin via tile_try_wait (P0-0.2
+                # integration).  Falls back to unbounded tile_wait only when
+                # the tile is not yet ready after the fast probe.
+                if tile_try_wait(locks_ptr, tile_id) == 0:
+                    tile_wait(locks_ptr, tile_id)
 
                 # ---- Read the completed tile ----
                 tile_m = tile_id // num_tiles_n

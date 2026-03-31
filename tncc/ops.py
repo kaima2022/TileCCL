@@ -9,6 +9,7 @@ __all__ = [
     "gemm_allscatter_sharded",
     "gemm_allgather",
     "gemm_reducescatter",
+    "allgather_gemm_reducescatter",
     "allgather",
     "allreduce",
     "reduce_scatter",
@@ -16,6 +17,7 @@ __all__ = [
     "build_gemm_allscatter_plan",
     "build_gemm_allgather_plan",
     "build_gemm_reducescatter_plan",
+    "build_allgather_gemm_reducescatter_plan",
     "build_allgather_plan",
     "build_allreduce_plan",
     "build_reduce_scatter_plan",
@@ -24,6 +26,7 @@ __all__ = [
     "GemmAllScatterMixedLayoutPlan",
     "GemmAllGatherPlan",
     "GemmReduceScatterPlan",
+    "AllGatherGemmReduceScatterPlan",
     "AllGatherPlan",
     "AllReducePlan",
     "ReduceScatterPlan",
@@ -31,6 +34,7 @@ __all__ = [
     "GemmAllScatterContract",
     "GemmAllGatherContract",
     "GemmReduceScatterContract",
+    "AllGatherGemmReduceScatterContract",
 ]
 
 from dataclasses import dataclass, field
@@ -2175,3 +2179,297 @@ def _require_tensor_on_heap(tensor: Any, *, ctx: tncc.TNCCContext, name: str) ->
         raise ValueError(
             f"{name} must reside in the attached symmetric heap for ctx rank {ctx.rank}"
         )
+
+
+# =====================================================================
+# AllGather → GEMM → ReduceScatter  (P1 three-stage pipeline)
+# =====================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class AllGatherGemmReduceScatterContract:
+    """Resolved public contract for allgather → GEMM → scatter."""
+
+    M: int
+    K: int
+    N: int
+    K_shard: int
+    N_shard: int
+    rank: int
+    world_size: int
+    storage_kind: str = "symmetric"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "M": self.M,
+            "K": self.K,
+            "N": self.N,
+            "K_shard": self.K_shard,
+            "N_shard": self.N_shard,
+            "rank": self.rank,
+            "world_size": self.world_size,
+            "storage_kind": self.storage_kind,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AllGatherGemmReduceScatterPlan:
+    """Executable plan for the three-stage AllGather → GEMM → Scatter."""
+
+    ctx: tncc.TNCCContext
+    contract: AllGatherGemmReduceScatterContract
+    runtime: TileCollectiveRuntime = field(repr=False)
+    execution: TileCollectiveExecution = field(repr=False)
+    implementation: str = "host_pipeline"
+    storage_kind: str = "symmetric"
+
+    def validate_tensors(
+        self,
+        input_shard: Any,
+        W: Any,
+        output: Any,
+    ) -> None:
+        contract = _resolve_ag_gemm_rs_contract(
+            input_shard, W, output, ctx=self.ctx, storage_kind=self.storage_kind
+        )
+        if contract != self.contract:
+            raise ValueError(
+                "Tensor contract no longer matches this AllGatherGemmReduceScatterPlan."
+            )
+
+    def execute(
+        self,
+        input_shard: Any,
+        W: Any,
+        output: Any,
+        *,
+        validate: bool = True,
+    ) -> Any:
+        if validate:
+            self.validate_tensors(input_shard, W, output)
+        return _execute_ag_gemm_rs_pipeline(self, input_shard, W, output)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "op": "allgather_gemm_reducescatter",
+            "ctx": {
+                "rank": self.ctx.rank,
+                "world_size": self.ctx.world_size,
+                "backend": self.ctx.backend_name,
+                "device": self.ctx.device,
+            },
+            "storage_kind": self.storage_kind,
+            "implementation": self.implementation,
+            "runtime": self.runtime.to_dict(),
+            "execution": self.execution.to_dict(),
+            "contract": self.contract.to_dict(),
+        }
+
+
+def _resolve_ag_gemm_rs_contract(
+    input_shard: Any,
+    W: Any,
+    output: Any,
+    *,
+    ctx: tncc.TNCCContext,
+    storage_kind: str,
+) -> AllGatherGemmReduceScatterContract:
+    ctx.require_heap()
+    if input_shard.ndim != 2 or W.ndim != 2 or output.ndim != 2:
+        raise ValueError(
+            "allgather_gemm_reducescatter expects 2-D tensors: "
+            f"got input_shard.ndim={input_shard.ndim}, W.ndim={W.ndim}, output.ndim={output.ndim}"
+        )
+
+    M, K_shard = int(input_shard.shape[0]), int(input_shard.shape[1])
+    K, N = int(W.shape[0]), int(W.shape[1])
+    out_M, out_N = int(output.shape[0]), int(output.shape[1])
+
+    if out_M != M:
+        raise ValueError(
+            f"output rows ({out_M}) must equal input_shard rows ({M})"
+        )
+    if out_N != N:
+        raise ValueError(
+            f"output columns ({out_N}) must equal W columns ({N})"
+        )
+    if K_shard * ctx.world_size != K:
+        raise ValueError(
+            f"input_shard columns ({K_shard}) * world_size ({ctx.world_size}) "
+            f"must equal W rows ({K})"
+        )
+
+    N_shard = N // ctx.world_size if ctx.world_size > 1 else N
+    return AllGatherGemmReduceScatterContract(
+        M=M,
+        K=K,
+        N=N,
+        K_shard=K_shard,
+        N_shard=N_shard,
+        rank=ctx.rank,
+        world_size=ctx.world_size,
+        storage_kind=storage_kind,
+    )
+
+
+def build_allgather_gemm_reducescatter_plan(
+    input_shard: Any,
+    W: Any,
+    output: Any,
+    *,
+    ctx: tncc.TNCCContext | None = None,
+    storage_kind: str = "symmetric",
+) -> AllGatherGemmReduceScatterPlan:
+    """Resolve a reusable plan for AllGather → GEMM → Scatter."""
+    resolved_ctx = ctx if ctx is not None else tncc.current_context()
+    _require_device_remote_access_runtime(
+        resolved_ctx,
+        operation="tncc.ops.allgather_gemm_reducescatter(...)",
+    )
+    contract = _resolve_ag_gemm_rs_contract(
+        input_shard, W, output, ctx=resolved_ctx, storage_kind=storage_kind
+    )
+    runtime = resolve_tile_collective_runtime("allgather_gemm_reducescatter")
+    execution = resolve_tile_collective_execution(
+        "allgather_gemm_reducescatter",
+        total_sms=resolved_ctx.backend.get_device_properties().compute_units,
+        rows=contract.M,
+        world_size=contract.world_size,
+    )
+    return AllGatherGemmReduceScatterPlan(
+        ctx=resolved_ctx,
+        contract=contract,
+        runtime=runtime,
+        execution=execution,
+        storage_kind=storage_kind,
+    )
+
+
+def allgather_gemm_reducescatter(
+    input_shard: Any,
+    W: Any,
+    output: Any,
+    *,
+    ctx: tncc.TNCCContext | None = None,
+    storage_kind: str = "symmetric",
+) -> Any:
+    """Three-stage AllGather → GEMM → Scatter.
+
+    Gathers input column shards from all ranks, performs GEMM with the
+    full assembled input and the weight matrix, then writes the full
+    output to each rank.
+
+    Args:
+        input_shard: (M, K_shard) per rank - column shard of input.
+        W: (K, N) full weight matrix.
+        output: (M, N) output buffer on each rank.
+        ctx: Runtime context.  Defaults to global context.
+        storage_kind: Memory storage kind.
+
+    Returns:
+        The output tensor.
+    """
+    plan = build_allgather_gemm_reducescatter_plan(
+        input_shard, W, output, ctx=ctx, storage_kind=storage_kind
+    )
+    return plan.execute(input_shard, W, output, validate=False)
+
+
+def _execute_ag_gemm_rs_pipeline(
+    plan: AllGatherGemmReduceScatterPlan,
+    input_shard: Any,
+    W: Any,
+    output: Any,
+) -> Any:
+    """Execute AllGather → GEMM → Scatter via host-side staged pipeline."""
+    import torch
+
+    ctx = plan.ctx
+    contract = plan.contract
+
+    if contract.world_size == 1:
+        _run_local_gemm(input_shard, W, out=output)
+        return output
+
+    heap = ctx.require_heap()
+
+    if heap.mode == "single_process":
+        return _execute_ag_gemm_rs_single_process(plan, input_shard, W, output)
+
+    compute_stream, collective_stream = _get_staged_pipeline_streams(
+        output.device
+    )
+    gathered = ctx.workspace(
+        "ag_gemm_rs.gathered_input",
+        contract.M,
+        contract.K,
+        dtype=input_shard.dtype,
+    )
+
+    from tncc.primitives.collectives import allgather as collective_allgather
+
+    # Stage 1: AllGather input shards → gathered
+    with torch.cuda.stream(collective_stream):
+        collective_allgather(input_shard, gathered, heap)
+        gather_done = torch.cuda.Event(blocking=False)
+        gather_done.record(collective_stream)
+
+    # Stage 2: GEMM on gathered input
+    with torch.cuda.stream(compute_stream):
+        compute_stream.wait_event(gather_done)
+        _run_local_gemm(
+            gathered.view(contract.world_size, contract.M, contract.K_shard)
+            .permute(1, 0, 2)
+            .reshape(contract.M, contract.K),
+            W,
+            out=output,
+        )
+
+    compute_stream.synchronize()
+    collective_stream.synchronize()
+    return output
+
+
+_PENDING_AG_GEMM_RS_SINGLE_PROCESS: dict[
+    tuple[object, ...],
+    dict[int, tuple[AllGatherGemmReduceScatterPlan, Any, Any, Any]],
+] = {}
+
+
+def _execute_ag_gemm_rs_single_process(
+    plan: AllGatherGemmReduceScatterPlan,
+    input_shard: Any,
+    W: Any,
+    output: Any,
+) -> Any:
+    """Single-process fallback: wait for all ranks then gather+gemm."""
+    import torch
+
+    ctx = plan.ctx
+    contract = plan.contract
+    heap_bases = tuple(int(b) for b in ctx.heap_bases.tolist())
+    key = (
+        "ag_gemm_rs",
+        heap_bases,
+        contract.M,
+        contract.K,
+        contract.N,
+        str(output.dtype),
+    )
+    pending = _PENDING_AG_GEMM_RS_SINGLE_PROCESS.setdefault(key, {})
+    pending[ctx.rank] = (plan, input_shard, W, output)
+    if len(pending) < contract.world_size:
+        return output
+
+    try:
+        for r in range(contract.world_size):
+            r_plan, r_shard, r_W, r_output = pending[r]
+            device = r_output.device
+            shards_on_device = [
+                pending[s][1].to(device=device) for s in range(contract.world_size)
+            ]
+            gathered = torch.cat(shards_on_device, dim=1)
+            torch.mm(gathered, r_W, out=r_output)
+    finally:
+        _PENDING_AG_GEMM_RS_SINGLE_PROCESS.pop(key, None)
+    return output
