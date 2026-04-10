@@ -296,12 +296,14 @@ def test_collective_comm_only_sampling_budget_and_batching_defaults() -> None:
     bench = _load_comm_only_benchmark_module()
 
     assert bench._DEFAULT_WARMUP == 12
+    assert bench._PRECONDITION_MESSAGE_BYTES == 256 * 1024
+    assert bench._PRECONDITION_ITERS == 4
     assert bench._sampling_budget_for_size(size_bytes=4096, warmup=12, iters=12) == (12, 12)
     assert bench._sampling_budget_for_size(size_bytes=262144, warmup=12, iters=12) == (10, 10)
     assert bench._sampling_budget_for_size(size_bytes=1048576, warmup=12, iters=12) == (8, 8)
 
     assert bench._timed_batch_repeats_for_size(4096) == 64
-    assert bench._timed_batch_repeats_for_size(16384) == 32
+    assert bench._timed_batch_repeats_for_size(16384) == 64
     assert bench._timed_batch_repeats_for_size(65536) == 16
     assert bench._timed_batch_repeats_for_size(262144) == 8
     assert bench._timed_batch_repeats_for_size(1048576) == 8

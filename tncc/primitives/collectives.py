@@ -838,6 +838,39 @@ def _allgather_kernel(
 
 
 @triton.jit
+def _allgather_chunked_kernel(
+    src_ptr,
+    dst_ptr,
+    heap_bases_ptr,
+    rank,
+    world_size,
+    chunk_start,
+    full_block_size,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """Allgather one power-of-two chunk directly into the final output buffer."""
+    offsets = tl.arange(0, BLOCK_SIZE)
+    src_offsets = chunk_start + offsets
+    my_tile = tl.load(src_ptr + src_offsets)
+
+    dst_offset = rank * full_block_size + chunk_start
+    tl.store(dst_ptr + dst_offset + offsets, my_tile)
+
+    for peer in tl.static_range(0, 32):
+        if peer >= world_size:
+            pass
+        else:
+            if peer != rank:
+                remote_dst = translate_ptr(
+                    dst_ptr,
+                    rank,
+                    peer,
+                    heap_bases_ptr,
+                )
+                tl.store(remote_dst + dst_offset + offsets, my_tile)
+
+
+@triton.jit
 def _reduce_scatter_kernel(
     src_ptr,
     dst_ptr,
@@ -858,6 +891,40 @@ def _reduce_scatter_kernel(
         BLOCK_SIZE,
         op="sum",
     )
+
+
+@triton.jit
+def _reduce_scatter_chunked_kernel(
+    src_ptr,
+    dst_ptr,
+    heap_bases_ptr,
+    rank,
+    world_size,
+    chunk_start,
+    full_block_size,
+    BLOCK_SIZE: tl.constexpr,
+    op: tl.constexpr = "sum",
+):
+    """Reduce-scatter one power-of-two chunk directly from the full source tensor."""
+    offsets = tl.arange(0, BLOCK_SIZE)
+    chunk_offset = rank * full_block_size + chunk_start
+    reduced = tl.load(src_ptr + chunk_offset + offsets)
+
+    for peer in tl.static_range(0, 32):
+        if peer >= world_size:
+            pass
+        else:
+            if peer != rank:
+                remote_peer = translate_ptr(
+                    src_ptr,
+                    rank,
+                    peer,
+                    heap_bases_ptr,
+                )
+                incoming = tl.load(remote_peer + chunk_offset + offsets)
+                reduced = _reduce_op(reduced, incoming, op)
+
+    tl.store(dst_ptr + chunk_start + offsets, reduced)
 
 
 @triton.jit
@@ -1075,41 +1142,21 @@ def allgather(
     if heap.mode == "multiprocess" and (
         block_size > chunk_elems or not _is_power_of_two(block_size)
     ):
-        workspace = _host_collective_workspace(
-            heap,
-            numel=world_size * chunk_elems,
-            dtype=output.dtype,
-        )
         tensor_flat = tensor.reshape(-1)
-        output_view = output.view(world_size, block_size)
-
         chunk_start = 0
         while chunk_start < block_size:
             chunk = _host_collective_kernel_block_elems(
                 block_size - chunk_start
             )
-            src_chunk = tensor_flat.narrow(0, chunk_start, chunk)
-            gathered_chunk = workspace.narrow(0, 0, world_size * chunk)
-
-            _allgather_kernel[(1,)](
-                src_chunk,
-                gathered_chunk,
+            _allgather_chunked_kernel[(1,)](
+                tensor_flat,
+                output,
                 heap_bases,
                 heap.rank,
                 world_size,
+                chunk_start,
+                block_size,
                 BLOCK_SIZE=chunk,
-            )
-            _host_collective_multiprocess_sync(
-                heap,
-                device=tensor.device,
-            )
-
-            output_view[:, chunk_start:chunk_start + chunk].copy_(
-                gathered_chunk.view(world_size, chunk)
-            )
-            _host_collective_multiprocess_sync(
-                heap,
-                device=output.device,
             )
             chunk_start += chunk
         return
@@ -1403,39 +1450,22 @@ def reduce_scatter(
     chunk_elems = _host_collective_chunk_elems(block_size)
 
     if block_size > chunk_elems or not _is_power_of_two(block_size):
-        tensor_view = tensor.view(world_size, block_size)
         output_flat = output.reshape(-1)
-        workspace = _host_collective_workspace(
-            heap,
-            numel=world_size * chunk_elems,
-            dtype=tensor.dtype,
-        )
-
         chunk_start = 0
         while chunk_start < block_size:
             chunk = _host_collective_kernel_block_elems(
                 block_size - chunk_start
             )
-            packed_chunk = workspace.narrow(0, 0, world_size * chunk)
-            packed_chunk.view(world_size, chunk).copy_(
-                tensor_view[:, chunk_start:chunk_start + chunk]
-            )
-            _host_collective_multiprocess_sync(
-                heap,
-                device=tensor.device,
-            )
-
-            _reduce_scatter_kernel[(1,)](
-                packed_chunk,
-                output_flat.narrow(0, chunk_start, chunk),
+            _reduce_scatter_chunked_kernel[(1,)](
+                tensor,
+                output_flat,
                 heap_bases,
                 heap.rank,
                 world_size,
+                chunk_start,
+                block_size,
                 BLOCK_SIZE=chunk,
-            )
-            _host_collective_multiprocess_sync(
-                heap,
-                device=output.device,
+                op=op,
             )
             chunk_start += chunk
         return

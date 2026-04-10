@@ -63,13 +63,15 @@ _COLLECTIVES = (
 _DEFAULT_TIMING_MODE = "device_event"
 _DEFAULT_WARMUP = 12
 _DEFAULT_ITERS = 12
+_PRECONDITION_MESSAGE_BYTES = 256 * 1024
+_PRECONDITION_ITERS = 4
 _TINY_MESSAGE_BATCH_THRESHOLD_BYTES = 4 * 1024
 _SMALL_MESSAGE_BATCH_THRESHOLD_BYTES = 16 * 1024
 _MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES = 64 * 1024
 _LARGE_MESSAGE_THRESHOLD_BYTES = 256 * 1024
 _VERY_LARGE_MESSAGE_THRESHOLD_BYTES = 1024 * 1024
 _TINY_MESSAGE_BATCH_REPEATS = 64
-_SMALL_MESSAGE_BATCH_REPEATS = 32
+_SMALL_MESSAGE_BATCH_REPEATS = 64
 _MEDIUM_MESSAGE_BATCH_REPEATS = 16
 _LARGE_MESSAGE_BATCH_REPEATS = 8
 _VERY_LARGE_MESSAGE_BATCH_REPEATS = 4
@@ -357,6 +359,54 @@ def _run_validation_collective(
     dist.barrier(**barrier_kwargs)
 
 
+def _precondition_collective_runtime(
+    *,
+    rank: int,
+    barrier_kwargs: dict[str, object],
+    dtype: torch.dtype,
+    world_size: int,
+    message_sizes_bytes: tuple[int, ...],
+    heap,
+    primitive_allreduce_fn,
+    xt_allreduce: torch.Tensor,
+    nccl_allreduce: torch.Tensor,
+) -> dict[str, int]:
+    """Warm up the first allreduce path so tiny-message timing starts hot."""
+    precondition_size_bytes = min(
+        max(message_sizes_bytes),
+        _PRECONDITION_MESSAGE_BYTES,
+    )
+    precondition_elements = _block_elements(
+        collective="allreduce",
+        size_bytes=precondition_size_bytes,
+        dtype=dtype,
+        world_size=world_size,
+    )
+    xt_view = xt_allreduce.narrow(0, 0, precondition_elements)
+    nccl_view = nccl_allreduce.narrow(0, 0, precondition_elements)
+
+    for _ in range(_PRECONDITION_ITERS):
+        _fill_allreduce_input(xt_view, rank=rank)
+        dist.barrier(**barrier_kwargs)
+        primitive_allreduce_fn(xt_view, heap)
+        torch.cuda.synchronize(rank)
+        dist.barrier(**barrier_kwargs)
+
+        _fill_allreduce_input(nccl_view, rank=rank)
+        dist.barrier(**barrier_kwargs)
+        work = dist.all_reduce(nccl_view, async_op=True)
+        if hasattr(work, "wait"):
+            work.wait()
+        torch.cuda.synchronize(rank)
+        dist.barrier(**barrier_kwargs)
+
+    return {
+        "collective": "allreduce",
+        "size_bytes": int(precondition_size_bytes),
+        "iterations": _PRECONDITION_ITERS,
+    }
+
+
 def _fill_allreduce_input(tensor: torch.Tensor, *, rank: int) -> None:
     tensor.fill_(float(rank + 1))
 
@@ -537,6 +587,18 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
         nccl_reduce_scatter_src = torch.empty_like(xt_reduce_scatter_src)
         nccl_reduce_scatter_dst = torch.empty_like(xt_reduce_scatter_dst)
         nccl_broadcast = torch.empty_like(xt_broadcast)
+
+        preconditioning = _precondition_collective_runtime(
+            rank=rank,
+            barrier_kwargs=barrier_kwargs,
+            dtype=dtype,
+            world_size=config.world_size,
+            message_sizes_bytes=config.message_sizes_bytes,
+            heap=heap,
+            primitive_allreduce_fn=primitive_allreduce,
+            xt_allreduce=xt_allreduce,
+            nccl_allreduce=nccl_allreduce,
+        )
 
         results: list[dict[str, Any]] = []
         for collective in config.collectives:
@@ -865,6 +927,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
             "root": config.root,
             "transport_strategy": heap.transport_strategy,
             "heap_mode": heap.mode,
+            "preconditioning": preconditioning if rank == 0 else None,
             "runtime_support": runtime_support_snapshot(ctx) if rank == 0 else None,
             "runtime_metadata": runtime_metadata_snapshot(ctx) if rank == 0 else None,
             "results": results,
@@ -1162,6 +1225,14 @@ def main() -> None:
         ),
         None,
     )
+    preconditioning = next(
+        (
+            payload["preconditioning"]
+            for payload in rank_payloads
+            if isinstance(payload.get("preconditioning"), dict)
+        ),
+        None,
+    )
     transport_strategy = next(
         (payload["transport_strategy"] for payload in rank_payloads if payload.get("transport_strategy")),
         None,
@@ -1181,6 +1252,7 @@ def main() -> None:
             "timing_mode": str(args.timing_mode),
             "warmup": int(args.warmup),
             "iters": int(args.iters),
+            "preconditioning": preconditioning,
             "message_sizes_bytes": list(message_sizes_bytes),
             "transport_strategy": transport_strategy,
             "latency_measurement": (
