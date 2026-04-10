@@ -7,7 +7,7 @@
 TileCCL brings collective communication into the tile programming model as a first-class library surface. Instead of hiding communication behind opaque runtime calls between kernels, TileCCL expresses allreduce, allgather, reduce-scatter, and fused GEMM+collective flows as compiler-visible Triton programs where compute, communication, and synchronization operate at the same tile granularity within a single device-side program.
 
 <p align="center">
-  <img src="assets/architecture.png" width="760" alt="TileCCL Architecture"/>
+  <img src="assets/TileCCL-architecture.png" width="760" alt="TileCCL Architecture"/>
 </p>
 
 ## Key Features
