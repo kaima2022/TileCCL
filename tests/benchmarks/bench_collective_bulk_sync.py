@@ -17,10 +17,10 @@ composition built from simpler communication steps.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import statistics
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 import torch
@@ -37,8 +37,10 @@ from tncc.primitives.collectives import (
     _scatter_kernel,
 )
 from tncc.utils.benchmark_results import (
+    benchmark_environment_health,
     canonical_benchmark_run,
     default_collective_bulk_sync_benchmark_path,
+    emit_benchmark_environment_warnings,
     runtime_metadata_snapshot,
     runtime_support_snapshot,
     write_json,
@@ -78,6 +80,13 @@ _COLLECTIVES = (
     "reduce_scatter",
     "broadcast",
 )
+_DEFAULT_WARMUP = 5
+_DEFAULT_ITERS = 20
+_SMALL_MESSAGE_BATCH_THRESHOLD_BYTES = 16 * 1024
+_MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES = 64 * 1024
+_SMALL_MESSAGE_BATCH_REPEATS = 16
+_MEDIUM_MESSAGE_BATCH_REPEATS = 8
+_LARGE_MESSAGE_BATCH_REPEATS = 4
 
 
 def _parse_args() -> argparse.Namespace:
@@ -94,8 +103,18 @@ def _parse_args() -> argparse.Namespace:
         default="4096,16384,65536",
         help="Comma-separated rank-local message sizes in bytes.",
     )
-    parser.add_argument("--warmup", type=int, default=2, help="Warmup iterations per case.")
-    parser.add_argument("--iters", type=int, default=5, help="Timed iterations per case.")
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=_DEFAULT_WARMUP,
+        help="Warmup iterations per case.",
+    )
+    parser.add_argument(
+        "--iters",
+        type=int,
+        default=_DEFAULT_ITERS,
+        help="Timed iterations per case.",
+    )
     parser.add_argument(
         "--world-size",
         type=int,
@@ -137,6 +156,15 @@ def _parse_message_sizes(raw: str, *, element_size: int, world_size: int) -> lis
 def _sync_all(world_size: int) -> None:
     for rank in range(world_size):
         torch.cuda.synchronize(rank)
+
+
+def _timed_batch_repeats_for_size(size_bytes: int) -> int:
+    """Return how many logical collectives to batch into one timed sample."""
+    if size_bytes <= _SMALL_MESSAGE_BATCH_THRESHOLD_BYTES:
+        return _SMALL_MESSAGE_BATCH_REPEATS
+    if size_bytes <= _MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES:
+        return _MEDIUM_MESSAGE_BATCH_REPEATS
+    return _LARGE_MESSAGE_BATCH_REPEATS
 
 
 def _reset_heaps(heaps: list[SymmetricHeap]) -> None:
@@ -223,21 +251,25 @@ def _time_end_to_end(
     world_size: int,
     warmup: int,
     iters: int,
+    operations_per_sample: int,
 ) -> dict[str, float]:
     for _ in range(warmup):
         prepare_fn()
         _sync_all(world_size)
-        run_fn()
-        _sync_all(world_size)
+        for _ in range(operations_per_sample):
+            run_fn()
+            _sync_all(world_size)
 
     times_ms: list[float] = []
     for _ in range(iters):
         prepare_fn()
         _sync_all(world_size)
-        start = time.perf_counter()
-        run_fn()
-        _sync_all(world_size)
-        times_ms.append((time.perf_counter() - start) * 1e3)
+        start_ns = time.perf_counter_ns()
+        for _ in range(operations_per_sample):
+            run_fn()
+            _sync_all(world_size)
+        elapsed_ms = float(time.perf_counter_ns() - start_ns) / 1_000_000.0
+        times_ms.append(elapsed_ms / float(operations_per_sample))
 
     return {
         "mean_ms": float(sum(times_ms) / len(times_ms)),
@@ -721,6 +753,7 @@ def _benchmark_case(
         world_size=world_size,
         warmup=warmup,
         iters=iters,
+        operations_per_sample=_timed_batch_repeats_for_size(size_bytes),
     )
     bulk_stats = _time_end_to_end(
         prepare_bulk,
@@ -728,6 +761,7 @@ def _benchmark_case(
         world_size=world_size,
         warmup=warmup,
         iters=iters,
+        operations_per_sample=_timed_batch_repeats_for_size(size_bytes),
     )
 
     prepare_tncc()
@@ -751,6 +785,12 @@ def _benchmark_case(
         "collective": collective,
         "size_bytes": size_bytes,
         "size_kib": float(size_bytes / 1024.0),
+        "timing_budget": {
+            "warmup": warmup,
+            "iters": iters,
+            "operations_per_timed_sample": _timed_batch_repeats_for_size(size_bytes),
+            "latency_measurement": "host_wall_end_to_end_batched_per_operation",
+        },
         "tncc": {
             **xt_stats,
             "median_bandwidth_gbps": xt_bw,
@@ -781,6 +821,10 @@ def main() -> None:
         element_size=torch.tensor([], dtype=dtype).element_size(),
         world_size=world_size,
     )
+    environment_health = benchmark_environment_health(
+        visible_gpu_count=world_size,
+    )
+    emit_benchmark_environment_warnings(environment_health)
 
     output_path = args.output_json
     with canonical_benchmark_run(output_path):
@@ -850,12 +894,24 @@ def main() -> None:
                     "message_sizes_bytes": sizes,
                     "mode": "single_process",
                     "transport_strategy": "peer_access",
+                    "sampling_policy": {
+                        "base_warmup": int(args.warmup),
+                        "base_iters": int(args.iters),
+                        "small_message_batch_threshold_bytes": _SMALL_MESSAGE_BATCH_THRESHOLD_BYTES,
+                        "medium_message_batch_threshold_bytes": _MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES,
+                        "small_message_batch_repeats": _SMALL_MESSAGE_BATCH_REPEATS,
+                        "medium_message_batch_repeats": _MEDIUM_MESSAGE_BATCH_REPEATS,
+                        "large_message_batch_repeats": _LARGE_MESSAGE_BATCH_REPEATS,
+                    },
                 },
                 "methodology": {
                     "optimized_path": "single-process peer_access device collective kernels",
                     "bulk_sync_baseline": (
                         "host-orchestrated composition of lower-level point-to-point "
                         "steps with explicit synchronization between phases"
+                    ),
+                    "latency_measurement": (
+                        "host_wall_end_to_end_batched_per_operation"
                     ),
                     "allreduce_note": (
                         "allreduce optimized path is measured as device reduce_scatter "
@@ -865,6 +921,7 @@ def main() -> None:
                 },
                 "runtime_support": runtime_support_snapshot(ctx),
                 "runtime_metadata": runtime_metadata_snapshot(ctx),
+                "environment_health": environment_health,
                 "cases": cases,
                 "summary": {
                     "best_speedup_vs_bulk": best_case["speedup_vs_bulk"] if best_case is not None else None,

@@ -20,6 +20,40 @@ def load_json_payload(path: str | Path) -> dict[str, Any]:
     return {}
 
 
+def benchmark_environment_status(payload: dict[str, Any]) -> str | None:
+    """Return the recorded benchmark-environment status when available."""
+    health = payload.get("environment_health")
+    if not isinstance(health, dict):
+        return None
+    status = health.get("status")
+    if isinstance(status, str) and status:
+        return status
+    return None
+
+
+def benchmark_publication_status(
+    payload: dict[str, Any],
+    *,
+    require_environment_health: bool = False,
+) -> str:
+    """Return whether one benchmark payload is publishable as a latest artifact."""
+    if not payload:
+        return "missing"
+
+    environment = payload.get("environment")
+    if isinstance(environment, dict) and environment.get("quick_mode"):
+        return "quick_mode"
+
+    environment_status = benchmark_environment_status(payload)
+    if environment_status == "contaminated":
+        return "contaminated"
+
+    if require_environment_health and environment_status != "clean":
+        return "unverified"
+
+    return "available"
+
+
 def runtime_support_brief(
     payload: dict[str, Any],
     *,
@@ -88,6 +122,14 @@ def benchmark_footer_text(
     support = runtime_support_brief(payload, highlight_ops=highlight_ops)
     if support:
         parts.append(support)
+
+    environment = payload.get("environment")
+    if isinstance(environment, dict) and environment.get("quick_mode"):
+        parts.append("mode=quick")
+
+    environment_status = benchmark_environment_status(payload)
+    if environment_status:
+        parts.append(f"env={environment_status}")
 
     command = payload.get("command")
     if include_command and isinstance(command, str) and command:

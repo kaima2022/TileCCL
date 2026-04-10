@@ -277,6 +277,49 @@ def _load_comm_only_benchmark_module():
     return module
 
 
+def _load_collective_bulk_sync_benchmark_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path = repo_root / "tests" / "benchmarks" / "bench_collective_bulk_sync.py"
+    spec = importlib.util.spec_from_file_location(
+        "_bench_collective_bulk_sync_test",
+        script_path,
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    sys.modules.setdefault("_bench_collective_bulk_sync_test", module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_collective_comm_only_sampling_budget_and_batching_defaults() -> None:
+    """Comm-only benchmark should keep publication defaults above the old low-sample regime."""
+    bench = _load_comm_only_benchmark_module()
+
+    assert bench._DEFAULT_WARMUP == 12
+    assert bench._sampling_budget_for_size(size_bytes=4096, warmup=12, iters=12) == (12, 12)
+    assert bench._sampling_budget_for_size(size_bytes=262144, warmup=12, iters=12) == (10, 10)
+    assert bench._sampling_budget_for_size(size_bytes=1048576, warmup=12, iters=12) == (8, 8)
+
+    assert bench._timed_batch_repeats_for_size(4096) == 64
+    assert bench._timed_batch_repeats_for_size(16384) == 32
+    assert bench._timed_batch_repeats_for_size(65536) == 16
+    assert bench._timed_batch_repeats_for_size(262144) == 8
+    assert bench._timed_batch_repeats_for_size(1048576) == 8
+    assert bench._timed_batch_repeats_for_size(2097152) == 4
+
+
+def test_collective_bulk_sync_small_message_batching_defaults() -> None:
+    """Bulk-sync comparison should amortize host timing on small messages."""
+    bench = _load_collective_bulk_sync_benchmark_module()
+
+    assert bench._DEFAULT_WARMUP == 5
+    assert bench._DEFAULT_ITERS == 20
+    assert bench._timed_batch_repeats_for_size(4096) == 16
+    assert bench._timed_batch_repeats_for_size(16384) == 16
+    assert bench._timed_batch_repeats_for_size(65536) == 8
+    assert bench._timed_batch_repeats_for_size(262144) == 4
+
+
 def test_collective_comm_only_aggregate_preserves_allreduce_execution_metadata() -> None:
     """Comm-only aggregation should keep rank-invariant allreduce execution metadata."""
     bench = _load_comm_only_benchmark_module()

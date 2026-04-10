@@ -62,7 +62,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from _benchmark_reporting import benchmark_footer_text, load_json_payload
+from _benchmark_reporting import (
+    benchmark_footer_text,
+    benchmark_publication_status,
+    load_json_payload,
+)
 
 GEMM_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "gemm_latest.json"
 P2P_BENCHMARK_JSON = REPO_ROOT / "figures" / "data" / "p2p_latest.json"
@@ -139,6 +143,14 @@ P2P_PAYLOAD = load_json_payload(P2P_BENCHMARK_JSON)
 PATTERN_PAYLOAD = load_json_payload(PATTERN_BENCHMARK_JSON)
 COLLECTIVE_PAYLOAD = load_json_payload(COLLECTIVE_BENCHMARK_JSON)
 COLLECTIVE_BULK_PAYLOAD = load_json_payload(COLLECTIVE_BULK_BENCHMARK_JSON)
+COLLECTIVE_PUBLICATION_STATUS = benchmark_publication_status(
+    COLLECTIVE_PAYLOAD,
+    require_environment_health=True,
+)
+COLLECTIVE_BULK_PUBLICATION_STATUS = benchmark_publication_status(
+    COLLECTIVE_BULK_PAYLOAD,
+    require_environment_health=True,
+)
 
 
 def _format_size_label(M, N, K):
@@ -258,6 +270,8 @@ def _load_collective_comm_only():
         return {}, {}
 
     payload = COLLECTIVE_PAYLOAD
+    if benchmark_publication_status(payload, require_environment_health=True) != "available":
+        return {}, payload.get("summary", {})
     cases = payload.get("cases", [])
     if not isinstance(cases, list) or not cases:
         return {}, payload.get("summary", {})
@@ -318,6 +332,8 @@ def _load_collective_bulk_speedups():
         return {}, {}
 
     payload = COLLECTIVE_BULK_PAYLOAD
+    if benchmark_publication_status(payload, require_environment_health=True) != "available":
+        return {}, payload.get("summary", {})
     cases = payload.get("cases", [])
     if not isinstance(cases, list) or not cases:
         return {}, payload.get("summary", {})
@@ -388,6 +404,60 @@ def _save_with_footer(fig, name, footer: str | None):
         )
         fig.tight_layout(rect=(0, 0.08, 1, 1))
     _save(fig, name)
+
+
+def _publication_block_reason(status: str, *, benchmark_name: str) -> str:
+    if status == "contaminated":
+        return (
+            f"{benchmark_name} canonical latest was captured under a contaminated GPU "
+            "environment. Rerun on isolated GPUs before publication."
+        )
+    if status == "quick_mode":
+        return (
+            f"{benchmark_name} canonical latest was captured in quick mode. Replace it "
+            "with a full benchmark rerun before publication."
+        )
+    if status == "unverified":
+        return (
+            f"{benchmark_name} canonical latest is missing benchmark-environment health "
+            "metadata. Rerun with the current harness before publication."
+        )
+    if status == "missing":
+        return f"No structured {benchmark_name.lower()} benchmark JSON is available."
+    return (
+        f"{benchmark_name} latest artifact is not publication-ready. Inspect the "
+        "structured benchmark JSON before releasing this figure."
+    )
+
+
+def _save_unavailable_figure(
+    *,
+    name: str,
+    title: str,
+    reason: str,
+    footer: str | None,
+) -> None:
+    fig, ax = plt.subplots(figsize=(7.0, 3.2))
+    ax.axis("off")
+    ax.text(
+        0.5,
+        0.66,
+        title,
+        ha="center",
+        va="center",
+        fontsize=14,
+        fontweight="bold",
+    )
+    ax.text(
+        0.5,
+        0.40,
+        textwrap.fill(reason, width=70),
+        ha="center",
+        va="center",
+        fontsize=10,
+        color="#555555",
+    )
+    _save_with_footer(fig, name, footer)
 
 
 def _format_message_size_mib(value: float) -> str:
@@ -761,7 +831,23 @@ def fig5_roofline():
 # ===================================================================
 def fig6_collective_comm_only():
     if not COLLECTIVE_SERIES:
-        print("  Skipping fig6_collective_comm_only (no structured benchmark JSON)")
+        print(
+            "  Replacing fig6_collective_comm_only with an unavailable placeholder "
+            f"({COLLECTIVE_PUBLICATION_STATUS})"
+        )
+        _save_unavailable_figure(
+            name="fig6_collective_comm_only",
+            title="Communication-only Collectives",
+            reason=_publication_block_reason(
+                COLLECTIVE_PUBLICATION_STATUS,
+                benchmark_name="Comm-only collectives",
+            ),
+            footer=benchmark_footer_text(
+                COLLECTIVE_PAYLOAD,
+                source_name="collective_comm_only_latest.json",
+                include_command=False,
+            ),
+        )
         return
 
     op_order = [
@@ -1037,7 +1123,23 @@ def fig6_collective_comm_only():
 # ===================================================================
 def fig7_collective_bulk_sync():
     if not COLLECTIVE_BULK_SERIES:
-        print("  Skipping fig7_collective_bulk_sync (no structured benchmark JSON)")
+        print(
+            "  Replacing fig7_collective_bulk_sync with an unavailable placeholder "
+            f"({COLLECTIVE_BULK_PUBLICATION_STATUS})"
+        )
+        _save_unavailable_figure(
+            name="fig7_collective_bulk_sync",
+            title="Collective vs bulk_sync",
+            reason=_publication_block_reason(
+                COLLECTIVE_BULK_PUBLICATION_STATUS,
+                benchmark_name="Collective vs bulk_sync",
+            ),
+            footer=benchmark_footer_text(
+                COLLECTIVE_BULK_PAYLOAD,
+                source_name="collective_bulk_sync_latest.json",
+                include_command=False,
+            ),
+        )
         return
 
     collective_order = ["allreduce", "allgather", "scatter", "reduce_scatter", "broadcast"]

@@ -110,3 +110,52 @@ def test_build_summary_document_contains_runtime_and_headlines() -> None:
     assert "`4096³ fp16`: 97.8% of torch.matmul" in document
     assert "best read: 248.65 GB/s" in document
     assert "best speedup vs bulk_sync: 1.619×" in document
+
+
+def test_build_summary_document_flags_collective_publication_gaps() -> None:
+    """Collective sections should surface contaminated or unverified latest artifacts."""
+    exporter = _load_export_module()
+
+    base_runtime = {
+        "runtime_support": {
+            "context": {
+                "backend": "cuda",
+                "world_size": 2,
+                "has_heap": True,
+                "heap_mode": "single_process",
+                "transport_strategy": "peer_access",
+            },
+            "ops": {},
+        },
+        "generated_at_utc": "2026-03-21T18:00:00+00:00",
+        "command": "python bench.py --output-json latest.json",
+    }
+
+    collective_payload = {
+        **base_runtime,
+        "environment_health": {"status": "contaminated"},
+        "summary": {
+            "peak_by_collective": {},
+        },
+    }
+    collective_bulk_payload = {
+        **base_runtime,
+        "summary": {
+            "peak_by_collective": {},
+        },
+    }
+
+    document = exporter.build_summary_document(
+        gemm_payload={},
+        p2p_payload={},
+        pattern_payload={},
+        collective_payload=collective_payload,
+        collective_bulk_payload=collective_bulk_payload,
+    )
+
+    assert "| Comm-only Collectives | contaminated |" in document
+    assert "| Collective vs bulk_sync | unverified |" in document
+    assert "captured under a contaminated GPU environment" in document
+    assert "missing benchmark-environment health metadata" in document
+    assert "env=contaminated" in document
+    assert "status=contaminated" in document

@@ -11,6 +11,7 @@ from typing import Any
 
 from _benchmark_reporting import (
     benchmark_footer_text,
+    benchmark_publication_status,
     execution_path_brief,
     load_json_payload,
 )
@@ -24,11 +25,56 @@ COLLECTIVE_JSON = REPO_ROOT / "figures" / "data" / "collective_comm_only_latest.
 COLLECTIVE_BULK_JSON = REPO_ROOT / "figures" / "data" / "collective_bulk_sync_latest.json"
 
 
-def _payload_status(payload: dict[str, Any]) -> str:
+def _payload_status(
+    payload: dict[str, Any],
+    *,
+    require_environment_health: bool = False,
+) -> str:
     """Return a coarse availability status for one benchmark payload."""
-    if not payload:
-        return "missing"
-    return "available"
+    return benchmark_publication_status(
+        payload,
+        require_environment_health=require_environment_health,
+    )
+
+
+def _publication_status_message(status: str, *, benchmark_name: str) -> str | None:
+    """Return one human-readable publication warning for the given status."""
+    if status == "contaminated":
+        return (
+            f"- {benchmark_name}: canonical latest was captured under a contaminated GPU "
+            "environment and should be rerun on isolated GPUs before publication."
+        )
+    if status == "quick_mode":
+        return (
+            f"- {benchmark_name}: canonical latest was captured in quick mode and should be "
+            "replaced with a full benchmark rerun before publication."
+        )
+    if status == "unverified":
+        return (
+            f"- {benchmark_name}: canonical latest is missing benchmark-environment health "
+            "metadata and should be rerun with the current harness before publication."
+        )
+    return None
+
+
+def _snapshot_line(
+    *,
+    payload: dict[str, Any],
+    source_name: str,
+    status: str,
+    highlight_ops: tuple[str, ...] = (),
+) -> str:
+    """Render one runtime-support snapshot line with publication status."""
+    footer = benchmark_footer_text(
+        payload,
+        source_name=source_name,
+        highlight_ops=highlight_ops,
+    )
+    if footer is None:
+        return "unavailable"
+    if status == "available":
+        return footer
+    return f"{footer} | status={status}"
 
 
 def _environment_dict(payload: dict[str, Any]) -> dict[str, Any]:
@@ -163,6 +209,14 @@ def _extract_pattern_headlines(payload: dict[str, Any]) -> list[str]:
 
 def _extract_collective_headlines(payload: dict[str, Any]) -> list[str]:
     """Return concise communication-only collective headline metrics."""
+    status = _payload_status(payload, require_environment_health=True)
+    message = _publication_status_message(
+        status,
+        benchmark_name="Comm-only Collectives",
+    )
+    if message is not None:
+        return [message]
+
     summary = payload.get("summary")
     if not isinstance(summary, dict):
         return ["无结构化 collective benchmark 数据。"]
@@ -187,6 +241,14 @@ def _extract_collective_headlines(payload: dict[str, Any]) -> list[str]:
 
 def _extract_collective_bulk_headlines(payload: dict[str, Any]) -> list[str]:
     """Return concise collective-vs-bulk_sync headline metrics."""
+    status = _payload_status(payload, require_environment_health=True)
+    message = _publication_status_message(
+        status,
+        benchmark_name="Collective vs bulk_sync",
+    )
+    if message is not None:
+        return [message]
+
     summary = payload.get("summary")
     if not isinstance(summary, dict):
         return ["无结构化 collective-vs-bulk_sync benchmark 数据。"]
@@ -223,6 +285,14 @@ def build_summary_document(
     """Render the benchmark/runtime summary as Markdown."""
     collective_payload = collective_payload or {}
     collective_bulk_payload = collective_bulk_payload or {}
+    collective_status = _payload_status(
+        collective_payload,
+        require_environment_health=True,
+    )
+    collective_bulk_status = _payload_status(
+        collective_bulk_payload,
+        require_environment_health=True,
+    )
     generated_at = datetime.now(timezone.utc).isoformat()
     hardware_lines = _hardware_topology_lines(
         p2p_payload,
@@ -244,20 +314,40 @@ def build_summary_document(
         f"| GEMM | {_payload_status(gemm_payload)} | `figures/data/gemm_latest.json` |",
         f"| P2P | {_payload_status(p2p_payload)} | `figures/data/p2p_latest.json` |",
         f"| Pattern | {_payload_status(pattern_payload)} | `figures/data/pattern_overlap_latest.json` |",
-        f"| Comm-only Collectives | {_payload_status(collective_payload)} | `figures/data/collective_comm_only_latest.json` |",
-        f"| Collective vs bulk_sync | {_payload_status(collective_bulk_payload)} | `figures/data/collective_bulk_sync_latest.json` |",
+        f"| Comm-only Collectives | {collective_status} | `figures/data/collective_comm_only_latest.json` |",
+        f"| Collective vs bulk_sync | {collective_bulk_status} | `figures/data/collective_bulk_sync_latest.json` |",
         "",
         "## Host Topology",
         "",
         *(hardware_lines or ["- unavailable"]),
         "",
+        "## Validation Warnings",
+        "",
+        *(
+            [
+                line
+                for line in (
+                    _publication_status_message(
+                        collective_status,
+                        benchmark_name="Comm-only Collectives",
+                    ),
+                    _publication_status_message(
+                        collective_bulk_status,
+                        benchmark_name="Collective vs bulk_sync",
+                    ),
+                )
+                if line is not None
+            ]
+            or ["- none"]
+        ),
+        "",
         "## Runtime Support Snapshots",
         "",
-        f"- GEMM: {benchmark_footer_text(gemm_payload, source_name='gemm_latest.json') or 'unavailable'}",
-        f"- P2P: {benchmark_footer_text(p2p_payload, source_name='p2p_latest.json', highlight_ops=('reduce_scatter',)) or 'unavailable'}",
-        f"- Pattern: {benchmark_footer_text(pattern_payload, source_name='pattern_overlap_latest.json', highlight_ops=('gemm_allscatter',)) or 'unavailable'}",
-        f"- Comm-only collectives: {benchmark_footer_text(collective_payload, source_name='collective_comm_only_latest.json') or 'unavailable'}",
-        f"- Collective vs bulk_sync: {benchmark_footer_text(collective_bulk_payload, source_name='collective_bulk_sync_latest.json') or 'unavailable'}",
+        f"- GEMM: {_snapshot_line(payload=gemm_payload, source_name='gemm_latest.json', status=_payload_status(gemm_payload))}",
+        f"- P2P: {_snapshot_line(payload=p2p_payload, source_name='p2p_latest.json', status=_payload_status(p2p_payload), highlight_ops=('reduce_scatter',))}",
+        f"- Pattern: {_snapshot_line(payload=pattern_payload, source_name='pattern_overlap_latest.json', status=_payload_status(pattern_payload), highlight_ops=('gemm_allscatter',))}",
+        f"- Comm-only collectives: {_snapshot_line(payload=collective_payload, source_name='collective_comm_only_latest.json', status=collective_status)}",
+        f"- Collective vs bulk_sync: {_snapshot_line(payload=collective_bulk_payload, source_name='collective_bulk_sync_latest.json', status=collective_bulk_status)}",
         "",
         "## Execution Paths",
         "",

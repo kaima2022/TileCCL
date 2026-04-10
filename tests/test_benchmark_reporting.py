@@ -72,6 +72,54 @@ def test_benchmark_footer_text_includes_source_date_and_command() -> None:
     assert "cmd=python bench.py --quick" in footer
 
 
+def test_benchmark_footer_text_includes_environment_health() -> None:
+    """Footers should surface recorded environment-health provenance."""
+    reporting = _load_reporting_module()
+    payload = {
+        "generated_at_utc": "2026-03-21T18:00:00+00:00",
+        "runtime_support": {
+            "context": {
+                "backend": "cuda",
+                "world_size": 2,
+                "has_heap": True,
+                "heap_mode": "single_process",
+                "transport_strategy": "peer_access",
+            },
+            "ops": {},
+        },
+        "environment_health": {
+            "status": "contaminated",
+        },
+    }
+
+    footer = reporting.benchmark_footer_text(payload, source_name="sample.json")
+
+    assert "env=contaminated" in footer
+
+
+def test_benchmark_publication_status_flags_unverified_and_quick_mode() -> None:
+    """Publication status should reject contaminated, quick, or unverified payloads."""
+    reporting = _load_reporting_module()
+
+    assert reporting.benchmark_publication_status(
+        {
+            "environment_health": {"status": "contaminated"},
+        },
+        require_environment_health=True,
+    ) == "contaminated"
+    assert reporting.benchmark_publication_status(
+        {
+            "environment": {"quick_mode": True},
+        }
+    ) == "quick_mode"
+    assert reporting.benchmark_publication_status(
+        {
+            "environment": {"quick_mode": False},
+        },
+        require_environment_health=True,
+    ) == "unverified"
+
+
 def test_execution_path_brief_formats_selected_paths() -> None:
     """Execution-path helper should surface implementation-level states."""
     reporting = _load_reporting_module()

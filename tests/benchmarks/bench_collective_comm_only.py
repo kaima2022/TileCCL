@@ -20,16 +20,16 @@ The benchmark is multiprocess and uses a real NCCL process group plus a real
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import statistics
 import sys
 import tempfile
 import time
 import traceback
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -47,7 +47,6 @@ from tncc.utils.benchmark_results import (
 )
 from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
 
-
 _DTYPES = {
     "float16": torch.float16,
     "bfloat16": torch.bfloat16,
@@ -61,12 +60,23 @@ _COLLECTIVES = (
     "reduce_scatter",
     "broadcast",
 )
+_DEFAULT_TIMING_MODE = "device_event"
+_DEFAULT_WARMUP = 12
+_DEFAULT_ITERS = 12
+_TINY_MESSAGE_BATCH_THRESHOLD_BYTES = 4 * 1024
+_SMALL_MESSAGE_BATCH_THRESHOLD_BYTES = 16 * 1024
+_MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES = 64 * 1024
 _LARGE_MESSAGE_THRESHOLD_BYTES = 256 * 1024
 _VERY_LARGE_MESSAGE_THRESHOLD_BYTES = 1024 * 1024
-_LARGE_MESSAGE_WARMUP_CAP = 1
-_LARGE_MESSAGE_ITERS_CAP = 2
-_VERY_LARGE_MESSAGE_WARMUP_CAP = 0
-_VERY_LARGE_MESSAGE_ITERS_CAP = 1
+_TINY_MESSAGE_BATCH_REPEATS = 64
+_SMALL_MESSAGE_BATCH_REPEATS = 32
+_MEDIUM_MESSAGE_BATCH_REPEATS = 16
+_LARGE_MESSAGE_BATCH_REPEATS = 8
+_VERY_LARGE_MESSAGE_BATCH_REPEATS = 4
+_LARGE_MESSAGE_WARMUP_CAP = 10
+_LARGE_MESSAGE_ITERS_CAP = 10
+_VERY_LARGE_MESSAGE_WARMUP_CAP = 8
+_VERY_LARGE_MESSAGE_ITERS_CAP = 8
 
 
 @dataclass(frozen=True)
@@ -112,11 +122,21 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timing-mode",
         choices=["host_wall", "device_event"],
-        default="host_wall",
+        default=_DEFAULT_TIMING_MODE,
         help="Measurement window to use for timed iterations.",
     )
-    parser.add_argument("--warmup", type=int, default=3, help="Warmup iterations per case.")
-    parser.add_argument("--iters", type=int, default=5, help="Timed iterations per case.")
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=_DEFAULT_WARMUP,
+        help="Warmup iterations per case.",
+    )
+    parser.add_argument(
+        "--iters",
+        type=int,
+        default=_DEFAULT_ITERS,
+        help="Timed iterations per case.",
+    )
     parser.add_argument(
         "--world-size",
         type=int,
@@ -240,6 +260,33 @@ def _sampling_budget_for_size(
     return min(warmup, _LARGE_MESSAGE_WARMUP_CAP), min(iters, _LARGE_MESSAGE_ITERS_CAP)
 
 
+def _timed_batch_repeats_for_size(size_bytes: int) -> int:
+    """Return how many logical collectives to batch into one timed sample."""
+    if size_bytes <= _TINY_MESSAGE_BATCH_THRESHOLD_BYTES:
+        return _TINY_MESSAGE_BATCH_REPEATS
+    if size_bytes <= _SMALL_MESSAGE_BATCH_THRESHOLD_BYTES:
+        return _SMALL_MESSAGE_BATCH_REPEATS
+    if size_bytes <= _MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES:
+        return _MEDIUM_MESSAGE_BATCH_REPEATS
+    if size_bytes <= _VERY_LARGE_MESSAGE_THRESHOLD_BYTES:
+        return _LARGE_MESSAGE_BATCH_REPEATS
+    return _VERY_LARGE_MESSAGE_BATCH_REPEATS
+
+
+def _execute_collective_batch(
+    fn,
+    *,
+    rank: int,
+    operations_per_sample: int,
+) -> None:
+    """Execute one timed batch and fully complete every logical collective."""
+    for _ in range(operations_per_sample):
+        result = fn()
+        if hasattr(result, "wait"):
+            result.wait()
+        torch.cuda.synchronize(rank)
+
+
 def _timed_collective(
     fn,
     *,
@@ -249,45 +296,65 @@ def _timed_collective(
     timing_mode: str,
     warmup: int,
     iters: int,
+    operations_per_sample: int,
 ) -> list[float]:
     for _ in range(warmup):
         prepare_fn()
-        torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
-        result = fn()
-        if hasattr(result, "wait"):
-            result.wait()
-        torch.cuda.synchronize(rank)
+        _execute_collective_batch(
+            fn,
+            rank=rank,
+            operations_per_sample=operations_per_sample,
+        )
         dist.barrier(**barrier_kwargs)
 
     times_ms: list[float] = []
     for _ in range(iters):
         prepare_fn()
-        torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
         if timing_mode == "device_event":
             start = torch.cuda.Event(enable_timing=True)
             end = torch.cuda.Event(enable_timing=True)
             start.record()
-            result = fn()
-            if hasattr(result, "wait"):
-                result.wait()
+            _execute_collective_batch(
+                fn,
+                rank=rank,
+                operations_per_sample=operations_per_sample,
+            )
             end.record()
             torch.cuda.synchronize(rank)
-            elapsed_ms = float(start.elapsed_time(end))
+            elapsed_ms = float(start.elapsed_time(end)) / float(operations_per_sample)
         else:
             # Measure the public collective as the caller observes it:
             # launch/rendezvous plus device completion on this rank.
             start_ns = time.perf_counter_ns()
-            result = fn()
-            if hasattr(result, "wait"):
-                result.wait()
-            torch.cuda.synchronize(rank)
+            _execute_collective_batch(
+                fn,
+                rank=rank,
+                operations_per_sample=operations_per_sample,
+            )
             end_ns = time.perf_counter_ns()
-            elapsed_ms = float(end_ns - start_ns) / 1_000_000.0
+            elapsed_ms = float(end_ns - start_ns) / 1_000_000.0 / float(operations_per_sample)
         dist.barrier(**barrier_kwargs)
         times_ms.append(elapsed_ms)
     return times_ms
+
+
+def _run_validation_collective(
+    fn,
+    *,
+    prepare_fn,
+    rank: int,
+    barrier_kwargs: dict[str, object],
+) -> None:
+    """Run one post-timing validation replay on freshly prepared buffers."""
+    prepare_fn()
+    dist.barrier(**barrier_kwargs)
+    result = fn()
+    if hasattr(result, "wait"):
+        result.wait()
+    torch.cuda.synchronize(rank)
+    dist.barrier(**barrier_kwargs)
 
 
 def _fill_allreduce_input(tensor: torch.Tensor, *, rank: int) -> None:
@@ -402,9 +469,17 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
         from tncc.memory.symmetric_heap import SymmetricHeap
         from tncc.primitives import (
             allgather as primitive_allgather,
+        )
+        from tncc.primitives import (
             allreduce as primitive_allreduce,
+        )
+        from tncc.primitives import (
             broadcast as primitive_broadcast,
+        )
+        from tncc.primitives import (
             reduce_scatter as primitive_reduce_scatter,
+        )
+        from tncc.primitives import (
             scatter as primitive_scatter,
         )
 
@@ -479,6 +554,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     warmup=config.warmup,
                     iters=config.iters,
                 )
+                operations_per_sample = _timed_batch_repeats_for_size(size_bytes)
 
                 if collective == "allreduce":
                     total_elements = block_elements
@@ -492,8 +568,12 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     def prepare_nccl() -> None:
                         _fill_allreduce_input(nccl_view, rank=rank)
 
-                    tncc_fn = lambda: primitive_allreduce(xt_view, heap)
-                    nccl_fn = lambda: dist.all_reduce(nccl_view, async_op=nccl_async)
+                    def tncc_fn():
+                        return primitive_allreduce(xt_view, heap)
+
+                    def nccl_fn():
+                        return dist.all_reduce(nccl_view, async_op=nccl_async)
+
                     expected_xt = _expected_allreduce(xt_view, world_size=config.world_size)
                     expected_nccl = _expected_allreduce(nccl_view, world_size=config.world_size)
 
@@ -509,12 +589,16 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     def prepare_nccl() -> None:
                         _fill_allgather_input(nccl_src, nccl_dst, rank=rank)
 
-                    tncc_fn = lambda: primitive_allgather(xt_src, xt_dst, heap)
-                    nccl_fn = lambda: dist.all_gather_into_tensor(
-                        nccl_dst,
-                        nccl_src,
-                        async_op=nccl_async,
-                    )
+                    def tncc_fn():
+                        return primitive_allgather(xt_src, xt_dst, heap)
+
+                    def nccl_fn():
+                        return dist.all_gather_into_tensor(
+                            nccl_dst,
+                            nccl_src,
+                            async_op=nccl_async,
+                        )
+
                     expected_xt = _expected_allgather(
                         xt_dst,
                         world_size=config.world_size,
@@ -559,18 +643,22 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                             root=config.root,
                         )
 
-                    tncc_fn = lambda: primitive_scatter(
-                        xt_src,
-                        xt_dst,
-                        heap,
-                        root=config.root,
-                    )
-                    nccl_fn = lambda: dist.scatter(
-                        nccl_dst,
-                        scatter_list=nccl_scatter_list,
-                        src=config.root,
-                        async_op=nccl_async,
-                    )
+                    def tncc_fn():
+                        return primitive_scatter(
+                            xt_src,
+                            xt_dst,
+                            heap,
+                            root=config.root,
+                        )
+
+                    def nccl_fn():
+                        return dist.scatter(
+                            nccl_dst,
+                            scatter_list=nccl_scatter_list,
+                            src=config.root,
+                            async_op=nccl_async,
+                        )
+
                     expected_xt = _expected_scatter_or_broadcast(
                         xt_dst,
                         rank=rank,
@@ -610,17 +698,21 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                             block_elements=block_elements,
                         )
 
-                    tncc_fn = lambda: primitive_reduce_scatter(
-                        xt_src,
-                        xt_dst,
-                        heap,
-                        implementation="device",
-                    )
-                    nccl_fn = lambda: dist.reduce_scatter_tensor(
-                        nccl_dst,
-                        nccl_src,
-                        async_op=nccl_async,
-                    )
+                    def tncc_fn():
+                        return primitive_reduce_scatter(
+                            xt_src,
+                            xt_dst,
+                            heap,
+                            implementation="device",
+                        )
+
+                    def nccl_fn():
+                        return dist.reduce_scatter_tensor(
+                            nccl_dst,
+                            nccl_src,
+                            async_op=nccl_async,
+                        )
+
                     expected_xt = _expected_reduce_scatter(
                         xt_dst,
                         rank=rank,
@@ -642,12 +734,16 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     def prepare_nccl() -> None:
                         _fill_broadcast_input(nccl_view, rank=rank, root=config.root)
 
-                    tncc_fn = lambda: primitive_broadcast(xt_view, heap, root=config.root)
-                    nccl_fn = lambda: dist.broadcast(
-                        nccl_view,
-                        src=config.root,
-                        async_op=nccl_async,
-                    )
+                    def tncc_fn():
+                        return primitive_broadcast(xt_view, heap, root=config.root)
+
+                    def nccl_fn():
+                        return dist.broadcast(
+                            nccl_view,
+                            src=config.root,
+                            async_op=nccl_async,
+                        )
+
                     expected_xt = _expected_scatter_or_broadcast(
                         xt_view,
                         rank=rank,
@@ -694,6 +790,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     timing_mode=config.timing_mode,
                     warmup=case_warmup,
                     iters=case_iters,
+                    operations_per_sample=operations_per_sample,
                 )
                 nccl_times_ms = _timed_collective(
                     nccl_fn,
@@ -703,6 +800,19 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     timing_mode=config.timing_mode,
                     warmup=case_warmup,
                     iters=case_iters,
+                    operations_per_sample=operations_per_sample,
+                )
+                _run_validation_collective(
+                    tncc_fn,
+                    prepare_fn=prepare_tncc,
+                    rank=rank,
+                    barrier_kwargs=barrier_kwargs,
+                )
+                _run_validation_collective(
+                    nccl_fn,
+                    prepare_fn=prepare_nccl,
+                    rank=rank,
+                    barrier_kwargs=barrier_kwargs,
                 )
 
                 if collective == "allreduce":
@@ -729,6 +839,7 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         "timing_budget": {
                             "warmup": case_warmup,
                             "iters": case_iters,
+                            "operations_per_timed_sample": operations_per_sample,
                             "size_adaptive": bool(size_bytes >= _LARGE_MESSAGE_THRESHOLD_BYTES),
                             "timing_mode": config.timing_mode,
                         },
@@ -868,6 +979,7 @@ def _aggregate_rank_results(
             "size_bytes": size_bytes,
             "size_mib": float(size_bytes / (1024 ** 2)),
             "world_size": world_size,
+            "timing_budget": per_rank[0].get("timing_budget"),
             "tncc": {
                 **tncc_summary,
                 **tncc_execution_metadata,
@@ -1080,6 +1192,14 @@ def main() -> None:
                 "mode": "size_adaptive",
                 "base_warmup": int(args.warmup),
                 "base_iters": int(args.iters),
+                "tiny_message_batch_threshold_bytes": _TINY_MESSAGE_BATCH_THRESHOLD_BYTES,
+                "small_message_batch_threshold_bytes": _SMALL_MESSAGE_BATCH_THRESHOLD_BYTES,
+                "medium_message_batch_threshold_bytes": _MEDIUM_MESSAGE_BATCH_THRESHOLD_BYTES,
+                "tiny_message_batch_repeats": _TINY_MESSAGE_BATCH_REPEATS,
+                "small_message_batch_repeats": _SMALL_MESSAGE_BATCH_REPEATS,
+                "medium_message_batch_repeats": _MEDIUM_MESSAGE_BATCH_REPEATS,
+                "large_message_batch_repeats": _LARGE_MESSAGE_BATCH_REPEATS,
+                "very_large_message_batch_repeats": _VERY_LARGE_MESSAGE_BATCH_REPEATS,
                 "large_message_threshold_bytes": _LARGE_MESSAGE_THRESHOLD_BYTES,
                 "very_large_message_threshold_bytes": _VERY_LARGE_MESSAGE_THRESHOLD_BYTES,
                 "large_message_warmup_cap": _LARGE_MESSAGE_WARMUP_CAP,
