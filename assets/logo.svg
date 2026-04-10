@@ -1,38 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" font-family="'Helvetica Neue', 'Arial', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 160">
   <defs>
-    <linearGradient id="tileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#2D6BC4"/>
-      <stop offset="100%" style="stop-color:#1B4D8E"/>
+    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a7a7a" />
+      <stop offset="100%" style="stop-color:#0d5e5e" />
     </linearGradient>
-    <linearGradient id="commGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#E28A2E"/>
-      <stop offset="100%" style="stop-color:#C06A10"/>
+    <linearGradient id="tealLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6ec4c4" />
+      <stop offset="100%" style="stop-color:#4aadad" />
     </linearGradient>
   </defs>
 
-  <!-- Tile grid icon: 2x2 tiles with one "communicating" tile -->
-  <g transform="translate(16, 22)">
-    <!-- Top-left tile -->
-    <rect x="0" y="0" width="40" height="40" rx="5" fill="url(#tileGrad)" opacity="0.9"/>
-    <!-- Top-right tile -->
-    <rect x="46" y="0" width="40" height="40" rx="5" fill="url(#tileGrad)" opacity="0.7"/>
-    <!-- Bottom-left tile -->
-    <rect x="0" y="46" width="40" height="40" rx="5" fill="url(#tileGrad)" opacity="0.7"/>
-    <!-- Bottom-right tile: communication accent -->
-    <rect x="46" y="46" width="40" height="40" rx="5" fill="url(#commGrad)" opacity="0.9"/>
+  <!-- 2x2 tile grid — simple, iconic -->
+  <rect x="32"  y="30" width="40" height="40" rx="5" fill="url(#teal)" />
+  <rect x="78"  y="30" width="40" height="40" rx="5" fill="url(#teal)" />
+  <rect x="32"  y="76" width="40" height="40" rx="5" fill="url(#tealLight)" />
+  <rect x="78"  y="76" width="40" height="40" rx="5" fill="url(#tealLight)" />
 
-    <!-- Communication arrow from top-left to bottom-right -->
-    <line x1="36" y1="36" x2="50" y2="50" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
-    <polygon points="50,50 44,47 47,44" fill="#fff" opacity="0.85"/>
-
-    <!-- Small signal dots -->
-    <circle cx="20" cy="20" r="3" fill="#fff" opacity="0.6"/>
-    <circle cx="66" cy="66" r="3" fill="#fff" opacity="0.6"/>
-  </g>
-
-  <!-- TNCC wordmark -->
-  <text x="138" y="82" font-size="62" font-weight="800" fill="#1a1a1a" letter-spacing="-1.5">TNCC</text>
+  <!-- Wordmark -->
+  <text x="152" y="88" font-family="'Helvetica Neue',Arial,sans-serif" font-size="64" font-weight="700" fill="#1a3a3a" letter-spacing="-2">Tile<tspan fill="#1a7a7a">CCL</tspan></text>
 
   <!-- Tagline -->
-  <text x="140" y="112" font-size="15.5" font-weight="500" fill="#666" letter-spacing="0.8">Tile-Native Collective Communication</text>
+  <text x="154" y="114" font-family="'Helvetica Neue',Arial,sans-serif" font-size="15" fill="#6b8a8a" letter-spacing="0.5">Tile-native Collective Communication Library</text>
 </svg>

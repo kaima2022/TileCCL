@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="assets/logo.png" width="420" alt="TNCC"/>
+  <img src="assets/logo.png" width="480" alt="TileCCL"/>
 </p>
 
-# TNCC: Tile-Native Collective Communication
+# TileCCL: Tile-native Collective Communication Library
 
-TNCC brings collective communication into the tile programming model. Instead of treating communication as opaque runtime calls between kernels, TNCC expresses every collective — allreduce, allgather, reduce-scatter, and fused GEMM+collective — as compiler-visible Triton programs where compute, communication, and synchronization operate at the same tile granularity within a single device-side program.
+TileCCL brings collective communication into the tile programming model as a first-class library surface. Instead of hiding communication behind opaque runtime calls between kernels, TileCCL expresses allreduce, allgather, reduce-scatter, and fused GEMM+collective flows as compiler-visible Triton programs where compute, communication, and synchronization operate at the same tile granularity within a single device-side program.
 
 <p align="center">
-  <img src="assets/tncc-architecture.png" width="760" alt="TNCC Architecture"/>
+  <img src="assets/architecture.png" width="760" alt="TileCCL Architecture"/>
 </p>
 
 ## Key Features
@@ -24,7 +24,7 @@ TNCC brings collective communication into the tile programming model. Instead of
 
 - **Plan-based execution.** Build an execution plan once (`build_gemm_allscatter_plan`), then reuse it across iterations. Planning overhead — pattern selection, contract validation, workspace allocation — is amortized to near zero.
 
-## TNCC Tile Primitive Groups
+## TileCCL Tile Primitive Groups
 
 **Data Movement** — Two modes of cross-GPU tile transfer:
 - *Value-based* (`tile_remote_load`, `tile_remote_store`): register-to-remote, fine-grained, ideal for small tiles.
@@ -73,7 +73,7 @@ See [`examples/`](examples/) for single-process, multi-process, and pattern benc
 
 ## Compute-Communication Overlap Patterns
 
-TNCC implements four overlap strategies, inspired by [Iris](https://github.com/ROCm/iris) (AMD Research). Each trades off complexity for overlap opportunity — from a bulk-synchronous baseline to SM-partitioned workgroup specialization.
+TileCCL implements four overlap strategies, inspired by [Iris](https://github.com/ROCm/iris) (AMD Research). Each trades off complexity for overlap opportunity, from a bulk-synchronous baseline to SM-partitioned workgroup specialization.
 
 Auto-selection chooses the best pattern based on problem shape and hardware:
 
