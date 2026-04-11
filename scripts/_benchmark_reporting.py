@@ -54,6 +54,51 @@ def benchmark_publication_status(
     return "available"
 
 
+def _runtime_surface_from_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Return runtime-surface metadata from supported payload locations."""
+    runtime_surface = payload.get("runtime_surface")
+    if isinstance(runtime_surface, dict):
+        return runtime_surface
+
+    runtime = payload.get("runtime_support")
+    if isinstance(runtime, dict):
+        embedded = runtime.get("runtime_surface")
+        if isinstance(embedded, dict):
+            return embedded
+
+    environment = payload.get("environment")
+    if isinstance(environment, dict):
+        embedded = environment.get("runtime_surface")
+        if isinstance(embedded, dict):
+            return embedded
+    return None
+
+
+def runtime_surface_brief(payload: dict[str, Any]) -> str | None:
+    """Return a concise validated-surface summary when benchmark records it."""
+    runtime_surface = _runtime_surface_from_payload(payload)
+    if not isinstance(runtime_surface, dict):
+        return None
+
+    validated = runtime_surface.get("validated_public_surface")
+    if not isinstance(validated, dict):
+        return None
+
+    world_size = validated.get("world_size")
+    transport = validated.get("transport_strategy")
+    if not isinstance(world_size, int) or not isinstance(transport, str):
+        return None
+
+    in_surface = runtime_surface.get("in_validated_public_surface")
+    if in_surface is True:
+        scope = "validated"
+    elif in_surface is False:
+        scope = "out_of_scope"
+    else:
+        scope = "unknown_scope"
+    return f"surface=ws{world_size}+{transport}({scope})"
+
+
 def runtime_support_brief(
     payload: dict[str, Any],
     *,
@@ -97,6 +142,10 @@ def runtime_support_brief(
             state = op_status.get("state")
             if state:
                 parts.append(f"{op_name}={state}")
+
+    surface = runtime_surface_brief(payload)
+    if surface:
+        parts.append(surface)
 
     if not parts:
         return None

@@ -20,6 +20,7 @@ from tncc.utils.feature_gates import (
     multiprocess_device_remote_access_detail,
     multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
+    multiprocess_device_validated_public_surface,
 )
 
 SupportState = Literal["supported", "partial", "unsupported"]
@@ -56,6 +57,7 @@ class RuntimeSupportMatrix:
     has_heap: bool
     heap_mode: str | None
     transport_strategy: str | None
+    runtime_surface: dict[str, object]
     ops: dict[str, SupportStatus]
     contracts: dict[str, SupportStatus]
     execution_paths: dict[str, SupportStatus]
@@ -74,20 +76,14 @@ class RuntimeSupportMatrix:
                 "heap_mode": self.heap_mode,
                 "transport_strategy": self.transport_strategy,
             },
+            "runtime_surface": self.runtime_surface,
             "ops": {name: status.to_dict() for name, status in self.ops.items()},
-            "contracts": {
-                name: status.to_dict() for name, status in self.contracts.items()
-            },
+            "contracts": {name: status.to_dict() for name, status in self.contracts.items()},
             "execution_paths": {
-                name: status.to_dict()
-                for name, status in self.execution_paths.items()
+                name: status.to_dict() for name, status in self.execution_paths.items()
             },
-            "collectives": {
-                name: status.to_dict() for name, status in self.collectives.items()
-            },
-            "memory": {
-                name: status.to_dict() for name, status in self.memory.items()
-            },
+            "collectives": {name: status.to_dict() for name, status in self.collectives.items()},
+            "memory": {name: status.to_dict() for name, status in self.memory.items()},
         }
 
 
@@ -105,9 +101,14 @@ def describe_runtime_support(
 
     resolved_ctx = ctx if ctx is not None else tncc.current_context()
     heap = resolved_ctx.heap
-    has_heap = heap is not None
-    heap_mode = heap.mode if has_heap else None
-    transport_strategy = heap.transport_strategy if has_heap else None
+    if heap is None:
+        has_heap = False
+        heap_mode = None
+        transport_strategy = None
+    else:
+        has_heap = True
+        heap_mode = heap.mode
+        transport_strategy = heap.transport_strategy
     world_size = resolved_ctx.world_size
     (
         reduce_scatter_state,
@@ -143,7 +144,25 @@ def describe_runtime_support(
         transport_strategy=transport_strategy,
         world_size=world_size,
     )
+    broadcast_status = _describe_broadcast_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    )
+    scatter_status = _describe_scatter_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    )
     allreduce_status = _describe_allreduce_support(
+        has_heap=has_heap,
+        heap_mode=heap_mode,
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    )
+    runtime_surface = _runtime_surface_snapshot(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
@@ -201,10 +220,76 @@ def describe_runtime_support(
 
     collectives = {
         "collectives.allgather_launcher": allgather_status,
+        "collectives.broadcast_launcher": broadcast_status,
+        "collectives.scatter_launcher": scatter_status,
         "collectives.allreduce_launcher": allreduce_status,
         "collectives.reduce_scatter_launcher": SupportStatus(
             reduce_scatter_state,
             reduce_scatter_detail,
+        ),
+    }
+
+    execution_paths = {
+        **reduce_scatter_paths,
+        "allgather.legacy": _describe_non_allreduce_legacy_path_support(
+            collective="allgather",
+            operation="tncc.primitives.allgather(...)",
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "allgather.staged_ws2": _describe_non_allreduce_staged_ws2_path_support(
+            collective="allgather",
+            operation="tncc.primitives.allgather(...)",
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "broadcast.legacy": _describe_non_allreduce_legacy_path_support(
+            collective="broadcast",
+            operation="tncc.primitives.broadcast(...)",
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "broadcast.staged_ws2": _describe_non_allreduce_staged_ws2_path_support(
+            collective="broadcast",
+            operation="tncc.primitives.broadcast(...)",
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "scatter.legacy": _describe_non_allreduce_legacy_path_support(
+            collective="scatter",
+            operation="tncc.primitives.scatter(...)",
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "scatter.staged_ws2": _describe_non_allreduce_staged_ws2_path_support(
+            collective="scatter",
+            operation="tncc.primitives.scatter(...)",
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "reduce_scatter.device.legacy": _describe_reduce_scatter_legacy_path_support(
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        ),
+        "reduce_scatter.device.staged_ws2": _describe_reduce_scatter_staged_ws2_path_support(
+            has_heap=has_heap,
+            heap_mode=heap_mode,
+            transport_strategy=transport_strategy,
+            world_size=world_size,
         ),
     }
 
@@ -307,9 +392,10 @@ def describe_runtime_support(
         has_heap=has_heap,
         heap_mode=heap_mode,
         transport_strategy=transport_strategy,
+        runtime_surface=runtime_surface,
         ops=ops,
         contracts=contracts,
-        execution_paths=reduce_scatter_paths,
+        execution_paths=execution_paths,
         collectives=collectives,
         memory=memory,
     )
@@ -390,9 +476,7 @@ def _describe_reduce_scatter_support(
             },
         )
 
-    if not multiprocess_device_collectives_transport_supported(
-        transport_strategy
-    ):
+    if not multiprocess_device_collectives_transport_supported(transport_strategy):
         return (
             "unsupported",
             gate_detail,
@@ -621,7 +705,84 @@ def _describe_allgather_support(
         )
     return SupportStatus(
         "supported",
-        "Current public multiprocess surface is validated for allgather: "
+        "Current public multiprocess allgather surface is validated for both "
+        "small-message legacy dispatch and large-message ws2 staged dispatch: "
+        "world_size=2 with transport_strategy='ctypes_ipc'.",
+    )
+
+
+def _describe_broadcast_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe host broadcast launcher support conservatively."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "Host broadcast launcher exists, but execution requires an attached symmetric heap.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "supported",
+            "Host broadcast launcher is validated on single-process peer-access heaps.",
+        )
+    if not multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "unsupported",
+            multiprocess_device_remote_access_detail(
+                transport_strategy=transport_strategy,
+                operation="tncc.primitives.broadcast(...)",
+                world_size=world_size,
+            ),
+        )
+    return SupportStatus(
+        "supported",
+        "Current public multiprocess broadcast surface is validated for both "
+        "small-message legacy dispatch and large-message ws2 staged dispatch: "
+        "world_size=2 with transport_strategy='ctypes_ipc'.",
+    )
+
+
+def _describe_scatter_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe host scatter launcher support conservatively."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "Host scatter launcher exists, but execution requires an attached symmetric heap.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "supported",
+            "Host scatter launcher is validated on single-process peer-access heaps.",
+        )
+    if not multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "unsupported",
+            multiprocess_device_remote_access_detail(
+                transport_strategy=transport_strategy,
+                operation="tncc.primitives.scatter(...)",
+                world_size=world_size,
+            ),
+        )
+    return SupportStatus(
+        "supported",
+        "Current public multiprocess scatter surface is validated for both "
+        "small-message legacy dispatch and large-message ws2 staged dispatch: "
         "world_size=2 with transport_strategy='ctypes_ipc'.",
     )
 
@@ -660,4 +821,245 @@ def _describe_allreduce_support(
         "supported",
         "Current public multiprocess surface is validated for allreduce: "
         "world_size=2 with transport_strategy='ctypes_ipc'.",
+    )
+
+
+def _runtime_surface_snapshot(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> dict[str, object]:
+    """Return one conservative runtime-surface descriptor for reports and CLI."""
+    validated_public_surface = multiprocess_device_validated_public_surface()
+    validated_world_size = int(validated_public_surface["world_size"])
+    validated_transport = str(validated_public_surface["transport_strategy"])
+    in_validated_public_surface = bool(
+        has_heap
+        and heap_mode == "multiprocess"
+        and multiprocess_device_remote_access_runtime_supported(
+            transport_strategy=transport_strategy,
+            world_size=world_size,
+        )
+    )
+
+    if not has_heap:
+        detail = (
+            "No heap is attached. Multiprocess validated-surface checks apply only "
+            "to heap-backed multiprocess runtimes."
+        )
+    elif heap_mode == "single_process":
+        detail = (
+            "Current runtime is single_process. Multiprocess public support remains "
+            "fail-closed to world_size=2 with transport_strategy='ctypes_ipc'."
+        )
+    elif in_validated_public_surface:
+        detail = (
+            "Current runtime is inside the validated multiprocess public surface "
+            "(world_size=2, transport_strategy='ctypes_ipc')."
+        )
+    elif multiprocess_device_remote_access_transport_supported(transport_strategy):
+        detail = (
+            "Current transport matches the validated multiprocess set, but the current "
+            "world_size is outside the validated public surface."
+        )
+    else:
+        detail = (
+            "Current multiprocess transport is outside the validated public surface. "
+            "Only transport_strategy='ctypes_ipc' at world_size=2 is public-supported."
+        )
+
+    return {
+        "policy": "fail_closed_validated_public_surface_only",
+        "validated_public_surface": {
+            "world_size": validated_world_size,
+            "transport_strategy": validated_transport,
+        },
+        "current_runtime": {
+            "has_heap": has_heap,
+            "heap_mode": heap_mode,
+            "transport_strategy": transport_strategy,
+            "world_size": world_size,
+        },
+        "in_validated_public_surface": in_validated_public_surface,
+        "detail": detail,
+    }
+
+
+def _describe_non_allreduce_legacy_path_support(
+    *,
+    collective: str,
+    operation: str,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe non-allreduce legacy path support for one collective."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            f"No attached symmetric heap; {collective} legacy path is unavailable.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "supported",
+            "Single-process launcher keeps the validated small-message legacy direct path.",
+        )
+    if multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "supported",
+            "Validated on the current public multiprocess surface: world_size=2 with "
+            "transport_strategy='ctypes_ipc'.",
+        )
+    return SupportStatus(
+        "unsupported",
+        multiprocess_device_remote_access_detail(
+            transport_strategy=transport_strategy,
+            operation=operation,
+            world_size=world_size,
+        ),
+    )
+
+
+def _describe_non_allreduce_staged_ws2_path_support(
+    *,
+    collective: str,
+    operation: str,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe non-allreduce staged ws2 path support for one collective."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            f"No attached symmetric heap; {collective} staged ws2 path is unavailable.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "unsupported",
+            "Staged ws2 path is multiprocess-only. Single-process runtime uses legacy/chunked launchers.",
+        )
+    if multiprocess_device_remote_access_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "supported",
+            "Large-message staged ws2 path is validated on the current public "
+            "multiprocess surface: world_size=2 with transport_strategy='ctypes_ipc'.",
+        )
+    return SupportStatus(
+        "unsupported",
+        multiprocess_device_remote_access_detail(
+            transport_strategy=transport_strategy,
+            operation=operation,
+            world_size=world_size,
+        ),
+    )
+
+
+def _describe_reduce_scatter_legacy_path_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe reduce_scatter legacy device path support."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "No attached symmetric heap; reduce_scatter legacy device path is unavailable.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "unsupported",
+            "Legacy device path is intentionally rejected for single-process heaps.",
+        )
+
+    gate_detail = multiprocess_device_collectives_detail(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    )
+    if multiprocess_device_collectives_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "supported",
+            "Small-message legacy reduce_scatter device path is validated on the "
+            "current public multiprocess surface: world_size=2 with "
+            "transport_strategy='ctypes_ipc'.",
+        )
+    if not multiprocess_device_collectives_enabled():
+        return SupportStatus(
+            "unsupported",
+            gate_detail,
+        )
+    if not multiprocess_device_collectives_transport_supported(transport_strategy):
+        return SupportStatus(
+            "unsupported",
+            gate_detail,
+        )
+    return SupportStatus(
+        "partial",
+        "Legacy reduce_scatter device path is running under an explicit diagnostic "
+        "gate outside the validated public surface.",
+    )
+
+
+def _describe_reduce_scatter_staged_ws2_path_support(
+    *,
+    has_heap: bool,
+    heap_mode: str | None,
+    transport_strategy: str | None,
+    world_size: int,
+) -> SupportStatus:
+    """Describe reduce_scatter staged ws2 device path support."""
+    if not has_heap:
+        return SupportStatus(
+            "partial",
+            "No attached symmetric heap; reduce_scatter staged ws2 path is unavailable.",
+        )
+    if heap_mode == "single_process":
+        return SupportStatus(
+            "unsupported",
+            "Staged ws2 device path is multiprocess-only and not used in single-process runtime.",
+        )
+
+    gate_detail = multiprocess_device_collectives_detail(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    )
+    if multiprocess_device_collectives_runtime_supported(
+        transport_strategy=transport_strategy,
+        world_size=world_size,
+    ):
+        return SupportStatus(
+            "supported",
+            "Large-message staged ws2 reduce_scatter device path is validated on the "
+            "current public multiprocess surface: world_size=2 with "
+            "transport_strategy='ctypes_ipc'.",
+        )
+    if not multiprocess_device_collectives_enabled():
+        return SupportStatus(
+            "unsupported",
+            gate_detail,
+        )
+    if not multiprocess_device_collectives_transport_supported(transport_strategy):
+        return SupportStatus(
+            "unsupported",
+            gate_detail,
+        )
+    return SupportStatus(
+        "partial",
+        "Staged ws2 reduce_scatter device path is running under an explicit "
+        "diagnostic gate outside the validated public surface.",
     )

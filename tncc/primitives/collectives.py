@@ -52,6 +52,8 @@ _ALLREDUCE_MAX_CHUNK_ELEMS = 4096
 _ALLREDUCE_MAX_THROUGHPUT_PIPELINE_SLOTS = 4
 _ALLREDUCE_MAX_BANDWIDTH_PIPELINE_SLOTS = 16
 _HOST_COLLECTIVE_MAX_CHUNK_ELEMS = 4096
+_NON_ALLREDUCE_LEGACY_MAX_MESSAGE_BYTES = 16 * 1024
+_NON_ALLREDUCE_MAX_PIPELINE_SLOTS = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +154,188 @@ class AllReduceExecutionSpec:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class _CollectiveExecutionSpec:
+    """Resolved internal execution metadata for one host collective call."""
+
+    collective: str
+    path: str
+    message_regime: str
+    chunk_elems: int
+    num_chunks: int
+    pipeline_slots: int
+    protocol: str
+    root_mode: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Ws2StagedCollectiveProtocolSpec:
+    """Internal ws2 staged protocol state-machine contract (spec-only)."""
+
+    collective: str
+    protocol: str
+    participants: str
+    root_behavior: str
+    publish: str
+    wait: str
+    ack: str
+    reuse: str
+    tail: str
+    slot_lifecycle: tuple[str, str, str, str]
+
+
+_WS2_STAGED_SLOT_LIFECYCLE = (
+    "empty",
+    "published",
+    "consumed_or_acked",
+    "reusable",
+)
+
+
+# =====================================================================
+# Internal protocol specs -- ws2 staged large-message state machine
+# =====================================================================
+#
+# This section is intentionally metadata-only. It codifies publish/wait/ack/
+# slot-reuse/tail semantics before wiring runtime-path changes for non-allreduce
+# collectives. Semantics align with the existing ws2 allreduce release/acquire
+# + system-scope atomics contract.
+_WS2_STAGED_COLLECTIVE_PROTOCOL_SPECS: dict[str, _Ws2StagedCollectiveProtocolSpec] = {
+    "allgather": _Ws2StagedCollectiveProtocolSpec(
+        collective="allgather",
+        protocol="ws2_slot_epoch_pipeline",
+        participants="two_peers_bidirectional",
+        root_behavior="no_root_each_rank_publishes_then_consumes_peer_chunk",
+        publish=(
+            "producer stores local chunk into the local slot then publish-epoch via "
+            "tl.atomic_xchg(..., sem='release', scope='sys')"
+        ),
+        wait=(
+            "consumer waits on peer publish epoch with tl.atomic_cas(..., "
+            "sem='acquire', scope='sys') before loading peer slot"
+        ),
+        ack=(
+            "after consuming peer slot, consumer writes epoch ack to the peer's ack "
+            "slot with release+sys ordering"
+        ),
+        reuse=(
+            "producer may reuse the local slot only after local ack slot reaches the "
+            "published epoch"
+        ),
+        tail=(
+            "final partial chunk uses mask-preserving load/store; terminal chunk may "
+            "skip reuse wait only when no future slot reuse exists"
+        ),
+        slot_lifecycle=_WS2_STAGED_SLOT_LIFECYCLE,
+    ),
+    "broadcast": _Ws2StagedCollectiveProtocolSpec(
+        collective="broadcast",
+        protocol="ws2_root_publish_consumer_ack",
+        participants="root_plus_one_receiver",
+        root_behavior=(
+            "root is the sole payload publisher; non-root never publishes payload and "
+            "only waits/consumes/acks"
+        ),
+        publish=(
+            "root stores chunk into root-owned publish slot and publishes epoch with "
+            "release+sys ordering"
+        ),
+        wait=(
+            "receiver waits for root publish epoch with acquire+sys ordering before "
+            "reading root payload"
+        ),
+        ack=(
+            "receiver acks root epoch after consume; root waits on ack epoch before "
+            "reusing the root slot"
+        ),
+        reuse=("slot reuse is root-owned only; receiver does not make slot-reuse decisions"),
+        tail=(
+            "root publishes final masked chunk; final-chunk reuse wait may be omitted "
+            "only when call completion guarantees no subsequent reuse"
+        ),
+        slot_lifecycle=_WS2_STAGED_SLOT_LIFECYCLE,
+    ),
+    "scatter": _Ws2StagedCollectiveProtocolSpec(
+        collective="scatter",
+        protocol="ws2_root_targeted_publish_ack",
+        participants="root_plus_one_target_per_chunk",
+        root_behavior=(
+            "root is the sole publisher of target-specific chunks; non-root ranks "
+            "never publish source payload"
+        ),
+        publish=(
+            "root writes target chunk into root-owned slot and publishes per-chunk "
+            "epoch with release+sys ordering"
+        ),
+        wait=("target rank waits for root publish epoch before consuming its addressed chunk"),
+        ack=("target rank acks root epoch after consuming; root waits on ack prior to slot reuse"),
+        reuse=(
+            "only root controls slot reuse across target chunks; non-target rank stays "
+            "idle for that chunk"
+        ),
+        tail=(
+            "for final partial chunk, root publishes masked payload and can elide reuse "
+            "wait only when no next chunk reuses the slot"
+        ),
+        slot_lifecycle=_WS2_STAGED_SLOT_LIFECYCLE,
+    ),
+    "reduce_scatter": _Ws2StagedCollectiveProtocolSpec(
+        collective="reduce_scatter",
+        protocol="ws2_owner_wait_reduce_ack",
+        participants="two_peers_bidirectional_chunk_owner_reduce",
+        root_behavior=(
+            "no root role; each chunk has an owner/consumer that waits and reduces "
+            "while the peer acts as publisher"
+        ),
+        publish=(
+            "publisher stores contribution chunk into its slot then publishes epoch with "
+            "release+sys ordering"
+        ),
+        wait=(
+            "chunk owner waits until peer publish epoch is visible with acquire+sys "
+            "ordering before reduction"
+        ),
+        ack=(
+            "after reduction, chunk owner writes ack epoch to peer so publisher can safely advance"
+        ),
+        reuse=("publisher reuses slot only after observing owner ack epoch for that slot"),
+        tail=(
+            "tail chunk reduction uses masks for partial elements; terminal chunk can "
+            "omit reuse wait only when no future publish reuses the slot"
+        ),
+        slot_lifecycle=_WS2_STAGED_SLOT_LIFECYCLE,
+    ),
+}
+
+
+_NON_ALLREDUCE_LEGACY_PROTOCOLS: dict[str, str] = {
+    "allgather": "direct_write",
+    "broadcast": "flat_root_broadcast",
+    "scatter": "flat_root_scatter",
+    "reduce_scatter": "direct_peer_reduce",
+}
+
+_WS2_STAGED_RESOLVER_PROTOCOL = "ws2_slot_epoch_pipeline"
+
+
+def _ws2_staged_resolver_protocol(collective: str) -> str:
+    """Return the staged ws2 protocol token for non-allreduce execution metadata.
+
+    Non-allreduce staged kernels still advertise one stable resolver protocol
+    token today, while per-collective ws2 publish/wait/ack semantics remain
+    modeled in ``_WS2_STAGED_COLLECTIVE_PROTOCOL_SPECS``.
+    """
+    spec = _WS2_STAGED_COLLECTIVE_PROTOCOL_SPECS.get(collective)
+    if spec is None:
+        raise ValueError(f"Unsupported ws2 staged collective: {collective!r}")
+    if not spec.protocol.startswith("ws2_"):
+        raise ValueError(
+            "ws2 staged protocol specs must use ws2_* protocol names, "
+            f"got {spec.protocol!r} for {collective!r}"
+        )
+    return _WS2_STAGED_RESOLVER_PROTOCOL
+
+
 @dataclass(slots=True)
 class _AllReduceWorkspace:
     """Process-local cached workspace for the staged allreduce fast path."""
@@ -168,9 +352,30 @@ class _AllReduceWorkspace:
         return start
 
 
+@dataclass(slots=True)
+class _Ws2StagedCollectiveWorkspace:
+    """Process-local cached workspace for ws2 staged non-allreduce paths."""
+
+    staging: torch.Tensor
+    published_epoch: torch.Tensor
+    slot_sync_state: torch.Tensor
+    next_epoch: int = 0
+
+    def reserve_epoch_range(self, num_chunks: int) -> int:
+        """Reserve one monotonically increasing epoch range for a call."""
+        start = self.next_epoch + 1
+        self.next_epoch += num_chunks
+        return start
+
+
 _ALLREDUCE_WORKSPACE_CACHE: dict[
     tuple[object, ...],
     _AllReduceWorkspace,
+] = {}
+
+_WS2_STAGED_COLLECTIVE_WORKSPACE_CACHE: dict[
+    tuple[object, ...],
+    _Ws2StagedCollectiveWorkspace,
 ] = {}
 
 
@@ -205,6 +410,70 @@ def _ring_next(rank, world_size):
 def _ring_prev(rank, world_size):
     """Return the predecessor rank in the ring: ``(rank - 1 + world_size) % world_size``."""
     return (rank - 1 + world_size) % world_size
+
+
+@triton.jit
+def _ws2_epoch_publish(epoch_slot_ptr, epoch):
+    """Publish one ws2 slot epoch with release+sys ordering."""
+    tl.atomic_xchg(epoch_slot_ptr, epoch, sem="release", scope="sys")
+
+
+@triton.jit
+def _ws2_epoch_wait(epoch_slot_ptr, epoch):
+    """Wait until *epoch_slot_ptr* reaches *epoch* with acquire+sys ordering."""
+    while (
+        tl.atomic_cas(
+            epoch_slot_ptr,
+            epoch,
+            epoch,
+            sem="acquire",
+            scope="sys",
+        )
+        != epoch
+    ):
+        pass
+
+
+@triton.jit
+def _ws2_epoch_wait_remote_publish(
+    published_slot_ptr,
+    rank,
+    peer_rank,
+    heap_bases_ptr,
+    epoch,
+):
+    """Wait for the peer-published epoch on one ws2 slot."""
+    remote_published = translate_ptr(
+        published_slot_ptr,
+        rank,
+        peer_rank,
+        heap_bases_ptr,
+    )
+    _ws2_epoch_wait(remote_published, epoch)
+
+
+@triton.jit
+def _ws2_epoch_ack_remote(
+    ack_slot_ptr,
+    rank,
+    peer_rank,
+    heap_bases_ptr,
+    epoch,
+):
+    """Ack one ws2 slot epoch to the peer with release+sys ordering."""
+    remote_ack = translate_ptr(
+        ack_slot_ptr,
+        rank,
+        peer_rank,
+        heap_bases_ptr,
+    )
+    _ws2_epoch_publish(remote_ack, epoch)
+
+
+@triton.jit
+def _ws2_slot_has_future_reuse(chunk_idx, num_slots, num_chunks):
+    """Return whether this ws2 slot will be reused by a later chunk."""
+    return chunk_idx + num_slots < num_chunks
 
 
 # =====================================================================
@@ -390,9 +659,7 @@ def tile_allgather(
             pass
         else:
             if peer != rank:
-                remote_dst = translate_ptr(
-                    dst_ptr, rank, peer, heap_bases
-                )
+                remote_dst = translate_ptr(dst_ptr, rank, peer, heap_bases)
                 tl.store(remote_dst + dst_offset + offsets, my_tile)
 
 
@@ -450,9 +717,7 @@ def tile_scatter(
                     tl.store(dst_ptr + offsets, chunk)
                 else:
                     # Remote write -- translate dst_ptr for the target rank.
-                    remote_dst = translate_ptr(
-                        dst_ptr, root, target, heap_bases
-                    )
+                    remote_dst = translate_ptr(dst_ptr, root, target, heap_bases)
                     tl.store(remote_dst + offsets, chunk)
 
 
@@ -562,9 +827,7 @@ def tile_broadcast(
                 pass
             else:
                 if peer != root:
-                    remote_ptr = translate_ptr(
-                        ptr, root, peer, heap_bases
-                    )
+                    remote_ptr = translate_ptr(ptr, root, peer, heap_bases)
                     tl.store(remote_ptr + offsets, tile_data)
 
 
@@ -641,13 +904,16 @@ def _allreduce_staged_kernel(
                         peer,
                         heap_bases_ptr,
                     )
-                    while tl.atomic_cas(
-                        remote_published,
-                        epoch,
-                        epoch,
-                        sem="acquire",
-                        scope="sys",
-                    ) != epoch:
+                    while (
+                        tl.atomic_cas(
+                            remote_published,
+                            epoch,
+                            epoch,
+                            sem="acquire",
+                            scope="sys",
+                        )
+                        != epoch
+                    ):
                         pass
 
                     remote_staging = translate_ptr(
@@ -681,13 +947,16 @@ def _allreduce_staged_kernel(
 
         if chunk_idx + num_slots < num_chunks:
             expected_consumers = world_size - 1
-            while tl.atomic_cas(
-                consumed_slot_ptr,
-                expected_consumers,
-                expected_consumers,
-                sem="acquire",
-                scope="sys",
-            ) != expected_consumers:
+            while (
+                tl.atomic_cas(
+                    consumed_slot_ptr,
+                    expected_consumers,
+                    expected_consumers,
+                    sem="acquire",
+                    scope="sys",
+                )
+                != expected_consumers
+            ):
                 pass
 
         chunk_idx += num_slots
@@ -736,22 +1005,15 @@ def _allreduce_staged_kernel_ws2(
         epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
 
         tl.store(staging_slot_ptr + offsets, local_values, mask=mask)
-        tl.atomic_xchg(published_slot_ptr, epoch, sem="release", scope="sys")
+        _ws2_epoch_publish(published_slot_ptr, epoch)
 
-        remote_published = translate_ptr(
+        _ws2_epoch_wait_remote_publish(
             published_slot_ptr,
             rank,
             peer_rank,
             heap_bases_ptr,
+            epoch,
         )
-        while tl.atomic_cas(
-            remote_published,
-            epoch,
-            epoch,
-            sem="acquire",
-            scope="sys",
-        ) != epoch:
-            pass
 
         remote_staging = translate_ptr(
             staging_slot_ptr,
@@ -768,23 +1030,16 @@ def _allreduce_staged_kernel_ws2(
         reduced = _reduce_op(local_values, incoming, op)
         tl.store(tensor_ptr + idx, reduced, mask=mask)
 
-        if chunk_idx + num_slots < num_chunks:
-            remote_ack = translate_ptr(
+        if _ws2_slot_has_future_reuse(chunk_idx, num_slots, num_chunks):
+            _ws2_epoch_ack_remote(
                 ack_slot_ptr,
                 rank,
                 peer_rank,
                 heap_bases_ptr,
+                epoch,
             )
-            tl.atomic_xchg(remote_ack, epoch, sem="release", scope="sys")
 
-            while tl.atomic_cas(
-                ack_slot_ptr,
-                epoch,
-                epoch,
-                sem="acquire",
-                scope="sys",
-            ) != epoch:
-                pass
+            _ws2_epoch_wait(ack_slot_ptr, epoch)
 
         chunk_idx += num_slots
 
@@ -871,6 +1126,96 @@ def _allgather_chunked_kernel(
 
 
 @triton.jit
+def _allgather_staged_kernel_ws2(
+    src_ptr,
+    dst_ptr,
+    staging_ptr,
+    published_epoch_ptr,
+    slot_sync_state_ptr,
+    heap_bases_ptr,
+    rank,
+    block_size,
+    full_block_size,
+    num_chunks,
+    num_slots,
+    base_epoch,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """World-size-2 staged allgather kernel for large non-allreduce messages.
+
+    Each rank publishes one chunk of its local contribution into a symmetric
+    staging slot, waits for the peer's publish epoch, consumes the peer chunk,
+    acks peer slot reuse, and waits for local ack before reusing local slot.
+    Output layout remains identical to the legacy allgather contract.
+    """
+    pid = tl.program_id(0)
+    if pid >= num_slots:
+        return
+
+    offsets = tl.arange(0, BLOCK_SIZE)
+    slot = pid
+    chunk_idx = pid
+    peer_rank = 1 - rank
+
+    while chunk_idx < num_chunks:
+        chunk_start = chunk_idx * BLOCK_SIZE
+        idx = chunk_start + offsets
+        mask = idx < block_size
+
+        local_values = tl.load(src_ptr + idx, mask=mask, other=0.0)
+
+        staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
+        published_slot_ptr = published_epoch_ptr + slot
+        ack_slot_ptr = slot_sync_state_ptr + slot
+        epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
+
+        # Publish local chunk into local slot.
+        tl.store(staging_slot_ptr + offsets, local_values, mask=mask)
+        _ws2_epoch_publish(published_slot_ptr, epoch)
+
+        # Keep local output contract identical to direct-write allgather.
+        local_out_offset = rank * full_block_size + chunk_start
+        tl.store(dst_ptr + local_out_offset + offsets, local_values, mask=mask)
+
+        # Consume peer chunk after publish epoch becomes visible.
+        _ws2_epoch_wait_remote_publish(
+            published_slot_ptr,
+            rank,
+            peer_rank,
+            heap_bases_ptr,
+            epoch,
+        )
+
+        remote_staging = translate_ptr(
+            staging_slot_ptr,
+            rank,
+            peer_rank,
+            heap_bases_ptr,
+        )
+        incoming = tl.load(
+            remote_staging + offsets,
+            mask=mask,
+            other=0.0,
+            cache_modifier=".cg",
+        )
+
+        peer_out_offset = peer_rank * full_block_size + chunk_start
+        tl.store(dst_ptr + peer_out_offset + offsets, incoming, mask=mask)
+
+        if _ws2_slot_has_future_reuse(chunk_idx, num_slots, num_chunks):
+            _ws2_epoch_ack_remote(
+                ack_slot_ptr,
+                rank,
+                peer_rank,
+                heap_bases_ptr,
+                epoch,
+            )
+            _ws2_epoch_wait(ack_slot_ptr, epoch)
+
+        chunk_idx += num_slots
+
+
+@triton.jit
 def _reduce_scatter_kernel(
     src_ptr,
     dst_ptr,
@@ -928,6 +1273,99 @@ def _reduce_scatter_chunked_kernel(
 
 
 @triton.jit
+def _reduce_scatter_staged_kernel_ws2(
+    src_ptr,
+    dst_ptr,
+    staging_ptr,
+    published_epoch_ptr,
+    slot_sync_state_ptr,
+    heap_bases_ptr,
+    rank,
+    block_size,
+    num_chunks,
+    num_slots,
+    base_epoch,
+    BLOCK_SIZE: tl.constexpr,
+    op: tl.constexpr = "sum",
+):
+    """World-size-2 staged reduce_scatter kernel for large non-allreduce messages.
+
+    Chunk-owner reduction protocol:
+    - each rank computes only its local output chunk (rank-local shard).
+    - publisher snapshots one local chunk segment into its staging slot and
+      publishes an epoch.
+    - owner waits on peer publish epoch, reads peer slot, reduces with local
+      contribution, stores only local output chunk segment, and acks peer slot.
+    - publisher waits on local ack before slot reuse to keep back-to-back host
+      calls safe without host-side barriers.
+    """
+    pid = tl.program_id(0)
+    if pid >= num_slots:
+        return
+
+    offsets = tl.arange(0, BLOCK_SIZE)
+    slot = pid
+    chunk_idx = pid
+    peer_rank = 1 - rank
+
+    while chunk_idx < num_chunks:
+        chunk_start = chunk_idx * BLOCK_SIZE
+        idx = chunk_start + offsets
+        mask = idx < block_size
+
+        owner_chunk_offset = rank * block_size + chunk_start
+        local_values = tl.load(src_ptr + owner_chunk_offset + offsets, mask=mask, other=0.0)
+
+        # In ws2 reduce_scatter, each rank owns one output shard (its rank chunk)
+        # but publishes the peer-owned shard contribution.
+        publish_chunk_offset = peer_rank * block_size + chunk_start
+        publish_values = tl.load(src_ptr + publish_chunk_offset + offsets, mask=mask, other=0.0)
+
+        staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
+        published_slot_ptr = published_epoch_ptr + slot
+        ack_slot_ptr = slot_sync_state_ptr + slot
+        epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
+
+        tl.store(staging_slot_ptr + offsets, publish_values, mask=mask)
+        _ws2_epoch_publish(published_slot_ptr, epoch)
+
+        _ws2_epoch_wait_remote_publish(
+            published_slot_ptr,
+            rank,
+            peer_rank,
+            heap_bases_ptr,
+            epoch,
+        )
+
+        remote_staging = translate_ptr(
+            staging_slot_ptr,
+            rank,
+            peer_rank,
+            heap_bases_ptr,
+        )
+        incoming = tl.load(
+            remote_staging + offsets,
+            mask=mask,
+            other=0.0,
+            cache_modifier=".cg",
+        )
+        reduced = _reduce_op(local_values, incoming, op)
+        tl.store(dst_ptr + idx, reduced, mask=mask)
+
+        if _ws2_slot_has_future_reuse(chunk_idx, num_slots, num_chunks):
+            _ws2_epoch_ack_remote(
+                ack_slot_ptr,
+                rank,
+                peer_rank,
+                heap_bases_ptr,
+                epoch,
+            )
+            _ws2_epoch_wait(ack_slot_ptr, epoch)
+
+        chunk_idx += num_slots
+
+
+@triton.jit
 def _broadcast_kernel(
     data_ptr,
     heap_bases_ptr,
@@ -947,6 +1385,210 @@ def _broadcast_kernel(
         heap_bases_ptr,
         BLOCK_SIZE,
     )
+
+
+@triton.jit
+def _broadcast_staged_kernel_ws2(
+    tensor_ptr,
+    staging_ptr,
+    published_epoch_ptr,
+    slot_sync_state_ptr,
+    heap_bases_ptr,
+    rank,
+    root,
+    block_size,
+    num_chunks,
+    num_slots,
+    base_epoch,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """World-size-2 staged broadcast kernel for large non-allreduce messages.
+
+    Root-centric publish/read/ack protocol:
+    - root publishes each chunk epoch after writing its slot payload.
+    - non-root waits on root publish, reads root payload, then acks root slot.
+    - root waits on non-root ack for every chunk so slot reuse remains safe
+      across back-to-back host calls without inter-call rank barriers.
+    """
+    pid = tl.program_id(0)
+    if pid >= num_slots:
+        return
+
+    offsets = tl.arange(0, BLOCK_SIZE)
+    slot = pid
+    chunk_idx = pid
+
+    while chunk_idx < num_chunks:
+        chunk_start = chunk_idx * BLOCK_SIZE
+        idx = chunk_start + offsets
+        mask = idx < block_size
+
+        staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
+        published_slot_ptr = published_epoch_ptr + slot
+        ack_slot_ptr = slot_sync_state_ptr + slot
+        epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
+        slot_reused_in_call = _ws2_slot_has_future_reuse(chunk_idx, num_slots, num_chunks)
+
+        if rank == root:
+            local_values = tl.load(tensor_ptr + idx, mask=mask, other=0.0)
+            tl.store(staging_slot_ptr + offsets, local_values, mask=mask)
+            _ws2_epoch_publish(published_slot_ptr, epoch)
+
+            if slot_reused_in_call:
+                _ws2_epoch_wait(ack_slot_ptr, epoch)
+            else:
+                # Tail chunks still wait for ack so the next host call cannot
+                # reuse this slot before the prior call's consume+ack completes.
+                _ws2_epoch_wait(ack_slot_ptr, epoch)
+        else:
+            _ws2_epoch_wait_remote_publish(
+                published_slot_ptr,
+                rank,
+                root,
+                heap_bases_ptr,
+                epoch,
+            )
+
+            remote_staging = translate_ptr(
+                staging_slot_ptr,
+                rank,
+                root,
+                heap_bases_ptr,
+            )
+            incoming = tl.load(
+                remote_staging + offsets,
+                mask=mask,
+                other=0.0,
+                cache_modifier=".cg",
+            )
+            tl.store(tensor_ptr + idx, incoming, mask=mask)
+
+            if slot_reused_in_call:
+                _ws2_epoch_ack_remote(
+                    ack_slot_ptr,
+                    rank,
+                    root,
+                    heap_bases_ptr,
+                    epoch,
+                )
+            else:
+                # Tail chunks still ack so root can safely move to the next
+                # host-level call on this workspace slot.
+                _ws2_epoch_ack_remote(
+                    ack_slot_ptr,
+                    rank,
+                    root,
+                    heap_bases_ptr,
+                    epoch,
+                )
+
+        chunk_idx += num_slots
+
+
+@triton.jit
+def _scatter_staged_kernel_ws2(
+    src_ptr,
+    dst_ptr,
+    staging_ptr,
+    published_epoch_ptr,
+    slot_sync_state_ptr,
+    heap_bases_ptr,
+    rank,
+    root,
+    block_size,
+    num_chunks,
+    num_slots,
+    base_epoch,
+    BLOCK_SIZE: tl.constexpr,
+):
+    """World-size-2 staged scatter kernel for large non-allreduce messages.
+
+    Root-centric shard-push protocol:
+    - root keeps its local shard in local memory (src[root] -> dst[root]).
+    - root publishes only the peer shard chunks via ws2 staging slots.
+    - peer waits on root publish, reads root slot payload, and acks root slot.
+    - root waits for peer ack before slot reuse so repeated host calls do not
+      deadlock on stale reuse state.
+    """
+    pid = tl.program_id(0)
+    if pid >= num_slots:
+        return
+
+    offsets = tl.arange(0, BLOCK_SIZE)
+    slot = pid
+    chunk_idx = pid
+    peer_rank = 1 - root
+
+    while chunk_idx < num_chunks:
+        chunk_start = chunk_idx * BLOCK_SIZE
+        idx = chunk_start + offsets
+        mask = idx < block_size
+
+        staging_slot_ptr = staging_ptr + slot * BLOCK_SIZE
+        published_slot_ptr = published_epoch_ptr + slot
+        ack_slot_ptr = slot_sync_state_ptr + slot
+        epoch = tl.cast(base_epoch + chunk_idx, tl.int32)
+        slot_reused_in_call = _ws2_slot_has_future_reuse(chunk_idx, num_slots, num_chunks)
+
+        if rank == root:
+            local_src_offset = root * block_size + chunk_start
+            local_values = tl.load(src_ptr + local_src_offset + offsets, mask=mask, other=0.0)
+            tl.store(dst_ptr + idx, local_values, mask=mask)
+
+            peer_src_offset = peer_rank * block_size + chunk_start
+            peer_values = tl.load(src_ptr + peer_src_offset + offsets, mask=mask, other=0.0)
+            tl.store(staging_slot_ptr + offsets, peer_values, mask=mask)
+            _ws2_epoch_publish(published_slot_ptr, epoch)
+
+            if slot_reused_in_call:
+                _ws2_epoch_wait(ack_slot_ptr, epoch)
+            else:
+                # Tail chunks still wait for ack so the next host call cannot
+                # reuse this slot before prior-call consume+ack completes.
+                _ws2_epoch_wait(ack_slot_ptr, epoch)
+        else:
+            _ws2_epoch_wait_remote_publish(
+                published_slot_ptr,
+                rank,
+                root,
+                heap_bases_ptr,
+                epoch,
+            )
+
+            remote_staging = translate_ptr(
+                staging_slot_ptr,
+                rank,
+                root,
+                heap_bases_ptr,
+            )
+            incoming = tl.load(
+                remote_staging + offsets,
+                mask=mask,
+                other=0.0,
+                cache_modifier=".cg",
+            )
+            tl.store(dst_ptr + idx, incoming, mask=mask)
+
+            if slot_reused_in_call:
+                _ws2_epoch_ack_remote(
+                    ack_slot_ptr,
+                    rank,
+                    root,
+                    heap_bases_ptr,
+                    epoch,
+                )
+            else:
+                # Tail chunks still ack so root can safely move to the next
+                # host-level call on this workspace slot.
+                _ws2_epoch_ack_remote(
+                    ack_slot_ptr,
+                    rank,
+                    root,
+                    heap_bases_ptr,
+                    epoch,
+                )
+
+        chunk_idx += num_slots
 
 
 @triton.jit
@@ -1032,10 +1674,209 @@ def _host_collective_multiprocess_sync(
     torch.cuda.synchronize(device)
     if not torch.distributed.is_initialized():
         raise RuntimeError(
-            "Chunked multiprocess collective launchers require torch.distributed "
-            "to be initialized."
+            "Chunked multiprocess collective launchers require torch.distributed to be initialized."
         )
     torch.distributed.barrier(device_ids=[device.index])
+
+
+def _validate_collective_world_size(world_size: int) -> None:
+    """Ensure collective world_size fits the static Triton launch bounds."""
+    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
+        raise ValueError(
+            f"world_size={world_size} exceeds maximum supported "
+            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
+            f"tl.static_range bound in collectives.py."
+        )
+
+
+def _validate_collective_root(
+    root: int,
+    *,
+    world_size: int,
+) -> None:
+    """Ensure one root rank argument is inside ``[0, world_size)``."""
+    if root < 0 or root >= world_size:
+        raise ValueError(f"root={root} out of range [0, {world_size})")
+
+
+def _validate_collective_pair_shape_contract(
+    collective: str,
+    *,
+    tensor: torch.Tensor,
+    output: torch.Tensor,
+    world_size: int,
+) -> int:
+    """Validate the numel contract for one tensor/output collective pair."""
+    if collective == "allgather":
+        block_size = int(tensor.numel())
+        expected_output = world_size * block_size
+        if int(output.numel()) != expected_output:
+            raise ValueError(
+                "allgather output.numel must equal tensor.numel * world_size: "
+                f"{output.numel()} != {block_size} * {world_size}"
+            )
+        return block_size
+
+    if collective in {"scatter", "reduce_scatter"}:
+        block_size = int(output.numel())
+        expected_input = world_size * block_size
+        if int(tensor.numel()) != expected_input:
+            raise ValueError(
+                f"{collective} tensor.numel must equal output.numel * world_size: "
+                f"{tensor.numel()} != {block_size} * {world_size}"
+            )
+        return block_size
+
+    raise ValueError(f"Unsupported collective pair shape contract: {collective!r}")
+
+
+def _validate_collective_pair_device(
+    collective: str,
+    *,
+    tensor: torch.Tensor,
+    output: torch.Tensor,
+) -> None:
+    """Validate tensor/output co-location for pairwise host launchers."""
+    if tensor.device != output.device:
+        raise ValueError(
+            f"{collective} expects tensor/output on the same device, "
+            f"got {tensor.device} vs {output.device}"
+        )
+
+
+def _validate_collective_tensor_contiguous(
+    collective: str,
+    *,
+    tensor: torch.Tensor,
+    name: str,
+) -> None:
+    """Validate one launcher tensor is contiguous."""
+    if not tensor.is_contiguous():
+        raise ValueError(f"{collective} currently requires {name} to be contiguous")
+
+
+def _collective_root_mode(collective: str, *, root: int | None) -> str:
+    """Return explicit root-role semantics for one collective launch."""
+    if collective in {"allgather", "reduce_scatter"}:
+        return "no_root"
+    if root is None:
+        return "root_required"
+    return f"explicit_root_rank_{root}"
+
+
+def _collective_message_bytes(
+    collective: str,
+    *,
+    input_numel: int,
+    world_size: int,
+    element_size: int,
+) -> int:
+    """Return one rank-local payload estimate used by path policy."""
+    if collective == "allgather":
+        payload_elems = input_numel
+    elif collective == "reduce_scatter":
+        payload_elems = max(0, input_numel // max(world_size, 1))
+    elif collective in {"broadcast", "scatter"}:
+        payload_elems = input_numel
+    else:
+        raise ValueError(f"Unsupported collective for execution resolution: {collective!r}")
+    return payload_elems * max(element_size, 1)
+
+
+def _collective_chunk_numel(
+    collective: str,
+    *,
+    input_numel: int,
+    world_size: int,
+) -> int:
+    """Return the per-rank local chunk span for one collective."""
+    if collective == "allgather":
+        return max(0, input_numel)
+    if collective == "reduce_scatter":
+        return max(0, input_numel // max(world_size, 1))
+    if collective in {"broadcast", "scatter"}:
+        return max(0, input_numel)
+    raise ValueError(f"Unsupported collective for execution resolution: {collective!r}")
+
+
+def _resolve_collective_execution(
+    collective: str,
+    *,
+    input_numel: int,
+    world_size: int,
+    element_size: int,
+    device: torch.device,
+    root: int | None = None,
+) -> _CollectiveExecutionSpec:
+    """Resolve non-allreduce host-collective execution metadata.
+
+    Policy is intentionally conservative for today's validated ws2 multiprocess
+    surface: messages up to 16 KiB stay on legacy direct launchers, while larger
+    messages advertise staged metadata for future kernel-path specialization.
+    """
+    if collective not in {
+        "allgather",
+        "broadcast",
+        "scatter",
+        "reduce_scatter",
+    }:
+        raise ValueError(f"Unsupported collective for execution resolution: {collective!r}")
+
+    message_bytes = _collective_message_bytes(
+        collective,
+        input_numel=input_numel,
+        world_size=world_size,
+        element_size=element_size,
+    )
+    message_regime = (
+        "legacy" if message_bytes <= _NON_ALLREDUCE_LEGACY_MAX_MESSAGE_BYTES else "staged"
+    )
+    path = message_regime
+    protocol = (
+        _NON_ALLREDUCE_LEGACY_PROTOCOLS[collective]
+        if path == "legacy"
+        else _ws2_staged_resolver_protocol(collective)
+    )
+
+    # Keep host launcher tile chunks bounded to the validated 4096-element cap
+    # so legacy/non-allreduce behavior remains stable across collectives.
+    logical_chunk_numel = _collective_chunk_numel(
+        collective,
+        input_numel=input_numel,
+        world_size=world_size,
+    )
+    chunk_elems = _host_collective_chunk_elems(logical_chunk_numel)
+    num_chunks = triton.cdiv(logical_chunk_numel, chunk_elems) if logical_chunk_numel > 0 else 0
+
+    if num_chunks == 0:
+        pipeline_slots = 0
+    else:
+        try:
+            props = torch.cuda.get_device_properties(device)
+            sm_count = int(getattr(props, "multi_processor_count", 1))
+        except Exception:
+            sm_count = 1
+        # Stage-slot fanout intentionally follows a conservative upper bound:
+        # min(num_chunks, SM_count, 8), with lower bound 1 when work exists.
+        pipeline_slots = max(
+            1,
+            min(
+                num_chunks,
+                sm_count,
+                _NON_ALLREDUCE_MAX_PIPELINE_SLOTS,
+            ),
+        )
+
+    return _CollectiveExecutionSpec(
+        collective=collective,
+        path=path,
+        message_regime=message_regime,
+        chunk_elems=chunk_elems,
+        num_chunks=num_chunks,
+        pipeline_slots=pipeline_slots,
+        protocol=protocol,
+        root_mode=_collective_root_mode(collective, root=root),
+    )
 
 
 def allreduce(
@@ -1117,37 +1958,82 @@ def allgather(
     reside in *heap*'s symmetric memory.
     """
     world_size = heap.world_size
-    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
-        raise ValueError(
-            f"world_size={world_size} exceeds maximum supported "
-            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
-            f"tl.static_range bound in collectives.py."
-        )
-    block_size = tensor.numel()
-    expected_output = world_size * block_size
-
-    if output.numel() != expected_output:
-        raise ValueError(
-            f"Output size ({output.numel()}) must equal "
-            f"world_size * BLOCK_SIZE ({expected_output})."
-        )
+    _validate_collective_world_size(world_size)
+    block_size = _validate_collective_pair_shape_contract(
+        "allgather",
+        tensor=tensor,
+        output=output,
+        world_size=world_size,
+    )
+    _validate_collective_pair_device(
+        "allgather",
+        tensor=tensor,
+        output=output,
+    )
+    _validate_collective_tensor_contiguous("allgather", tensor=tensor, name="tensor")
+    _validate_collective_tensor_contiguous("allgather", tensor=output, name="output")
+    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
+    _require_tensor_on_heap(output, heap=heap, name="output")
     _require_device_remote_access_transport(
         heap,
         operation="tncc.primitives.allgather(...)",
     )
 
     heap_bases = heap.get_heap_bases()
-    chunk_elems = _host_collective_chunk_elems(block_size)
+    execution = _resolve_collective_execution(
+        "allgather",
+        input_numel=block_size,
+        world_size=world_size,
+        element_size=tensor.element_size(),
+        device=tensor.device,
+    )
+
+    if heap.mode == "multiprocess" and execution.path == "staged":
+        if world_size != 2:
+            raise ValueError(
+                "allgather staged multiprocess path currently supports world_size=2 only"
+            )
+        if not _is_power_of_two(execution.chunk_elems):
+            raise ValueError(
+                "allgather staged multiprocess path requires power-of-two chunk_elems, "
+                f"got {execution.chunk_elems}"
+            )
+
+        tensor_flat = tensor.reshape(-1)
+        output_flat = output.reshape(-1)
+        workspace = _ws2_staged_collective_workspace(
+            "allgather",
+            tensor_flat,
+            heap=heap,
+            execution=execution,
+        )
+        base_epoch = workspace.reserve_epoch_range(execution.num_chunks)
+
+        _allgather_staged_kernel_ws2[(execution.pipeline_slots,)](
+            tensor_flat,
+            output_flat,
+            workspace.staging,
+            workspace.published_epoch,
+            workspace.slot_sync_state,
+            heap_bases,
+            heap.rank,
+            block_size,
+            block_size,
+            execution.num_chunks,
+            execution.pipeline_slots,
+            base_epoch,
+            BLOCK_SIZE=execution.chunk_elems,
+            num_stages=1,
+        )
+        return
 
     if heap.mode == "multiprocess" and (
-        block_size > chunk_elems or not _is_power_of_two(block_size)
+        block_size > execution.chunk_elems or not _is_power_of_two(block_size)
     ):
         tensor_flat = tensor.reshape(-1)
         chunk_start = 0
         while chunk_start < block_size:
-            chunk = _host_collective_kernel_block_elems(
-                block_size - chunk_start
-            )
+            chunk = _host_collective_kernel_block_elems(block_size - chunk_start)
             _allgather_chunked_kernel[(1,)](
                 tensor_flat,
                 output,
@@ -1182,31 +2068,71 @@ def broadcast(
     *heap*'s symmetric memory.
     """
     world_size = heap.world_size
-    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
-        raise ValueError(
-            f"world_size={world_size} exceeds maximum supported "
-            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
-            f"tl.static_range bound in collectives.py."
-        )
-    if root < 0 or root >= world_size:
-        raise ValueError(
-            f"root={root} out of range [0, {world_size})"
-        )
+    _validate_collective_world_size(world_size)
+    _validate_collective_root(root, world_size=world_size)
+    _validate_collective_tensor_contiguous("broadcast", tensor=tensor, name="tensor")
+    _require_tensor_on_heap(tensor, heap=heap, name="tensor")
     _require_device_remote_access_transport(
         heap,
         operation="tncc.primitives.broadcast(...)",
     )
 
-    block_size = tensor.numel()
+    block_size = int(tensor.numel())
     heap_bases = heap.get_heap_bases()
-    chunk_elems = _host_collective_chunk_elems(block_size)
+    execution = _resolve_collective_execution(
+        "broadcast",
+        input_numel=block_size,
+        world_size=world_size,
+        element_size=tensor.element_size(),
+        device=tensor.device,
+        root=root,
+    )
 
-    if block_size > chunk_elems or not _is_power_of_two(block_size):
+    if heap.mode == "multiprocess" and execution.path == "staged":
+        if world_size != 2:
+            raise ValueError(
+                "broadcast staged multiprocess path currently supports world_size=2 only"
+            )
+        if not _is_power_of_two(execution.chunk_elems):
+            raise ValueError(
+                "broadcast staged path requires power-of-two chunk_elems, "
+                f"got {execution.chunk_elems}"
+            )
+
+        tensor_flat = tensor.reshape(-1)
+        workspace = _ws2_staged_collective_workspace(
+            "broadcast",
+            tensor_flat,
+            heap=heap,
+            execution=execution,
+        )
+        base_epoch = workspace.reserve_epoch_range(execution.num_chunks)
+
+        _broadcast_staged_kernel_ws2[(execution.pipeline_slots,)](
+            tensor_flat,
+            workspace.staging,
+            workspace.published_epoch,
+            workspace.slot_sync_state,
+            heap_bases,
+            heap.rank,
+            root,
+            block_size,
+            execution.num_chunks,
+            execution.pipeline_slots,
+            base_epoch,
+            BLOCK_SIZE=execution.chunk_elems,
+            num_stages=1,
+        )
+        return
+
+    if (
+        execution.path == "staged"
+        or block_size > execution.chunk_elems
+        or not _is_power_of_two(block_size)
+    ):
         chunk_start = 0
         while chunk_start < block_size:
-            chunk = _host_collective_kernel_block_elems(
-                block_size - chunk_start
-            )
+            chunk = _host_collective_kernel_block_elems(block_size - chunk_start)
             tensor_chunk = tensor.narrow(0, chunk_start, chunk)
 
             _broadcast_kernel[(1,)](
@@ -1244,30 +2170,21 @@ def scatter(
     chunk ``i`` from ``root``.
     """
     world_size = heap.world_size
-    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
-        raise ValueError(
-            f"world_size={world_size} exceeds maximum supported "
-            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
-            f"tl.static_range bound in collectives.py."
-        )
-    if root < 0 or root >= world_size:
-        raise ValueError(f"root={root} out of range [0, {world_size})")
-
-    block_size = output.numel()
-    expected_input = block_size * world_size
-    if tensor.numel() != expected_input:
-        raise ValueError(
-            f"Input size ({tensor.numel()}) must equal "
-            f"world_size * output.numel() ({expected_input})."
-        )
-    if tensor.device != output.device:
-        raise ValueError(
-            f"tensor/output must be on the same device, got {tensor.device} vs {output.device}"
-        )
-    if not tensor.is_contiguous():
-        raise ValueError("scatter currently requires tensor to be contiguous")
-    if not output.is_contiguous():
-        raise ValueError("scatter currently requires output to be contiguous")
+    _validate_collective_world_size(world_size)
+    _validate_collective_root(root, world_size=world_size)
+    block_size = _validate_collective_pair_shape_contract(
+        "scatter",
+        tensor=tensor,
+        output=output,
+        world_size=world_size,
+    )
+    _validate_collective_pair_device(
+        "scatter",
+        tensor=tensor,
+        output=output,
+    )
+    _validate_collective_tensor_contiguous("scatter", tensor=tensor, name="tensor")
+    _validate_collective_tensor_contiguous("scatter", tensor=output, name="output")
 
     _require_tensor_on_heap(tensor, heap=heap, name="tensor")
     _require_tensor_on_heap(output, heap=heap, name="output")
@@ -1277,23 +2194,71 @@ def scatter(
     )
 
     heap_bases = heap.get_heap_bases()
-    chunk_elems = _host_collective_chunk_elems(block_size)
+    execution = _resolve_collective_execution(
+        "scatter",
+        input_numel=block_size,
+        world_size=world_size,
+        element_size=tensor.element_size(),
+        device=tensor.device,
+        root=root,
+    )
 
-    if block_size > chunk_elems or not _is_power_of_two(block_size):
+    if heap.mode == "multiprocess" and execution.path == "staged":
+        if world_size != 2:
+            raise ValueError(
+                "scatter staged multiprocess path currently supports world_size=2 only"
+            )
+        if not _is_power_of_two(execution.chunk_elems):
+            raise ValueError(
+                "scatter staged path requires power-of-two chunk_elems, "
+                f"got {execution.chunk_elems}"
+            )
+
+        tensor_flat = tensor.reshape(-1)
+        output_flat = output.reshape(-1)
+        workspace = _ws2_staged_collective_workspace(
+            "scatter",
+            tensor_flat,
+            heap=heap,
+            execution=execution,
+        )
+        base_epoch = workspace.reserve_epoch_range(execution.num_chunks)
+
+        _scatter_staged_kernel_ws2[(execution.pipeline_slots,)](
+            tensor_flat,
+            output_flat,
+            workspace.staging,
+            workspace.published_epoch,
+            workspace.slot_sync_state,
+            heap_bases,
+            heap.rank,
+            root,
+            block_size,
+            execution.num_chunks,
+            execution.pipeline_slots,
+            base_epoch,
+            BLOCK_SIZE=execution.chunk_elems,
+            num_stages=1,
+        )
+        return
+
+    if (
+        execution.path == "staged"
+        or block_size > execution.chunk_elems
+        or not _is_power_of_two(block_size)
+    ):
         tensor_view = tensor.view(world_size, block_size)
         packed_chunk = None
         if heap.rank == root:
             packed_chunk = torch.empty(
-                (world_size * chunk_elems,),
+                (world_size * execution.chunk_elems,),
                 dtype=tensor.dtype,
                 device=tensor.device,
             )
 
         chunk_start = 0
         while chunk_start < block_size:
-            chunk = _host_collective_kernel_block_elems(
-                block_size - chunk_start
-            )
+            chunk = _host_collective_kernel_block_elems(block_size - chunk_start)
             output_chunk = output.narrow(0, chunk_start, chunk)
             if heap.rank == root:
                 assert packed_chunk is not None
@@ -1301,9 +2266,7 @@ def scatter(
                     world_size,
                     chunk,
                 )
-                packed_chunk_view.copy_(
-                    tensor_view[:, chunk_start:chunk_start + chunk]
-                )
+                packed_chunk_view.copy_(tensor_view[:, chunk_start : chunk_start + chunk])
                 src_chunk = packed_chunk.narrow(0, 0, world_size * chunk)
             else:
                 src_chunk = tensor.narrow(0, 0, world_size * chunk)
@@ -1350,9 +2313,7 @@ def reduce_scatter(
     ``gemm_reducescatter`` API is still a separate follow-up item.
     """
     if op != "sum":
-        raise ValueError(
-            f"Only op='sum' is currently supported, got {op!r}"
-        )
+        raise ValueError(f"Only op='sum' is currently supported, got {op!r}")
     if implementation not in {"auto", "reference", "device"}:
         raise ValueError(
             "implementation must be one of {'auto', 'reference', 'device'}, "
@@ -1360,28 +2321,20 @@ def reduce_scatter(
         )
 
     world_size = heap.world_size
-    if world_size > MAX_COLLECTIVE_WORLD_SIZE:
-        raise ValueError(
-            f"world_size={world_size} exceeds maximum supported "
-            f"({MAX_COLLECTIVE_WORLD_SIZE}). Recompile with larger "
-            f"tl.static_range bound in collectives.py."
-        )
-
-    block_size = output.numel()
-    expected_input = block_size * world_size
-    if tensor.numel() != expected_input:
-        raise ValueError(
-            f"Input size ({tensor.numel()}) must equal "
-            f"world_size * output.numel() ({expected_input})."
-        )
-    if tensor.device != output.device:
-        raise ValueError(
-            f"tensor/output must be on the same device, got {tensor.device} vs {output.device}"
-        )
-    if not tensor.is_contiguous():
-        raise ValueError("reduce_scatter currently requires tensor to be contiguous")
-    if not output.is_contiguous():
-        raise ValueError("reduce_scatter currently requires output to be contiguous")
+    _validate_collective_world_size(world_size)
+    block_size = _validate_collective_pair_shape_contract(
+        "reduce_scatter",
+        tensor=tensor,
+        output=output,
+        world_size=world_size,
+    )
+    _validate_collective_pair_device(
+        "reduce_scatter",
+        tensor=tensor,
+        output=output,
+    )
+    _validate_collective_tensor_contiguous("reduce_scatter", tensor=tensor, name="tensor")
+    _validate_collective_tensor_contiguous("reduce_scatter", tensor=output, name="output")
 
     _require_tensor_on_heap(tensor, heap=heap, name="tensor")
     _require_tensor_on_heap(output, heap=heap, name="output")
@@ -1396,16 +2349,14 @@ def reduce_scatter(
                 world_size=heap.world_size,
             ):
                 resolved_impl = "device"
-            elif not multiprocess_device_collectives_enabled():
+            elif not multiprocess_device_collectives_transport_supported(heap.transport_strategy):
                 raise ValueError(
                     multiprocess_device_collectives_detail(
                         transport_strategy=heap.transport_strategy,
                         world_size=heap.world_size,
                     )
                 )
-            elif not multiprocess_device_collectives_transport_supported(
-                heap.transport_strategy
-            ):
+            elif not multiprocess_device_collectives_enabled():
                 raise ValueError(
                     multiprocess_device_collectives_detail(
                         transport_strategy=heap.transport_strategy,
@@ -1425,16 +2376,14 @@ def reduce_scatter(
             world_size=heap.world_size,
         ):
             pass
-        elif not multiprocess_device_collectives_enabled():
+        elif not multiprocess_device_collectives_transport_supported(heap.transport_strategy):
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
                     world_size=heap.world_size,
                 )
             )
-        elif not multiprocess_device_collectives_transport_supported(
-            heap.transport_strategy
-        ):
+        elif not multiprocess_device_collectives_enabled():
             raise ValueError(
                 multiprocess_device_collectives_detail(
                     transport_strategy=heap.transport_strategy,
@@ -1446,16 +2395,64 @@ def reduce_scatter(
         _reference_reduce_scatter_single_process(tensor, output, heap)
         return
 
-    heap_bases = heap.get_heap_bases()
-    chunk_elems = _host_collective_chunk_elems(block_size)
+    execution = _resolve_collective_execution(
+        "reduce_scatter",
+        input_numel=tensor.numel(),
+        world_size=world_size,
+        element_size=tensor.element_size(),
+        device=tensor.device,
+    )
 
-    if block_size > chunk_elems or not _is_power_of_two(block_size):
+    heap_bases = heap.get_heap_bases()
+
+    if heap.mode == "multiprocess" and execution.path == "staged":
+        if world_size != 2:
+            raise ValueError(
+                "reduce_scatter staged multiprocess path currently supports world_size=2 only"
+            )
+        if not _is_power_of_two(execution.chunk_elems):
+            raise ValueError(
+                "reduce_scatter staged path requires power-of-two chunk_elems, "
+                f"got {execution.chunk_elems}"
+            )
+
+        tensor_flat = tensor.reshape(-1)
+        output_flat = output.reshape(-1)
+        workspace = _ws2_staged_collective_workspace(
+            "reduce_scatter",
+            tensor_flat,
+            heap=heap,
+            execution=execution,
+        )
+        base_epoch = workspace.reserve_epoch_range(execution.num_chunks)
+
+        _reduce_scatter_staged_kernel_ws2[(execution.pipeline_slots,)](
+            tensor_flat,
+            output_flat,
+            workspace.staging,
+            workspace.published_epoch,
+            workspace.slot_sync_state,
+            heap_bases,
+            heap.rank,
+            block_size,
+            execution.num_chunks,
+            execution.pipeline_slots,
+            base_epoch,
+            BLOCK_SIZE=execution.chunk_elems,
+            op=op,
+            num_stages=1,
+        )
+        return
+
+    if (
+        execution.path == "staged"
+        or block_size > execution.chunk_elems
+        or not _is_power_of_two(block_size)
+    ):
         output_flat = output.reshape(-1)
         chunk_start = 0
         while chunk_start < block_size:
-            chunk = _host_collective_kernel_block_elems(
-                block_size - chunk_start
-            )
+            chunk = _host_collective_kernel_block_elems(block_size - chunk_start)
             _reduce_scatter_chunked_kernel[(1,)](
                 tensor,
                 output_flat,
@@ -1488,9 +2485,7 @@ def _require_tensor_on_heap(
 ) -> None:
     """Ensure *tensor* resides in *heap*."""
     if not heap.owns_tensor(tensor):
-        raise ValueError(
-            f"{name} must reside in the provided SymmetricHeap for rank {heap.rank}"
-        )
+        raise ValueError(f"{name} must reside in the provided SymmetricHeap for rank {heap.rank}")
 
 
 def _require_device_remote_access_transport(
@@ -1529,9 +2524,7 @@ def _reference_reduce_scatter_single_process(
     benchmarking.
     """
     if heap.mode != "single_process":
-        raise RuntimeError(
-            "Reference reduce_scatter requires a single-process SymmetricHeap."
-        )
+        raise RuntimeError("Reference reduce_scatter requires a single-process SymmetricHeap.")
 
     element_bytes = tensor.element_size()
     tensor_offset = heap.get_offset(int(tensor.data_ptr()))
@@ -1616,9 +2609,7 @@ def resolve_allreduce_execution(
         if pipeline_slots == 1 and num_chunks == 1
         else "per_chunk_slot_epoch"
     )
-    workspace_bytes = pipeline_slots * (
-        chunk_elems * tensor.element_size() + (2 * 4)
-    )
+    workspace_bytes = pipeline_slots * (chunk_elems * tensor.element_size() + (2 * 4))
     return AllReduceExecutionSpec(
         op=op,
         world_size=world_size,
@@ -1781,18 +2772,14 @@ def _validate_allreduce_execution_spec(
         op=op,
     )
     if execution.op != op:
-        raise ValueError(
-            f"allreduce execution op mismatch: {execution.op!r} != {op!r}"
-        )
+        raise ValueError(f"allreduce execution op mismatch: {execution.op!r} != {op!r}")
     if execution.world_size != heap.world_size:
         raise ValueError(
-            "allreduce execution world_size mismatch: "
-            f"{execution.world_size} != {heap.world_size}"
+            f"allreduce execution world_size mismatch: {execution.world_size} != {heap.world_size}"
         )
     if execution.tensor_numel != numel:
         raise ValueError(
-            "allreduce execution tensor_numel mismatch: "
-            f"{execution.tensor_numel} != {numel}"
+            f"allreduce execution tensor_numel mismatch: {execution.tensor_numel} != {numel}"
         )
     expected_message_bytes = _allreduce_message_bytes(tensor)
     if execution.message_bytes != expected_message_bytes:
@@ -1847,4 +2834,57 @@ def _allreduce_workspace(
             slot_sync_state=slot_sync_state,
         )
         _ALLREDUCE_WORKSPACE_CACHE[key] = workspace
+    return workspace
+
+
+def _ws2_staged_collective_workspace_key(
+    collective: str,
+    tensor: torch.Tensor,
+    *,
+    heap: SymmetricHeap,
+    execution: _CollectiveExecutionSpec,
+) -> tuple[object, ...]:
+    """Return a process-local key for cached ws2 staged collective workspaces."""
+    heap_bases = tuple(int(base) for base in heap.get_heap_bases().tolist())
+    return (
+        "ws2_staged_collective",
+        collective,
+        heap_bases,
+        heap.rank,
+        str(tensor.dtype),
+        execution.chunk_elems,
+        execution.pipeline_slots,
+    )
+
+
+def _ws2_staged_collective_workspace(
+    collective: str,
+    tensor: torch.Tensor,
+    *,
+    heap: SymmetricHeap,
+    execution: _CollectiveExecutionSpec,
+) -> _Ws2StagedCollectiveWorkspace:
+    """Return cached ws2 staged workspace for one non-allreduce collective."""
+    key = _ws2_staged_collective_workspace_key(
+        collective,
+        tensor,
+        heap=heap,
+        execution=execution,
+    )
+    workspace = _WS2_STAGED_COLLECTIVE_WORKSPACE_CACHE.get(key)
+    if workspace is None:
+        staging = heap.allocate_tensor(
+            (execution.pipeline_slots, execution.chunk_elems),
+            tensor.dtype,
+        )
+        published_epoch = heap.allocate_tensor((execution.pipeline_slots,), torch.int32)
+        slot_sync_state = heap.allocate_tensor((execution.pipeline_slots,), torch.int32)
+        published_epoch.zero_()
+        slot_sync_state.zero_()
+        workspace = _Ws2StagedCollectiveWorkspace(
+            staging=staging,
+            published_epoch=published_epoch,
+            slot_sync_state=slot_sync_state,
+        )
+        _WS2_STAGED_COLLECTIVE_WORKSPACE_CACHE[key] = workspace
     return workspace

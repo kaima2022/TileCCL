@@ -14,6 +14,7 @@ from tncc.utils.feature_gates import (
     multiprocess_device_remote_access_detail,
     multiprocess_device_remote_access_runtime_supported,
     multiprocess_device_remote_access_transport_supported,
+    multiprocess_device_validated_public_surface,
 )
 
 
@@ -70,10 +71,7 @@ def test_multiprocess_device_collectives_transport_supported_is_specific() -> No
     assert multiprocess_device_collectives_transport_supported("ctypes_ipc") is True
     assert multiprocess_device_collectives_transport_supported("pytorch_ipc") is False
     assert (
-        multiprocess_device_collectives_transport_supported(
-            "peer_access_pointer_exchange"
-        )
-        is False
+        multiprocess_device_collectives_transport_supported("peer_access_pointer_exchange") is False
     )
 
 
@@ -82,43 +80,101 @@ def test_multiprocess_device_remote_access_transport_supported_is_specific() -> 
     assert multiprocess_device_remote_access_transport_supported("ctypes_ipc") is True
     assert multiprocess_device_remote_access_transport_supported("pytorch_ipc") is False
     assert (
-        multiprocess_device_remote_access_transport_supported(
-            "peer_access_pointer_exchange"
-        )
+        multiprocess_device_remote_access_transport_supported("peer_access_pointer_exchange")
         is False
     )
 
 
 def test_multiprocess_device_collectives_runtime_supported_is_world_size_specific() -> None:
     """Validated multiprocess collectives should stay scoped to the tested runtime."""
-    assert multiprocess_device_collectives_runtime_supported(
-        transport_strategy="ctypes_ipc",
-        world_size=2,
-    ) is True
-    assert multiprocess_device_collectives_runtime_supported(
-        transport_strategy="ctypes_ipc",
-        world_size=4,
-    ) is False
-    assert multiprocess_device_collectives_runtime_supported(
-        transport_strategy="pytorch_ipc",
-        world_size=2,
-    ) is False
+    assert (
+        multiprocess_device_collectives_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=2,
+        )
+        is True
+    )
+    assert (
+        multiprocess_device_collectives_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=4,
+        )
+        is False
+    )
+    assert (
+        multiprocess_device_collectives_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=3,
+        )
+        is False
+    )
+    assert (
+        multiprocess_device_collectives_runtime_supported(
+            transport_strategy="pytorch_ipc",
+            world_size=2,
+        )
+        is False
+    )
+
+
+def test_multiprocess_device_validated_public_surface_is_frozen() -> None:
+    """Validated public surface should stay ws2 + ctypes_ipc."""
+    surface = multiprocess_device_validated_public_surface()
+
+    assert surface == {
+        "world_size": 2,
+        "transport_strategy": "ctypes_ipc",
+    }
 
 
 def test_multiprocess_device_remote_access_runtime_supported_is_world_size_specific() -> None:
     """Validated remote access should stay scoped to the tested runtime."""
-    assert multiprocess_device_remote_access_runtime_supported(
-        transport_strategy="ctypes_ipc",
-        world_size=2,
-    ) is True
-    assert multiprocess_device_remote_access_runtime_supported(
-        transport_strategy="ctypes_ipc",
-        world_size=4,
-    ) is False
-    assert multiprocess_device_remote_access_runtime_supported(
-        transport_strategy="pytorch_ipc",
-        world_size=2,
-    ) is False
+    assert (
+        multiprocess_device_remote_access_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=2,
+        )
+        is True
+    )
+    assert (
+        multiprocess_device_remote_access_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=4,
+        )
+        is False
+    )
+    assert (
+        multiprocess_device_remote_access_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=3,
+        )
+        is False
+    )
+    assert (
+        multiprocess_device_remote_access_runtime_supported(
+            transport_strategy="pytorch_ipc",
+            world_size=2,
+        )
+        is False
+    )
+
+
+def test_multiprocess_device_runtime_surface_excludes_world_size_3() -> None:
+    """Gate helpers should fail-closed for world_size=3 on the public surface."""
+    assert (
+        multiprocess_device_collectives_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=3,
+        )
+        is False
+    )
+    assert (
+        multiprocess_device_remote_access_runtime_supported(
+            transport_strategy="ctypes_ipc",
+            world_size=3,
+        )
+        is False
+    )
 
 
 def test_multiprocess_device_remote_access_detail_mentions_operation() -> None:

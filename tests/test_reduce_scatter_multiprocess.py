@@ -11,10 +11,22 @@ import pytest
 
 
 @pytest.mark.multigpu
-@pytest.mark.parametrize("dtype_name", ["float16", "bfloat16", "float32"])
+@pytest.mark.parametrize(
+    ("dtype_name", "block_size", "expected_path", "expected_regime", "expected_protocol"),
+    [
+        ("float16", 128, "legacy", "legacy", "direct_peer_reduce"),
+        ("bfloat16", 128, "legacy", "legacy", "direct_peer_reduce"),
+        ("float32", 128, "legacy", "legacy", "direct_peer_reduce"),
+        ("float32", 4097, "staged", "staged", "ws2_slot_epoch_pipeline"),
+    ],
+)
 def test_reduce_scatter_device_path_multiprocess(
     skip_no_multigpu,
     dtype_name: str,
+    block_size: int,
+    expected_path: str,
+    expected_regime: str,
+    expected_protocol: str,
 ) -> None:
     """The multiprocess device path should be correct on the current runtime."""
     result = subprocess.run(
@@ -24,6 +36,8 @@ def test_reduce_scatter_device_path_multiprocess(
             "tests.test_e2e._run_reduce_scatter_multiprocess",
             "--dtype",
             dtype_name,
+            "--block-size",
+            str(block_size),
             "--warmup",
             "2",
             "--iters",
@@ -42,14 +56,21 @@ def test_reduce_scatter_device_path_multiprocess(
         )
 
     payloads = [
-        json.loads(line)
-        for line in result.stdout.splitlines()
-        if line.strip().startswith("{")
+        json.loads(line) for line in result.stdout.splitlines() if line.strip().startswith("{")
     ]
     assert payloads, f"No JSON payloads found in stdout:\n{result.stdout}"
     for payload in payloads:
         assert payload["dtype"] == dtype_name
+        assert payload["block_size"] == block_size
         assert payload["mode"] == "multiprocess"
         assert payload["transport_strategy"] == "ctypes_ipc"
         assert payload["primitive_ok"] is True
         assert payload["high_level_ok"] is True
+        assert payload["kernel_ok"] is True
+        execution = payload["primitive_execution"]
+        assert execution["path"] == expected_path
+        assert execution["message_regime"] == expected_regime
+        assert execution["protocol"] == expected_protocol
+        assert execution["root_mode"] == "no_root"
+        assert execution["chunk_elems"] <= 4096
+        assert execution["pipeline_slots"] <= 8

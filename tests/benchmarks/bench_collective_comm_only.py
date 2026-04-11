@@ -45,7 +45,10 @@ from tncc.utils.benchmark_results import (
     runtime_support_snapshot,
     write_json,
 )
-from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import (
+    FORCE_MULTIPROCESS_TRANSPORT_ENV,
+    multiprocess_device_validated_public_surface,
+)
 
 _DTYPES = {
     "float16": torch.float16,
@@ -79,6 +82,119 @@ _LARGE_MESSAGE_WARMUP_CAP = 10
 _LARGE_MESSAGE_ITERS_CAP = 10
 _VERY_LARGE_MESSAGE_WARMUP_CAP = 8
 _VERY_LARGE_MESSAGE_ITERS_CAP = 8
+_ROOTLESS_COLLECTIVES = frozenset({"allreduce", "allgather", "reduce_scatter"})
+
+
+def _allreduce_execution_path(implementation: str | None) -> str | None:
+    """Map allreduce implementation families to a stable path label."""
+    if not isinstance(implementation, str) or not implementation:
+        return None
+    if implementation == "noop":
+        return "local_identity"
+    if implementation.startswith("device_"):
+        return "staged"
+    return implementation
+
+
+def _allreduce_execution_metadata(plan: Any) -> dict[str, Any]:
+    """Return normalized allreduce execution metadata for benchmark payloads."""
+    chunk_elems = int(plan.chunk_elems)
+    num_chunks = int(plan.num_chunks)
+    pipeline_slots = int(plan.pipeline_slots)
+    metadata = {
+        "collective": "allreduce",
+        "path": _allreduce_execution_path(plan.implementation),
+        "protocol": str(plan.protocol),
+        "message_regime": str(plan.message_regime),
+        "root_mode": "no_root",
+        "implementation": str(plan.implementation),
+        "kernel_family": str(plan.kernel_family),
+        "reuse_handshake": str(plan.reuse_handshake),
+        "message_bytes": int(plan.message_bytes),
+        "cta_policy": str(plan.cta_policy),
+        "epoch_policy": str(plan.epoch_policy),
+        "chunk_elems": chunk_elems,
+        "num_chunks": num_chunks,
+        "pipeline_slots": pipeline_slots,
+        "grid_size": int(plan.grid_size),
+        "num_warps": int(plan.num_warps),
+        "workspace_bytes": int(plan.workspace_bytes),
+        "chunk": {
+            "elems": chunk_elems,
+            "count": num_chunks,
+        },
+        "pipeline": {
+            "slots": pipeline_slots,
+        },
+    }
+    return metadata
+
+
+def _resolved_collective_execution_metadata(spec: Any) -> dict[str, Any]:
+    """Return normalized non-allreduce execution metadata for benchmark payloads."""
+    chunk_elems = int(spec.chunk_elems)
+    num_chunks = int(spec.num_chunks)
+    pipeline_slots = int(spec.pipeline_slots)
+    metadata = {
+        "collective": str(spec.collective),
+        "path": str(spec.path),
+        "protocol": str(spec.protocol),
+        "message_regime": str(spec.message_regime),
+        "root_mode": str(spec.root_mode),
+        "chunk_elems": chunk_elems,
+        "num_chunks": num_chunks,
+        "pipeline_slots": pipeline_slots,
+        "chunk": {
+            "elems": chunk_elems,
+            "count": num_chunks,
+        },
+        "pipeline": {
+            "slots": pipeline_slots,
+        },
+    }
+    return metadata
+
+
+def _normalize_execution_metadata(
+    metadata: dict[str, Any],
+    *,
+    collective: str,
+) -> dict[str, Any]:
+    """Normalize optional execution metadata into stable append-only keys."""
+    normalized = dict(metadata)
+    normalized.setdefault("collective", collective)
+
+    if "path" not in normalized:
+        path = _allreduce_execution_path(normalized.get("implementation"))
+        if path is not None:
+            normalized["path"] = path
+
+    if "root_mode" not in normalized and collective in _ROOTLESS_COLLECTIVES:
+        normalized["root_mode"] = "no_root"
+
+    if "chunk" not in normalized:
+        chunk: dict[str, Any] = {}
+        if "chunk_elems" in normalized:
+            chunk["elems"] = normalized["chunk_elems"]
+        elif "chunk_elems_per_rank" in normalized:
+            chunk["elems_per_rank"] = normalized["chunk_elems_per_rank"]
+        if "num_chunks" in normalized:
+            chunk["count"] = normalized["num_chunks"]
+        elif "num_chunks_per_rank" in normalized:
+            chunk["count_per_rank"] = normalized["num_chunks_per_rank"]
+        if chunk:
+            normalized["chunk"] = chunk
+
+    if "pipeline" not in normalized:
+        pipeline: dict[str, Any] = {}
+        if "pipeline_slots" in normalized:
+            pipeline["slots"] = normalized["pipeline_slots"]
+        elif "pipeline_slots_per_rank" in normalized:
+            pipeline["slots_per_rank"] = normalized["pipeline_slots_per_rank"]
+        if pipeline:
+            normalized["pipeline"] = pipeline
+
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -96,6 +212,134 @@ class _RunConfig:
     root: int
     heap_size_bytes: int
     output_dir: str
+
+
+def _validated_surface_contract() -> dict[str, int | str]:
+    """Return the frozen validated public runtime surface for this benchmark."""
+    validated = multiprocess_device_validated_public_surface()
+    return {
+        "world_size": int(validated["world_size"]),
+        "transport_strategy": str(validated["transport_strategy"]),
+    }
+
+
+def _enforce_validated_surface_request(
+    *,
+    requested_world_size: int,
+    requested_force_transport: str,
+) -> dict[str, int | str]:
+    """Fail closed when CLI request is outside the validated public surface."""
+    validated_surface = _validated_surface_contract()
+    validated_world_size = int(validated_surface["world_size"])
+    validated_transport = str(validated_surface["transport_strategy"])
+
+    if requested_world_size != validated_world_size:
+        raise SystemExit(
+            "collective_comm_only benchmark is fail-closed to the validated public "
+            f"surface: world_size={validated_world_size}, "
+            f"transport_strategy='{validated_transport}'. "
+            f"Got --world-size={requested_world_size}."
+        )
+
+    if requested_force_transport not in {"auto", validated_transport}:
+        raise SystemExit(
+            "collective_comm_only benchmark is fail-closed to the validated public "
+            f"surface: world_size={validated_world_size}, "
+            f"transport_strategy='{validated_transport}' (or --force-transport=auto). "
+            f"Got --force-transport={requested_force_transport!r}."
+        )
+
+    return validated_surface
+
+
+def _runtime_surface_metadata(
+    *,
+    validated_surface: dict[str, int | str],
+    requested_world_size: int,
+    requested_force_transport: str,
+    resolved_world_size: int,
+    resolved_transport_strategy: str | None,
+) -> dict[str, Any]:
+    """Return structured metadata describing validated-surface enforcement."""
+    validated_world_size = int(validated_surface["world_size"])
+    validated_transport = str(validated_surface["transport_strategy"])
+    return {
+        "policy": "fail_closed_validated_public_surface_only",
+        "validated_public_surface": {
+            "world_size": validated_world_size,
+            "transport_strategy": validated_transport,
+        },
+        "requested": {
+            "world_size": int(requested_world_size),
+            "force_transport": str(requested_force_transport),
+        },
+        "resolved": {
+            "world_size": int(resolved_world_size),
+            "transport_strategy": resolved_transport_strategy,
+        },
+        "in_validated_public_surface": bool(
+            resolved_world_size == validated_world_size
+            and resolved_transport_strategy == validated_transport
+        ),
+    }
+
+
+def _assert_runtime_on_validated_surface(
+    *,
+    validated_surface: dict[str, int | str],
+    world_size: int,
+    transport_strategy: str | None,
+    runtime_support: dict[str, Any] | None,
+) -> None:
+    """Ensure resolved runtime still matches the validated public surface."""
+    validated_world_size = int(validated_surface["world_size"])
+    validated_transport = str(validated_surface["transport_strategy"])
+    if world_size != validated_world_size:
+        raise RuntimeError(
+            "Resolved world size left the validated public surface: "
+            f"expected {validated_world_size}, got {world_size}."
+        )
+    if transport_strategy != validated_transport:
+        raise RuntimeError(
+            "Resolved transport strategy left the validated public surface: "
+            f"expected {validated_transport!r}, got {transport_strategy!r}."
+        )
+
+    if not isinstance(runtime_support, dict):
+        return
+    context = runtime_support.get("context")
+    if not isinstance(context, dict):
+        return
+
+    context_world_size = context.get("world_size")
+    if isinstance(context_world_size, int) and context_world_size != validated_world_size:
+        raise RuntimeError(
+            "runtime_support context world_size diverged from validated surface: "
+            f"expected {validated_world_size}, got {context_world_size}."
+        )
+
+    context_transport = context.get("transport_strategy")
+    if isinstance(context_transport, str) and context_transport != validated_transport:
+        raise RuntimeError(
+            "runtime_support context transport_strategy diverged from validated "
+            f"surface: expected {validated_transport!r}, got {context_transport!r}."
+        )
+
+
+def _annotate_runtime_support_with_validated_surface(
+    runtime_support: dict[str, Any] | None,
+    *,
+    validated_surface: dict[str, int | str],
+    runtime_surface: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Append validated-surface metadata without changing existing keys."""
+    if not isinstance(runtime_support, dict):
+        return runtime_support
+    return {
+        **runtime_support,
+        "validated_public_surface": dict(validated_surface),
+        "runtime_surface": runtime_surface,
+    }
 
 
 def _parse_args() -> argparse.Namespace:
@@ -202,7 +446,9 @@ def _parse_collectives(raw: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(selected))
 
 
-def _block_elements(*, collective: str, size_bytes: int, dtype: torch.dtype, world_size: int) -> int:
+def _block_elements(
+    *, collective: str, size_bytes: int, dtype: torch.dtype, world_size: int
+) -> int:
     element_size = torch.tensor([], dtype=dtype).element_size()
     if collective == "allreduce":
         return size_bytes // element_size
@@ -438,7 +684,7 @@ def _fill_scatter_input(
         return
     for peer in range(world_size):
         start = peer * block_elements
-        src[start:start + block_elements].fill_(float((peer + 1) * 10))
+        src[start : start + block_elements].fill_(float((peer + 1) * 10))
 
 
 def _fill_reduce_scatter_input(
@@ -452,7 +698,7 @@ def _fill_reduce_scatter_input(
     dst.zero_()
     for chunk in range(world_size):
         start = chunk * block_elements
-        src[start:start + block_elements].fill_(float(rank * world_size + chunk + 1))
+        src[start : start + block_elements].fill_(float(rank * world_size + chunk + 1))
 
 
 def _expected_allreduce(tensor: torch.Tensor, *, world_size: int) -> torch.Tensor:
@@ -468,7 +714,7 @@ def _expected_allgather(
     expected = torch.empty_like(tensor)
     for peer in range(world_size):
         start = peer * block_elements
-        expected[start:start + block_elements].fill_(float((peer + 1) * 10))
+        expected[start : start + block_elements].fill_(float((peer + 1) * 10))
     return expected
 
 
@@ -488,9 +734,7 @@ def _expected_reduce_scatter(
     rank: int,
     world_size: int,
 ) -> torch.Tensor:
-    expected_value = float(
-        sum(peer * world_size + rank + 1 for peer in range(world_size))
-    )
+    expected_value = float(sum(peer * world_size + rank + 1 for peer in range(world_size)))
     return torch.full_like(tensor, expected_value)
 
 
@@ -531,6 +775,9 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
         )
         from tncc.primitives import (
             scatter as primitive_scatter,
+        )
+        from tncc.primitives.collectives import (
+            _resolve_collective_execution,
         )
 
         heap = SymmetricHeap(
@@ -617,12 +864,14 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     iters=config.iters,
                 )
                 operations_per_sample = _timed_batch_repeats_for_size(size_bytes)
+                tncc_case_execution_metadata: dict[str, Any] | None = None
 
                 if collective == "allreduce":
                     total_elements = block_elements
                     xt_view = xt_allreduce.narrow(0, 0, total_elements)
                     nccl_view = nccl_allreduce.narrow(0, 0, total_elements)
                     allreduce_plan = tncc.ops.build_allreduce_plan(xt_view, ctx=ctx)
+                    tncc_case_execution_metadata = _allreduce_execution_metadata(allreduce_plan)
 
                     def prepare_tncc() -> None:
                         _fill_allreduce_input(xt_view, rank=rank)
@@ -644,6 +893,15 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     xt_dst = xt_allgather_dst.narrow(0, 0, block_elements * config.world_size)
                     nccl_src = nccl_allgather_src.narrow(0, 0, block_elements)
                     nccl_dst = nccl_allgather_dst.narrow(0, 0, block_elements * config.world_size)
+                    tncc_case_execution_metadata = _resolved_collective_execution_metadata(
+                        _resolve_collective_execution(
+                            "allgather",
+                            input_numel=int(xt_src.numel()),
+                            world_size=config.world_size,
+                            element_size=xt_src.element_size(),
+                            device=xt_src.device,
+                        )
+                    )
 
                     def prepare_tncc() -> None:
                         _fill_allgather_input(xt_src, xt_dst, rank=rank)
@@ -677,6 +935,16 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                     xt_dst = xt_scatter_dst.narrow(0, 0, block_elements)
                     nccl_src = nccl_scatter_src.narrow(0, 0, block_elements * config.world_size)
                     nccl_dst = nccl_scatter_dst.narrow(0, 0, block_elements)
+                    tncc_case_execution_metadata = _resolved_collective_execution_metadata(
+                        _resolve_collective_execution(
+                            "scatter",
+                            input_numel=int(xt_dst.numel()),
+                            world_size=config.world_size,
+                            element_size=xt_src.element_size(),
+                            device=xt_src.device,
+                            root=config.root,
+                        )
+                    )
                     if rank == config.root:
                         nccl_scatter_list = [
                             nccl_src.narrow(0, peer * block_elements, block_elements)
@@ -741,6 +1009,15 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                         block_elements * config.world_size,
                     )
                     nccl_dst = nccl_reduce_scatter_dst.narrow(0, 0, block_elements)
+                    tncc_case_execution_metadata = _resolved_collective_execution_metadata(
+                        _resolve_collective_execution(
+                            "reduce_scatter",
+                            input_numel=int(xt_src.numel()),
+                            world_size=config.world_size,
+                            element_size=xt_src.element_size(),
+                            device=xt_src.device,
+                        )
+                    )
 
                     def prepare_tncc() -> None:
                         _fill_reduce_scatter_input(
@@ -789,6 +1066,16 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                 elif collective == "broadcast":
                     xt_view = xt_broadcast.narrow(0, 0, block_elements)
                     nccl_view = nccl_broadcast.narrow(0, 0, block_elements)
+                    tncc_case_execution_metadata = _resolved_collective_execution_metadata(
+                        _resolve_collective_execution(
+                            "broadcast",
+                            input_numel=int(xt_view.numel()),
+                            world_size=config.world_size,
+                            element_size=xt_view.element_size(),
+                            device=xt_view.device,
+                            root=config.root,
+                        )
+                    )
 
                     def prepare_tncc() -> None:
                         _fill_broadcast_input(xt_view, rank=rank, root=config.root)
@@ -843,6 +1130,8 @@ def _worker(rank: int, store_path: str, config: _RunConfig) -> None:
                             "workspace_bytes": allreduce_plan.workspace_bytes,
                         }
                     )
+                if tncc_case_execution_metadata is not None:
+                    tncc_result["execution"] = tncc_case_execution_metadata
 
                 tncc_times_ms = _timed_collective(
                     tncc_fn,
@@ -988,6 +1277,11 @@ def _aggregate_rank_results(
         key=lambda key: (_COLLECTIVES.index(key[0]), key[1]),
     ):
         per_rank = grouped[(collective, size_bytes)]
+        tncc_execution_nested = _shared_nested_rank_metadata(
+            per_rank,
+            side="tncc",
+            nested_key="execution",
+        )
         tncc_execution_metadata = _shared_rank_metadata(
             per_rank,
             side="tncc",
@@ -1008,6 +1302,11 @@ def _aggregate_rank_results(
                 "workspace_bytes",
             ),
         )
+        if tncc_execution_nested:
+            tncc_execution_metadata["execution"] = _normalize_execution_metadata(
+                tncc_execution_nested,
+                collective=collective,
+            )
         tncc_times_by_rank = [list(entry["tncc"]["times_ms"]) for entry in per_rank]
         nccl_times_by_rank = [list(entry["nccl"]["times_ms"]) for entry in per_rank]
         tncc_aggregate_times = [
@@ -1040,7 +1339,7 @@ def _aggregate_rank_results(
         case = {
             "collective": collective,
             "size_bytes": size_bytes,
-            "size_mib": float(size_bytes / (1024 ** 2)),
+            "size_mib": float(size_bytes / (1024**2)),
             "world_size": world_size,
             "timing_budget": per_rank[0].get("timing_budget"),
             "tncc": {
@@ -1117,11 +1416,52 @@ def _shared_rank_metadata(
     return result
 
 
+def _shared_nested_rank_metadata(
+    per_rank: list[dict[str, Any]],
+    *,
+    side: str,
+    nested_key: str,
+) -> dict[str, Any]:
+    """Return rank-invariant metadata from one nested object key."""
+    if not per_rank:
+        return {}
+
+    nested_values = [entry.get(side, {}).get(nested_key) for entry in per_rank]
+    if any(not isinstance(value, dict) for value in nested_values):
+        return {}
+
+    shared: dict[str, Any] = {}
+    reference = nested_values[0]
+    assert isinstance(reference, dict)
+    for key in reference:
+        values = [value.get(key) for value in nested_values]
+        if all(value == values[0] for value in values[1:]):
+            shared[key] = values[0]
+        else:
+            shared[f"{key}_per_rank"] = values
+    return shared
+
+
 def main() -> None:
     args = _parse_args()
-    world_size = min(torch.cuda.device_count(), int(args.world_size))
-    if world_size < 2:
-        raise SystemExit("Need >= 2 GPUs")
+    requested_world_size = int(args.world_size)
+    requested_force_transport = str(args.force_transport)
+    validated_surface = _enforce_validated_surface_request(
+        requested_world_size=requested_world_size,
+        requested_force_transport=requested_force_transport,
+    )
+    validated_world_size = int(validated_surface["world_size"])
+
+    world_size = min(torch.cuda.device_count(), requested_world_size)
+    if world_size < validated_world_size:
+        raise SystemExit(
+            f"Need >= {validated_world_size} visible GPUs for the validated public surface"
+        )
+    if world_size != validated_world_size:
+        raise SystemExit(
+            "collective_comm_only benchmark resolved outside the validated public "
+            f"surface: expected world_size={validated_world_size}, got {world_size}."
+        )
     if args.warmup < 0:
         raise SystemExit("--warmup must be >= 0")
     if args.iters <= 0:
@@ -1234,8 +1574,30 @@ def main() -> None:
         None,
     )
     transport_strategy = next(
-        (payload["transport_strategy"] for payload in rank_payloads if payload.get("transport_strategy")),
+        (
+            payload["transport_strategy"]
+            for payload in rank_payloads
+            if payload.get("transport_strategy")
+        ),
         None,
+    )
+    runtime_surface = _runtime_surface_metadata(
+        validated_surface=validated_surface,
+        requested_world_size=requested_world_size,
+        requested_force_transport=requested_force_transport,
+        resolved_world_size=world_size,
+        resolved_transport_strategy=transport_strategy,
+    )
+    _assert_runtime_on_validated_surface(
+        validated_surface=validated_surface,
+        world_size=world_size,
+        transport_strategy=transport_strategy,
+        runtime_support=runtime_support,
+    )
+    runtime_support = _annotate_runtime_support_with_validated_surface(
+        runtime_support,
+        validated_surface=validated_surface,
+        runtime_surface=runtime_surface,
     )
 
     payload = {
@@ -1255,6 +1617,8 @@ def main() -> None:
             "preconditioning": preconditioning,
             "message_sizes_bytes": list(message_sizes_bytes),
             "transport_strategy": transport_strategy,
+            "validated_public_surface": validated_surface,
+            "runtime_surface": runtime_surface,
             "latency_measurement": (
                 "host_wall_end_to_end_with_cuda_completion"
                 if args.timing_mode == "host_wall"
@@ -1289,6 +1653,7 @@ def main() -> None:
         },
         "runtime_support": runtime_support,
         "runtime_metadata": runtime_metadata,
+        "runtime_surface": runtime_surface,
         "environment_health": environment_health,
         "rank_payloads": rank_payloads,
         "cases": cases,

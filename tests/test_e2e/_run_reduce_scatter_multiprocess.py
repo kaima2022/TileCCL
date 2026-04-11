@@ -14,7 +14,7 @@ import argparse
 import json
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import torch
 import torch.distributed as dist
@@ -41,6 +41,8 @@ _DTYPES = {
     "float32": torch.float32,
 }
 
+_KERNEL_MAX_BLOCK_SIZE = 4096
+
 
 def _resolve_dtype(dtype_name: str) -> torch.dtype:
     """Resolve a user-facing dtype name into a torch dtype."""
@@ -49,6 +51,58 @@ def _resolve_dtype(dtype_name: str) -> torch.dtype:
     except KeyError as exc:
         allowed = ", ".join(sorted(_DTYPES))
         raise ValueError(f"dtype must be one of {allowed}, got {dtype_name!r}") from exc
+
+
+def _is_power_of_two(value: int) -> bool:
+    """Return ``True`` when *value* is a power of two."""
+    return value > 0 and (value & (value - 1)) == 0
+
+
+def _kernel_block_elems(remaining: int) -> int:
+    """Return one Triton-safe kernel block size for the remaining tail."""
+    capped = max(1, min(remaining, _KERNEL_MAX_BLOCK_SIZE))
+    return 1 << (capped.bit_length() - 1)
+
+
+def _launch_reduce_scatter_kernel(
+    *,
+    src: torch.Tensor,
+    dst: torch.Tensor,
+    heap_bases: torch.Tensor,
+    rank: int,
+    world_size: int,
+    block_size: int,
+    reduce_scatter_kernel,
+    reduce_scatter_chunked_kernel,
+) -> None:
+    """Launch raw reduce_scatter kernels with a power-of-two-safe fallback path."""
+    if block_size <= _KERNEL_MAX_BLOCK_SIZE and _is_power_of_two(block_size):
+        reduce_scatter_kernel[(1,)](
+            src,
+            dst,
+            heap_bases,
+            rank,
+            world_size,
+            BLOCK_SIZE=block_size,
+        )
+        return
+
+    dst_flat = dst.reshape(-1)
+    chunk_start = 0
+    while chunk_start < block_size:
+        chunk = _kernel_block_elems(block_size - chunk_start)
+        reduce_scatter_chunked_kernel[(1,)](
+            src,
+            dst_flat,
+            heap_bases,
+            rank,
+            world_size,
+            chunk_start,
+            block_size,
+            BLOCK_SIZE=chunk,
+            op="sum",
+        )
+        chunk_start += chunk
 
 
 def _fill_reduce_scatter_input(
@@ -62,7 +116,7 @@ def _fill_reduce_scatter_input(
     for chunk in range(world_size):
         start = chunk * block_size
         value = float(rank * 2 + chunk + 1)
-        tensor[start:start + block_size].fill_(value)
+        tensor[start : start + block_size].fill_(value)
 
 
 def _timed_collective(
@@ -122,7 +176,11 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
     import tncc
     from tncc.memory.symmetric_heap import SymmetricHeap
     from tncc.primitives import reduce_scatter as primitive_reduce_scatter
-    from tncc.primitives.collectives import _reduce_scatter_kernel
+    from tncc.primitives.collectives import (
+        _reduce_scatter_chunked_kernel,
+        _reduce_scatter_kernel,
+        _resolve_collective_execution,
+    )
 
     heap = SymmetricHeap(
         size=64 * 1024 * 1024,
@@ -173,7 +231,17 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         primitive_timing = None
         primitive_ok = None
         primitive_value = None
+        primitive_execution = None
         if config.launcher in {"primitive", "all"}:
+            primitive_execution = asdict(
+                _resolve_collective_execution(
+                    "reduce_scatter",
+                    input_numel=src_primitive.numel(),
+                    world_size=world_size,
+                    element_size=src_primitive.element_size(),
+                    device=src_primitive.device,
+                )
+            )
             primitive_timing = _timed_collective(
                 lambda: primitive_reduce_scatter(
                     src_primitive,
@@ -189,13 +257,15 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
         if config.launcher in {"kernel", "all"}:
             kernel_timing = _timed_collective(
-                lambda: _reduce_scatter_kernel[(1,)](
-                    src_kernel,
-                    dst_kernel,
-                    heap.get_heap_bases(),
-                    rank,
-                    world_size,
-                    BLOCK_SIZE=block_size,
+                lambda: _launch_reduce_scatter_kernel(
+                    src=src_kernel,
+                    dst=dst_kernel,
+                    heap_bases=heap.get_heap_bases(),
+                    rank=rank,
+                    world_size=world_size,
+                    block_size=block_size,
+                    reduce_scatter_kernel=_reduce_scatter_kernel,
+                    reduce_scatter_chunked_kernel=_reduce_scatter_chunked_kernel,
                 ),
                 rank=rank,
                 barrier_kwargs=barrier_kwargs,
@@ -230,14 +300,10 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         expected = float((0 * 2 + rank + 1) + (1 * 2 + rank + 1))
         expected_tensor = torch.full_like(dst_primitive, expected)
         if config.launcher in {"primitive", "all"}:
-            primitive_ok = bool(
-                torch.allclose(dst_primitive, expected_tensor, atol=1e-4)
-            )
+            primitive_ok = bool(torch.allclose(dst_primitive, expected_tensor, atol=1e-4))
             primitive_value = float(dst_primitive[0].item())
         if config.launcher in {"ops", "all"}:
-            high_level_ok = bool(
-                torch.allclose(dst_high_level, expected_tensor, atol=1e-4)
-            )
+            high_level_ok = bool(torch.allclose(dst_high_level, expected_tensor, atol=1e-4))
             high_level_value = float(dst_high_level[0].item())
         if config.launcher in {"kernel", "all"}:
             assert dst_kernel is not None
@@ -250,6 +316,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             "high_level_value": high_level_value,
             "kernel_value": kernel_value,
             "primitive_ok": primitive_ok,
+            "primitive_execution": primitive_execution,
             "high_level_ok": high_level_ok,
             "kernel_ok": kernel_ok,
             "transport_strategy": heap.transport_strategy,
@@ -266,9 +333,7 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         }
         print(json.dumps(payload), flush=True)
         checks = [
-            result
-            for result in (primitive_ok, high_level_ok, kernel_ok)
-            if result is not None
+            result for result in (primitive_ok, high_level_ok, kernel_ok) if result is not None
         ]
         if not checks or not all(checks):
             raise SystemExit(2)

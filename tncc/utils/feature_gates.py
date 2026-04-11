@@ -7,17 +7,33 @@ import os
 
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
 
-MULTIPROCESS_DEVICE_COLLECTIVES_ENV = (
-    "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES"
-)
+MULTIPROCESS_DEVICE_COLLECTIVES_ENV = "TNCC_ENABLE_EXPERIMENTAL_MULTIPROCESS_DEVICE_COLLECTIVES"
 FORCE_MULTIPROCESS_TRANSPORT_ENV = "TNCC_FORCE_MULTIPROCESS_TRANSPORT"
 _MULTIPROCESS_TRANSPORT_VALUES = {
     "ctypes_ipc",
     "pytorch_ipc",
     "peer_access_pointer_exchange",
 }
-_VALIDATED_MULTIPROCESS_DEVICE_TRANSPORTS = {"ctypes_ipc"}
-_VALIDATED_MULTIPROCESS_DEVICE_WORLD_SIZES = {2}
+_VALIDATED_MULTIPROCESS_DEVICE_TRANSPORT = "ctypes_ipc"
+_VALIDATED_MULTIPROCESS_DEVICE_WORLD_SIZE = 2
+_VALIDATED_MULTIPROCESS_DEVICE_TRANSPORTS = {
+    _VALIDATED_MULTIPROCESS_DEVICE_TRANSPORT,
+}
+_VALIDATED_MULTIPROCESS_DEVICE_WORLD_SIZES = {
+    _VALIDATED_MULTIPROCESS_DEVICE_WORLD_SIZE,
+}
+
+
+def multiprocess_device_validated_public_surface() -> dict[str, int | str]:
+    """Return the current validated public multiprocess device surface.
+
+    The public contract is intentionally frozen and fail-closed until broader
+    world-size and transport diagnostics are promoted from bring-up to stable.
+    """
+    return {
+        "world_size": _VALIDATED_MULTIPROCESS_DEVICE_WORLD_SIZE,
+        "transport_strategy": _VALIDATED_MULTIPROCESS_DEVICE_TRANSPORT,
+    }
 
 
 def multiprocess_device_collectives_enabled() -> bool:
@@ -146,8 +162,7 @@ def forced_multiprocess_transport() -> str | None:
     if value not in _MULTIPROCESS_TRANSPORT_VALUES:
         allowed = ", ".join(sorted(_MULTIPROCESS_TRANSPORT_VALUES))
         raise ValueError(
-            f"{FORCE_MULTIPROCESS_TRANSPORT_ENV} must be one of "
-            f"'auto', {allowed}; got {value!r}"
+            f"{FORCE_MULTIPROCESS_TRANSPORT_ENV} must be one of 'auto', {allowed}; got {value!r}"
         )
     return value
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Real multiprocess allgather validation."""
+"""Real multiprocess broadcast validation."""
 
 from __future__ import annotations
 
@@ -14,12 +14,16 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 
-from tncc.utils.feature_gates import FORCE_MULTIPROCESS_TRANSPORT_ENV
+from tncc.utils.feature_gates import (
+    FORCE_MULTIPROCESS_TRANSPORT_ENV,
+    multiprocess_device_remote_access_detail,
+    multiprocess_device_remote_access_runtime_supported,
+)
 
 
 @dataclass(frozen=True)
 class _RunConfig:
-    """Configuration for one multiprocess allgather diagnostic run."""
+    """Configuration for one multiprocess broadcast diagnostic run."""
 
     block_size: int
     dtype_name: str
@@ -27,6 +31,7 @@ class _RunConfig:
     iters: int
     force_transport: str | None
     launcher: str
+    root: int
 
 
 _DTYPES = {
@@ -58,41 +63,38 @@ def _kernel_block_elems(remaining: int) -> int:
     return 1 << (capped.bit_length() - 1)
 
 
-def _launch_allgather_kernel(
+def _launch_broadcast_kernel(
     *,
-    src: torch.Tensor,
-    dst: torch.Tensor,
+    tensor: torch.Tensor,
     heap_bases: torch.Tensor,
     rank: int,
     world_size: int,
+    root: int,
     block_size: int,
-    allgather_kernel,
-    allgather_chunked_kernel,
+    broadcast_kernel,
 ) -> None:
-    """Launch raw allgather kernels with a power-of-two-safe fallback path."""
+    """Launch raw broadcast kernels with a power-of-two-safe fallback path."""
     if block_size <= _KERNEL_MAX_BLOCK_SIZE and _is_power_of_two(block_size):
-        allgather_kernel[(1,)](
-            src,
-            dst,
+        broadcast_kernel[(1,)](
+            tensor,
             heap_bases,
             rank,
             world_size,
+            root,
             BLOCK_SIZE=block_size,
         )
         return
 
-    src_flat = src.reshape(-1)
     chunk_start = 0
     while chunk_start < block_size:
         chunk = _kernel_block_elems(block_size - chunk_start)
-        allgather_chunked_kernel[(1,)](
-            src_flat,
-            dst,
+        tensor_chunk = tensor.narrow(0, chunk_start, chunk)
+        broadcast_kernel[(1,)](
+            tensor_chunk,
             heap_bases,
             rank,
             world_size,
-            chunk_start,
-            block_size,
+            root,
             BLOCK_SIZE=chunk,
         )
         chunk_start += chunk
@@ -101,6 +103,7 @@ def _launch_allgather_kernel(
 def _timed_collective(
     fn,
     *,
+    prepare_fn,
     rank: int,
     barrier_kwargs: dict[str, object],
     warmup: int,
@@ -108,6 +111,8 @@ def _timed_collective(
 ) -> dict[str, float]:
     """Time one collective call using CUDA events and rank barriers."""
     for _ in range(warmup):
+        prepare_fn()
+        torch.cuda.synchronize(rank)
         dist.barrier(**barrier_kwargs)
         fn()
         torch.cuda.synchronize(rank)
@@ -115,6 +120,8 @@ def _timed_collective(
 
     times_ms: list[float] = []
     for _ in range(iters):
+        prepare_fn()
+        torch.cuda.synchronize(rank)
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
         dist.barrier(**barrier_kwargs)
@@ -132,23 +139,29 @@ def _timed_collective(
     }
 
 
-def _fill_allgather_input(tensor: torch.Tensor, *, rank: int) -> None:
-    """Fill one rank-local block with a stable scalar pattern."""
-    tensor.fill_(float((rank + 1) * 10))
+def _fill_broadcast_input(tensor: torch.Tensor, *, rank: int, root: int) -> None:
+    """Fill one rank-local tensor with a root/non-root distinguishable pattern."""
+    if rank == root:
+        tensor.fill_(111.0)
+    else:
+        tensor.fill_(-1.0)
 
 
-def _expected_output(
-    output: torch.Tensor,
+def _launch_broadcast_ops_compat(
     *,
-    world_size: int,
-    block_size: int,
-) -> torch.Tensor:
-    """Build the expected allgather output on the local device."""
-    expected = torch.empty_like(output)
-    for rank in range(world_size):
-        start = rank * block_size
-        expected[start : start + block_size].fill_(float((rank + 1) * 10))
-    return expected
+    tensor: torch.Tensor,
+    heap,
+    root: int,
+) -> None:
+    """Compatibility launcher for the worker's "ops" surface.
+
+    ``tncc.ops`` does not currently expose ``broadcast``. Keep launcher-matrix
+    parity in this worker by routing the "ops" lane through the same validated
+    primitive entrypoint on an independent tensor.
+    """
+    from tncc.primitives import broadcast as primitive_broadcast
+
+    primitive_broadcast(tensor, heap, root=root)
 
 
 def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> None:
@@ -171,63 +184,86 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
         device_id=device,
     )
 
-    import tncc
     from tncc.memory.symmetric_heap import SymmetricHeap
-    from tncc.primitives import allgather as primitive_allgather
-    from tncc.primitives.collectives import (
-        _allgather_chunked_kernel,
-        _allgather_kernel,
-        _resolve_collective_execution,
-    )
+    from tncc.primitives import broadcast as primitive_broadcast
+    from tncc.primitives.collectives import _broadcast_kernel, _resolve_collective_execution
 
-    heap = SymmetricHeap(
-        size=64 * 1024 * 1024,
-        rank=rank,
-        world_size=world_size,
-        backend="cuda",
-    )
+    heap = None
     try:
+        heap = SymmetricHeap(
+            size=64 * 1024 * 1024,
+            rank=rank,
+            world_size=world_size,
+            backend="cuda",
+        )
+
+        if not multiprocess_device_remote_access_runtime_supported(
+            transport_strategy=heap.transport_strategy,
+            world_size=world_size,
+        ):
+            raise ValueError(
+                multiprocess_device_remote_access_detail(
+                    transport_strategy=heap.transport_strategy,
+                    operation="tests.test_e2e._run_broadcast_multiprocess",
+                    world_size=world_size,
+                )
+            )
+
         block_size = config.block_size
-
-        src_primitive = heap.allocate_tensor((block_size,), dtype)
-        dst_primitive = heap.allocate_tensor((block_size * world_size,), dtype)
-        _fill_allgather_input(src_primitive, rank=rank)
-        dst_primitive.zero_()
-
-        src_ops = heap.allocate_tensor((block_size,), dtype)
-        dst_ops = heap.allocate_tensor((block_size * world_size,), dtype)
-        _fill_allgather_input(src_ops, rank=rank)
-        dst_ops.zero_()
-
-        src_kernel = None
-        dst_kernel = None
+        tensor_primitive = heap.allocate_tensor((block_size,), dtype)
+        tensor_ops = heap.allocate_tensor((block_size,), dtype)
+        tensor_kernel = None
         if config.launcher in {"kernel", "all"}:
-            src_kernel = heap.allocate_tensor((block_size,), dtype)
-            dst_kernel = heap.allocate_tensor((block_size * world_size,), dtype)
-            _fill_allgather_input(src_kernel, rank=rank)
-            dst_kernel.zero_()
+            tensor_kernel = heap.allocate_tensor((block_size,), dtype)
 
+        _fill_broadcast_input(tensor_primitive, rank=rank, root=config.root)
+        _fill_broadcast_input(tensor_ops, rank=rank, root=config.root)
+        if tensor_kernel is not None:
+            _fill_broadcast_input(tensor_kernel, rank=rank, root=config.root)
         torch.cuda.synchronize(rank)
+
+        primitive_execution = asdict(
+            _resolve_collective_execution(
+                "broadcast",
+                input_numel=tensor_primitive.numel(),
+                world_size=world_size,
+                element_size=tensor_primitive.element_size(),
+                device=tensor_primitive.device,
+                root=config.root,
+            )
+        )
 
         primitive_timing = None
         primitive_ok = None
-        primitive_first_chunk = None
-        primitive_execution = None
+        primitive_first_value = None
         if config.launcher in {"primitive", "all"}:
-            primitive_execution = asdict(
-                _resolve_collective_execution(
-                    "allgather",
-                    input_numel=src_primitive.numel(),
-                    world_size=world_size,
-                    element_size=src_primitive.element_size(),
-                    device=src_primitive.device,
-                )
-            )
             primitive_timing = _timed_collective(
-                lambda: primitive_allgather(
-                    src_primitive,
-                    dst_primitive,
-                    heap,
+                lambda: primitive_broadcast(tensor_primitive, heap, root=config.root),
+                prepare_fn=lambda: _fill_broadcast_input(
+                    tensor_primitive,
+                    rank=rank,
+                    root=config.root,
+                ),
+                rank=rank,
+                barrier_kwargs=barrier_kwargs,
+                warmup=config.warmup,
+                iters=config.iters,
+            )
+
+        high_level_timing = None
+        high_level_ok = None
+        high_level_first_value = None
+        if config.launcher in {"ops", "all"}:
+            high_level_timing = _timed_collective(
+                lambda: _launch_broadcast_ops_compat(
+                    tensor=tensor_ops,
+                    heap=heap,
+                    root=config.root,
+                ),
+                prepare_fn=lambda: _fill_broadcast_input(
+                    tensor_ops,
+                    rank=rank,
+                    root=config.root,
                 ),
                 rank=rank,
                 barrier_kwargs=barrier_kwargs,
@@ -237,18 +273,23 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
         kernel_timing = None
         kernel_ok = None
-        kernel_first_chunk = None
+        kernel_first_value = None
         if config.launcher in {"kernel", "all"}:
+            assert tensor_kernel is not None
             kernel_timing = _timed_collective(
-                lambda: _launch_allgather_kernel(
-                    src=src_kernel,
-                    dst=dst_kernel,
+                lambda: _launch_broadcast_kernel(
+                    tensor=tensor_kernel,
                     heap_bases=heap.get_heap_bases(),
                     rank=rank,
                     world_size=world_size,
+                    root=config.root,
                     block_size=block_size,
-                    allgather_kernel=_allgather_kernel,
-                    allgather_chunked_kernel=_allgather_chunked_kernel,
+                    broadcast_kernel=_broadcast_kernel,
+                ),
+                prepare_fn=lambda: _fill_broadcast_input(
+                    tensor_kernel,
+                    rank=rank,
+                    root=config.root,
                 ),
                 rank=rank,
                 barrier_kwargs=barrier_kwargs,
@@ -256,67 +297,43 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
                 iters=config.iters,
             )
 
-        ctx = tncc.init(
-            backend="cuda",
-            rank=rank,
-            world_size=world_size,
-            heap=heap,
-            force_backend=True,
-        )
-        high_level_timing = None
-        high_level_ok = None
-        high_level_first_chunk = None
-        if config.launcher in {"ops", "all"}:
-            high_level_timing = _timed_collective(
-                lambda: tncc.ops.allgather(
-                    src_ops,
-                    dst_ops,
-                    ctx=ctx,
-                ),
-                rank=rank,
-                barrier_kwargs=barrier_kwargs,
-                warmup=config.warmup,
-                iters=config.iters,
-            )
-
-        expected = _expected_output(
-            dst_primitive,
-            world_size=world_size,
-            block_size=block_size,
-        )
+        expected = torch.full_like(tensor_primitive, 111.0)
         if config.launcher in {"primitive", "all"}:
-            primitive_ok = bool(torch.allclose(dst_primitive, expected, atol=1e-4))
-            primitive_first_chunk = float(dst_primitive[0].item())
+            primitive_ok = bool(torch.allclose(tensor_primitive, expected, atol=1e-4))
+            primitive_first_value = float(tensor_primitive[0].item())
         if config.launcher in {"ops", "all"}:
-            high_level_ok = bool(torch.allclose(dst_ops, expected, atol=1e-4))
-            high_level_first_chunk = float(dst_ops[0].item())
+            high_level_ok = bool(torch.allclose(tensor_ops, expected, atol=1e-4))
+            high_level_first_value = float(tensor_ops[0].item())
         if config.launcher in {"kernel", "all"}:
-            assert dst_kernel is not None
-            kernel_ok = bool(torch.allclose(dst_kernel, expected, atol=1e-4))
-            kernel_first_chunk = float(dst_kernel[0].item())
+            assert tensor_kernel is not None
+            kernel_ok = bool(torch.allclose(tensor_kernel, expected, atol=1e-4))
+            kernel_first_value = float(tensor_kernel[0].item())
 
         payload = {
             "rank": rank,
             "dtype": config.dtype_name,
             "block_size": block_size,
+            "world_size": world_size,
+            "root": config.root,
             "warmup": config.warmup,
             "iters": config.iters,
             "forced_transport": config.force_transport or "auto",
             "launcher": config.launcher,
             "transport_strategy": heap.transport_strategy,
             "mode": heap.mode,
-            "primitive_first_chunk": primitive_first_chunk,
+            "primitive_first_value": primitive_first_value,
             "primitive_ok": primitive_ok,
-            "primitive_execution": primitive_execution,
             "primitive_timing_ms": primitive_timing,
-            "high_level_first_chunk": high_level_first_chunk,
+            "primitive_execution": primitive_execution,
+            "high_level_first_value": high_level_first_value,
             "high_level_ok": high_level_ok,
             "high_level_timing_ms": high_level_timing,
-            "kernel_first_chunk": kernel_first_chunk,
+            "kernel_first_value": kernel_first_value,
             "kernel_ok": kernel_ok,
             "kernel_timing_ms": kernel_timing,
         }
         print(json.dumps(payload), flush=True)
+
         checks = [
             result for result in (primitive_ok, high_level_ok, kernel_ok) if result is not None
         ]
@@ -329,7 +346,8 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
             except Exception:
                 pass
         try:
-            heap.cleanup()
+            if heap is not None:
+                heap.cleanup()
         finally:
             if dist.is_initialized():
                 try:
@@ -339,20 +357,20 @@ def _worker(rank: int, world_size: int, store_path: str, config: _RunConfig) -> 
 
 
 def main() -> None:
-    """Run the real multiprocess allgather validation."""
+    """Run the real multiprocess broadcast validation."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dtype",
         type=str,
         default="float32",
         choices=sorted(_DTYPES),
-        help="Element dtype for the diagnostic source/output tensors.",
+        help="Element dtype for the diagnostic tensor.",
     )
     parser.add_argument(
         "--block-size",
         type=int,
         default=128,
-        help="Elements per rank-local allgather contribution.",
+        help="Elements in the rank-local broadcast tensor.",
     )
     parser.add_argument(
         "--warmup",
@@ -364,13 +382,13 @@ def main() -> None:
         "--iters",
         type=int,
         default=10,
-        help="Timed iterations for primitive/high-level latency statistics.",
+        help="Timed iterations for primitive/high-level/kernel latency statistics.",
     )
     parser.add_argument(
         "--world-size",
         type=int,
         default=2,
-        help="Requested world size. Must be <= visible GPUs. Current host runs up to 2.",
+        help="Requested world size. Current validated public surface is world_size=2.",
     )
     parser.add_argument(
         "--force-transport",
@@ -384,12 +402,20 @@ def main() -> None:
         type=str,
         default="all",
         choices=["primitive", "ops", "kernel", "all"],
-        help="Which launcher surface to validate: host primitive, high-level op, raw kernel, or all.",
+        help="Which launcher surface to validate: host primitive, compatibility ops lane, raw kernel, or all.",
+    )
+    parser.add_argument(
+        "--root",
+        type=int,
+        default=0,
+        help="Root rank for broadcast.",
     )
     args = parser.parse_args()
 
-    world_size = min(torch.cuda.device_count(), int(args.world_size))
-    if world_size < 2:
+    requested_world_size = int(args.world_size)
+    if requested_world_size != 2:
+        raise SystemExit("--world-size must be 2 on the current validated public surface")
+    if torch.cuda.device_count() < requested_world_size:
         raise SystemExit("Need >= 2 GPUs")
     if args.block_size <= 0:
         raise SystemExit("--block-size must be positive")
@@ -397,25 +423,28 @@ def main() -> None:
         raise SystemExit("--warmup must be >= 0")
     if args.iters <= 0:
         raise SystemExit("--iters must be > 0")
+    if args.root < 0 or args.root >= requested_world_size:
+        raise SystemExit("--root must be in [0, world_size)")
 
     config = _RunConfig(
-        block_size=int(args.block_size),
+        block_size=args.block_size,
         dtype_name=args.dtype,
-        warmup=int(args.warmup),
-        iters=int(args.iters),
+        warmup=args.warmup,
+        iters=args.iters,
         force_transport=None if args.force_transport == "auto" else args.force_transport,
         launcher=args.launcher,
+        root=args.root,
     )
 
-    store_fd, store_path = tempfile.mkstemp(prefix="tncc_ag_store_")
+    store_fd, store_path = tempfile.mkstemp(prefix="tncc_broadcast_store_")
     os.close(store_fd)
     os.unlink(store_path)
 
     try:
         mp.start_processes(
             _worker,
-            args=(world_size, store_path, config),
-            nprocs=world_size,
+            args=(requested_world_size, store_path, config),
+            nprocs=requested_world_size,
             join=True,
             start_method="spawn",
         )

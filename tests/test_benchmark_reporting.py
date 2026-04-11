@@ -43,9 +43,36 @@ def test_runtime_support_brief_formats_heap_and_op_state() -> None:
     )
 
     assert summary == (
-        "backend=cuda, ws=2, heap=single_process, transport=peer_access, "
-        "reduce_scatter=supported"
+        "backend=cuda, ws=2, heap=single_process, transport=peer_access, reduce_scatter=supported"
     )
+
+
+def test_runtime_support_brief_includes_validated_surface_summary() -> None:
+    """Runtime support brief should include runtime-surface metadata when present."""
+    reporting = _load_reporting_module()
+    payload = {
+        "runtime_support": {
+            "context": {
+                "backend": "cuda",
+                "world_size": 2,
+                "has_heap": True,
+                "heap_mode": "multiprocess",
+                "transport_strategy": "ctypes_ipc",
+            },
+            "ops": {},
+            "runtime_surface": {
+                "validated_public_surface": {
+                    "world_size": 2,
+                    "transport_strategy": "ctypes_ipc",
+                },
+                "in_validated_public_surface": True,
+            },
+        }
+    }
+
+    summary = reporting.runtime_support_brief(payload)
+
+    assert "surface=ws2+ctypes_ipc(validated)" in summary
 
 
 def test_benchmark_footer_text_includes_source_date_and_command() -> None:
@@ -101,23 +128,32 @@ def test_benchmark_publication_status_flags_unverified_and_quick_mode() -> None:
     """Publication status should reject contaminated, quick, or unverified payloads."""
     reporting = _load_reporting_module()
 
-    assert reporting.benchmark_publication_status(
-        {
-            "environment_health": {"status": "contaminated"},
-        },
-        require_environment_health=True,
-    ) == "contaminated"
-    assert reporting.benchmark_publication_status(
-        {
-            "environment": {"quick_mode": True},
-        }
-    ) == "quick_mode"
-    assert reporting.benchmark_publication_status(
-        {
-            "environment": {"quick_mode": False},
-        },
-        require_environment_health=True,
-    ) == "unverified"
+    assert (
+        reporting.benchmark_publication_status(
+            {
+                "environment_health": {"status": "contaminated"},
+            },
+            require_environment_health=True,
+        )
+        == "contaminated"
+    )
+    assert (
+        reporting.benchmark_publication_status(
+            {
+                "environment": {"quick_mode": True},
+            }
+        )
+        == "quick_mode"
+    )
+    assert (
+        reporting.benchmark_publication_status(
+            {
+                "environment": {"quick_mode": False},
+            },
+            require_environment_health=True,
+        )
+        == "unverified"
+    )
 
 
 def test_execution_path_brief_formats_selected_paths() -> None:
@@ -137,7 +173,4 @@ def test_execution_path_brief_formats_selected_paths() -> None:
         names=("reduce_scatter.reference", "reduce_scatter.device"),
     )
 
-    assert summary == (
-        "reduce_scatter.reference=supported, "
-        "reduce_scatter.device=unsupported"
-    )
+    assert summary == ("reduce_scatter.reference=supported, reduce_scatter.device=unsupported")

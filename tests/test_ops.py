@@ -188,7 +188,7 @@ def test_gemm_allscatter_full_to_shard_wrapper_multigpu(
 
             ref = torch.matmul(A.float(), B.float()).half()
             col_offset = rank * shard_cols
-            expected = ref[:, col_offset:col_offset + shard_cols]
+            expected = ref[:, col_offset : col_offset + shard_cols]
 
             assert payload["materialization"] == "full_to_shard"
             assert payload["public_contract"]["rhs_layout"] == "full"
@@ -566,12 +566,10 @@ def test_gemm_reducescatter_multigpu(
     shard_cols = N // world_size
     generator = torch.Generator().manual_seed(0)
     A_host = [
-        torch.randn(M, K, generator=generator, dtype=torch.float32)
-        for _ in range(world_size)
+        torch.randn(M, K, generator=generator, dtype=torch.float32) for _ in range(world_size)
     ]
     B_host = [
-        torch.randn(K, N, generator=generator, dtype=torch.float32)
-        for _ in range(world_size)
+        torch.randn(K, N, generator=generator, dtype=torch.float32) for _ in range(world_size)
     ]
     expected_full = torch.zeros(M, N, dtype=torch.float32)
     for A_rank, B_rank in zip(A_host, B_host):
@@ -609,11 +607,88 @@ def test_gemm_reducescatter_multigpu(
 
         for rank, output in enumerate(outputs):
             col_offset = rank * shard_cols
-            expected = expected_full[:, col_offset:col_offset + shard_cols].to(dtype=torch.float16)
+            expected = expected_full[:, col_offset : col_offset + shard_cols].to(
+                dtype=torch.float16
+            )
             assert torch.allclose(output.cpu(), expected, rtol=1e-2, atol=1e-1)
     finally:
         for heap in heaps:
             heap.cleanup()
+
+
+@pytest.mark.parametrize(
+    ("collective", "message_bytes", "expected_regime"),
+    [
+        ("allgather", 16 * 1024, "legacy"),
+        ("allgather", (16 * 1024) + 4, "staged"),
+        ("broadcast", 16 * 1024, "legacy"),
+        ("broadcast", (16 * 1024) + 4, "staged"),
+        ("scatter", 16 * 1024, "legacy"),
+        ("scatter", (16 * 1024) + 4, "staged"),
+        ("reduce_scatter", 16 * 1024, "legacy"),
+        ("reduce_scatter", (16 * 1024) + 4, "staged"),
+    ],
+)
+def test_non_allreduce_execution_metadata_threshold_split_is_stable(
+    collective: str,
+    message_bytes: int,
+    expected_regime: str,
+    monkeypatch,
+) -> None:
+    """Non-allreduce execution metadata should stay stable at the 16 KiB split."""
+    import tncc.primitives.collectives as collectives
+
+    class _Props:
+        multi_processor_count = 6
+
+    monkeypatch.setattr(
+        torch.cuda,
+        "get_device_properties",
+        lambda _device: _Props(),
+    )
+
+    element_size = torch.tensor([], dtype=torch.float32).element_size()
+    world_size = 2
+    rank_payload_numel = message_bytes // element_size
+    if collective == "reduce_scatter":
+        input_numel = rank_payload_numel * world_size
+    else:
+        input_numel = rank_payload_numel
+
+    root = 1 if collective in {"broadcast", "scatter"} else None
+    spec = collectives._resolve_collective_execution(
+        collective,
+        input_numel=input_numel,
+        world_size=world_size,
+        element_size=element_size,
+        device=torch.device("cuda:0"),
+        root=root,
+    )
+
+    legacy_protocols = {
+        "allgather": "direct_write",
+        "broadcast": "flat_root_broadcast",
+        "scatter": "flat_root_scatter",
+        "reduce_scatter": "direct_peer_reduce",
+    }
+    logical_chunk_numel = (
+        input_numel if collective != "reduce_scatter" else input_numel // world_size
+    )
+    expected_chunk_elems = min(logical_chunk_numel, 4096)
+    expected_num_chunks = (logical_chunk_numel + expected_chunk_elems - 1) // expected_chunk_elems
+    expected_pipeline_slots = min(expected_num_chunks, _Props.multi_processor_count, 8)
+
+    assert spec.path == expected_regime
+    assert spec.message_regime == expected_regime
+    assert spec.protocol == (
+        legacy_protocols[collective] if expected_regime == "legacy" else "ws2_slot_epoch_pipeline"
+    )
+    assert spec.root_mode == (
+        "no_root" if collective in {"allgather", "reduce_scatter"} else "explicit_root_rank_1"
+    )
+    assert spec.chunk_elems == expected_chunk_elems
+    assert spec.num_chunks == expected_num_chunks
+    assert spec.pipeline_slots == expected_pipeline_slots
 
 
 def test_build_allgather_plan_exposes_stable_metadata(skip_no_multigpu, device_info) -> None:
@@ -1336,8 +1411,12 @@ def test_allgather_high_level_api_multigpu(skip_no_multigpu, device_info) -> Non
 
         for rank in range(world_size):
             torch.cuda.synchronize(rank)
-            assert torch.allclose(output[rank][:block_size], torch.full_like(output[rank][:block_size], 10.0))
-            assert torch.allclose(output[rank][block_size:], torch.full_like(output[rank][block_size:], 20.0))
+            assert torch.allclose(
+                output[rank][:block_size], torch.full_like(output[rank][:block_size], 10.0)
+            )
+            assert torch.allclose(
+                output[rank][block_size:], torch.full_like(output[rank][block_size:], 20.0)
+            )
     finally:
         for heap in heaps:
             heap.cleanup()
@@ -1372,7 +1451,7 @@ def test_reduce_scatter_high_level_api_multigpu(skip_no_multigpu, device_info) -
             out_rank = heaps[rank].allocate_tensor((block_size,), torch.float32)
             for chunk in range(world_size):
                 start = chunk * block_size
-                src_rank[start:start + block_size].fill_(float(rank * 2 + chunk + 1))
+                src_rank[start : start + block_size].fill_(float(rank * 2 + chunk + 1))
             out_rank.zero_()
             src.append(src_rank)
             output.append(out_rank)
@@ -1430,9 +1509,7 @@ def test_ag_gemm_rs_single_process(skip_no_multigpu, device_info) -> None:
         W = torch.randn(K, N, device="cuda:0", dtype=torch.float32)
 
         # Reference: concat shards → GEMM
-        full_input = torch.cat(
-            [s.to(device="cuda:0") for s in shards], dim=1
-        )
+        full_input = torch.cat([s.to(device="cuda:0") for s in shards], dim=1)
         expected = torch.matmul(full_input, W)
 
         for rank in range(world_size):
@@ -1476,9 +1553,7 @@ def test_build_ag_gemm_rs_plan_exposes_stable_metadata(
         W = torch.randn(K, N, device="cuda:0", dtype=torch.float32)
         output = heaps[0].allocate_tensor((M, N), torch.float32)
 
-        plan = tncc.ops.build_allgather_gemm_reducescatter_plan(
-            input_shard, W, output, ctx=ctx
-        )
+        plan = tncc.ops.build_allgather_gemm_reducescatter_plan(input_shard, W, output, ctx=ctx)
         payload = plan.to_dict()
 
         assert payload["op"] == "allgather_gemm_reducescatter"

@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import tncc
 from tncc.utils.benchmark_results import (
     benchmark_environment_health,
@@ -177,10 +179,7 @@ def test_benchmark_environment_health_flags_foreign_gpu_activity(monkeypatch) ->
             return subprocess.CompletedProcess(
                 command,
                 0,
-                stdout=(
-                    "GPU-AAA, 3286824, llama-box, 34197\n"
-                    "GPU-BBB, 1054772, python, 1055\n"
-                ),
+                stdout=("GPU-AAA, 3286824, llama-box, 34197\nGPU-BBB, 1054772, python, 1055\n"),
                 stderr="",
             )
         raise AssertionError(f"unexpected command: {command}")
@@ -244,11 +243,7 @@ except RuntimeError:
 
     env = os.environ.copy()
     pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = (
-        str(repo_root)
-        if not pythonpath
-        else f"{repo_root}{os.pathsep}{pythonpath}"
-    )
+    env["PYTHONPATH"] = str(repo_root) if not pythonpath else f"{repo_root}{os.pathsep}{pythonpath}"
 
     with canonical_benchmark_run(output_path):
         proc = subprocess.run(
@@ -403,3 +398,155 @@ def test_collective_comm_only_aggregate_preserves_allreduce_execution_metadata()
     assert case["tncc"]["epoch_policy"] == "per_chunk_slot_epoch"
     assert case["tncc"]["chunk_elems"] == 4096
     assert summary["peak_by_collective"]["allreduce"]["peak_tncc_bandwidth_gbps"] > 0.0
+
+
+def test_collective_comm_only_aggregate_appends_tncc_execution_metadata_compatibly() -> None:
+    """Comm-only aggregation should append optional tncc.execution and keep old keys."""
+    bench = _load_comm_only_benchmark_module()
+
+    rank_payloads = [
+        {
+            "results": [
+                {
+                    "collective": "allgather",
+                    "size_bytes": 65536,
+                    "tncc": {
+                        "times_ms": [0.20, 0.21],
+                        "correct": True,
+                        "execution": {
+                            "collective": "allgather",
+                            "path": "staged",
+                            "protocol": "ws2_slot_epoch_pipeline",
+                            "message_regime": "staged",
+                            "root_mode": "no_root",
+                            "chunk_elems": 4096,
+                            "num_chunks": 1,
+                            "pipeline_slots": 1,
+                            "chunk": {
+                                "elems": 4096,
+                                "count": 1,
+                            },
+                            "pipeline": {
+                                "slots": 1,
+                            },
+                        },
+                    },
+                    "nccl": {
+                        "times_ms": [0.18, 0.19],
+                        "correct": True,
+                    },
+                }
+            ]
+        },
+        {
+            "results": [
+                {
+                    "collective": "allgather",
+                    "size_bytes": 65536,
+                    "tncc": {
+                        "times_ms": [0.22, 0.23],
+                        "correct": True,
+                        "execution": {
+                            "collective": "allgather",
+                            "path": "staged",
+                            "protocol": "ws2_slot_epoch_pipeline",
+                            "message_regime": "staged",
+                            "root_mode": "no_root",
+                            "chunk_elems": 4096,
+                            "num_chunks": 1,
+                            "pipeline_slots": 1,
+                            "chunk": {
+                                "elems": 4096,
+                                "count": 1,
+                            },
+                            "pipeline": {
+                                "slots": 1,
+                            },
+                        },
+                    },
+                    "nccl": {
+                        "times_ms": [0.19, 0.20],
+                        "correct": True,
+                    },
+                }
+            ]
+        },
+    ]
+
+    cases, _ = bench._aggregate_rank_results(rank_payloads, world_size=2)
+
+    assert len(cases) == 1
+    case = cases[0]
+    assert "tncc" in case
+    assert "median_ms" in case["tncc"]
+    assert "median_bandwidth_gbps" in case["tncc"]
+    assert "correct_all_ranks" in case["tncc"]
+    assert "rank_times_ms" in case["tncc"]
+    assert "aggregate_times_ms" in case["tncc"]
+    assert case["tncc_vs_nccl_bandwidth_ratio"] > 0.0
+
+    execution = case["tncc"].get("execution")
+    assert isinstance(execution, dict)
+    assert execution["collective"] == "allgather"
+    assert execution["path"] == "staged"
+    assert execution["protocol"] == "ws2_slot_epoch_pipeline"
+    assert execution["message_regime"] == "staged"
+    assert execution["root_mode"] == "no_root"
+    assert execution["chunk_elems"] == 4096
+    assert execution["num_chunks"] == 1
+    assert execution["pipeline_slots"] == 1
+    assert execution["chunk"] == {"elems": 4096, "count": 1}
+    assert execution["pipeline"] == {"slots": 1}
+
+
+def test_collective_comm_only_validated_surface_request_rejects_unsupported_force_transport():
+    """Comm-only benchmark should fail closed for unsupported forced transports."""
+    bench = _load_comm_only_benchmark_module()
+
+    with pytest.raises(SystemExit, match="fail-closed"):
+        bench._enforce_validated_surface_request(
+            requested_world_size=2,
+            requested_force_transport="pytorch_ipc",
+        )
+
+
+def test_collective_comm_only_runtime_surface_metadata_marks_in_scope() -> None:
+    """Comm-only runtime-surface metadata should encode ws2+ctypes as validated."""
+    bench = _load_comm_only_benchmark_module()
+
+    validated = bench._validated_surface_contract()
+    metadata = bench._runtime_surface_metadata(
+        validated_surface=validated,
+        requested_world_size=2,
+        requested_force_transport="auto",
+        resolved_world_size=2,
+        resolved_transport_strategy="ctypes_ipc",
+    )
+
+    assert metadata["policy"] == "fail_closed_validated_public_surface_only"
+    assert metadata["validated_public_surface"] == {
+        "world_size": 2,
+        "transport_strategy": "ctypes_ipc",
+    }
+    assert metadata["in_validated_public_surface"] is True
+
+
+def test_collective_comm_only_runtime_surface_assertion_rejects_drift() -> None:
+    """Comm-only runtime guard should reject resolved transports outside validated surface."""
+    bench = _load_comm_only_benchmark_module()
+
+    with pytest.raises(RuntimeError, match="validated public surface"):
+        bench._assert_runtime_on_validated_surface(
+            validated_surface={
+                "world_size": 2,
+                "transport_strategy": "ctypes_ipc",
+            },
+            world_size=2,
+            transport_strategy="pytorch_ipc",
+            runtime_support={
+                "context": {
+                    "world_size": 2,
+                    "transport_strategy": "pytorch_ipc",
+                }
+            },
+        )

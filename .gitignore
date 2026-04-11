@@ -60,4 +60,5 @@ scripts/*
 !scripts/_benchmark_reporting.py
 !scripts/export_benchmark_summary.py
 !scripts/plot_figures.py
+!scripts/publish_fig6_artifacts.py
 run_benchmarks.sh
