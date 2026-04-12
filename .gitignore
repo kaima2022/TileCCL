@@ -59,3 +59,7 @@ CLAUDE.md
 # Internal scripts and automation
 scripts/*
 run_benchmarks.sh
+
+
+.sisyphus/
+README_back.md
