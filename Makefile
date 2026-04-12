@@ -1,4 +1,4 @@
-.PHONY: install install-dev test bench lint typecheck clean help
+.PHONY: install install-dev lint lint-fix format typecheck clean help
 
 help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -7,29 +7,17 @@ help:  ## Show this help
 install:  ## Install tncc in editable mode
 	pip install -e .
 
-install-dev:  ## Install with dev + benchmark dependencies
-	pip install -e ".[dev,benchmark]"
-
-test:  ## Run all tests
-	pytest tests/ -v
-
-test-unit:  ## Run unit tests only (no benchmark, no multigpu)
-	pytest tests/ -v -m "not benchmark and not multigpu"
-
-test-multigpu:  ## Run multi-GPU tests
-	pytest tests/ -v -m "multigpu"
-
-bench:  ## Run benchmarks
-	pytest tests/benchmarks/ -v -m "benchmark" --no-header -rN
+install-dev:  ## Install with dev dependencies
+	pip install -e ".[dev]"
 
 lint:  ## Run ruff linter
-	ruff check tncc/ tests/ examples/ scripts/_benchmark_reporting.py scripts/export_benchmark_summary.py scripts/plot_figures.py --exclude tests/benchmarks/
+	ruff check tncc/ examples/
 
 lint-fix:  ## Run ruff linter with auto-fix
-	ruff check --fix tncc/ tests/ examples/ scripts/_benchmark_reporting.py scripts/export_benchmark_summary.py scripts/plot_figures.py --exclude tests/benchmarks/
+	ruff check --fix tncc/ examples/
 
 format:  ## Format code with ruff
-	ruff format tncc/ tests/ examples/ scripts/_benchmark_reporting.py scripts/export_benchmark_summary.py scripts/plot_figures.py --exclude tests/benchmarks/
+	ruff format tncc/ examples/
 
 typecheck:  ## Run mypy type checker
 	mypy tncc/

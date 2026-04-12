@@ -49,6 +49,7 @@ Thumbs.db
 # Benchmark results and figures
 results/
 figures/
+tests/
 
 # Internal documentation (not for public release)
 docs/

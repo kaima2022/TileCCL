@@ -7,7 +7,7 @@ Thank you for your interest in TNCC. Contributions of all kinds are welcome: bug
 ```bash
 git clone https://github.com/MaKai-Research/tncc.git
 cd tncc
-pip install -e ".[dev,benchmark]"
+pip install -e ".[dev]"
 ```
 
 ## Code Style
@@ -22,22 +22,11 @@ make format     # Format
 make typecheck  # Type check
 ```
 
-## Testing
-
-TNCC tests require **2 NVIDIA GPUs with NVLink** for the full suite.
-
-```bash
-make test          # Full suite (requires 2x GPUs)
-make test-unit     # CPU-only unit tests (no GPU required)
-make test-multigpu # Multi-GPU tests only
-```
-
 ## Pull Requests
 
 1. Fork the repository and create a feature branch.
-2. Write tests for new functionality.
-3. Run `make lint` and `make test-unit` before submitting.
-4. Keep PRs focused: one feature or fix per PR.
+2. Run `make lint` and `make typecheck` before submitting.
+3. Keep PRs focused: one feature or fix per PR.
 
 ## Reporting Issues
 

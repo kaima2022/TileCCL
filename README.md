@@ -84,19 +84,40 @@ pattern = ctx.auto_select_pattern("gemm_allscatter", M=M, N=N, K=K)
 ## Development
 
 ```bash
-make install-dev   # Install with dev + benchmark dependencies
-make test          # Run tests
+make install-dev   # Install with dev dependencies
 make lint          # Ruff linter
-make bench         # Run benchmarks
+make typecheck     # mypy
 ```
 
-CLI benchmarking:
+## Minimal Collective Check
+
+This is the smallest public check that still exercises TNCC's tile-native
+collective path. It launches a 2-GPU in-process allreduce on symmetric memory
+and verifies that both ranks observe the same reduced tensor.
 
 ```bash
-tncc bench pattern --quick    # Compare overlap patterns
-tncc bench gemm               # GEMM kernel performance
-tncc bench p2p                # P2P bandwidth sweep
-tncc bench all                # Run all benchmarks
+python - <<'PY'
+import torch
+import tncc
+
+ctxs = tncc.init_local(world_size=2, heap_size=256 * 1024 * 1024)
+tensors = []
+
+for rank, ctx in enumerate(ctxs):
+    x = ctx.zeros(128, dtype=torch.float32)
+    x.fill_(rank + 1)
+    tensors.append(x)
+
+for ctx, x in zip(ctxs, tensors):
+    tncc.ops.allreduce(x, ctx=ctx)
+
+torch.cuda.synchronize()
+
+for rank, x in enumerate(tensors):
+    expected = torch.full_like(x, 3.0)
+    max_err = (x - expected).abs().max().item()
+    print(f"rank={rank} max_err={max_err:.1e} values={x[:4].tolist()}")
+PY
 ```
 
 ## Requirements
