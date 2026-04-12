@@ -16,9 +16,9 @@ import time
 
 import torch
 
-import tncc
-from tncc.ops import build_gemm_allscatter_plan
-from tncc.patterns import (
+import tileccl
+from tileccl.ops import build_gemm_allscatter_plan
+from tileccl.patterns import (
     BulkSyncPattern,
     FusedSequentialPattern,
     ProducerConsumerPattern,
@@ -34,7 +34,7 @@ PATTERNS = [
 
 
 def main() -> None:
-    ctxs = tncc.init_local(world_size=2, heap_size=1 << 30)
+    ctxs = tileccl.init_local(world_size=2, heap_size=1 << 30)
     ctx = ctxs[0]
 
     M, K, N = 8192, 36864, 4608 * ctx.world_size

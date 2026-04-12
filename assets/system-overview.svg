@@ -33,7 +33,7 @@
   <rect width="700" height="500" fill="#fff"/>
 
   <!-- Title -->
-  <text x="350" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#111">TNCC System Overview</text>
+  <text x="350" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#111">TileCCL System Overview</text>
 
   <!-- ====== Layer 1: User Operations ====== -->
   <rect x="50" y="48" width="600" height="62" rx="8" fill="url(#opsGrad)" stroke="#bbb" stroke-width="1"/>

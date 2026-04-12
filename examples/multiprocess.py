@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Multi-process GEMM + AllScatter via torchrun.
 
-Each process owns one GPU.  TNCC detects rank and world_size from the
+Each process owns one GPU.  TileCCL detects rank and world_size from the
 torch.distributed environment and sets up IPC-based symmetric memory.
 
 Requirements: 2x NVIDIA GPUs with NVLink.
@@ -15,13 +15,13 @@ from __future__ import annotations
 import torch
 import torch.distributed as dist
 
-import tncc
+import tileccl
 
 
 def main() -> None:
     dist.init_process_group(backend="nccl")
 
-    ctx = tncc.init(backend="auto", heap_size=512 * 1024 * 1024)
+    ctx = tileccl.init(backend="auto", heap_size=512 * 1024 * 1024)
 
     M, K, N = 4096, 4096, 8192
     A = ctx.randn(M, K, dtype=torch.float16)
@@ -29,7 +29,7 @@ def main() -> None:
     C = ctx.zeros(M, N, dtype=torch.float16)
 
     # Fused GEMM + all-scatter.
-    tncc.ops.gemm_allscatter(A, B, C, ctx=ctx)
+    tileccl.ops.gemm_allscatter(A, B, C, ctx=ctx)
     torch.cuda.synchronize()
 
     # Verify against a local torch.matmul reference.

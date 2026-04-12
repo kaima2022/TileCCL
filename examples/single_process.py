@@ -2,7 +2,7 @@
 """Single-process multi-GPU GEMM + AllScatter.
 
 Demonstrates the simplest usage path: two GPUs managed from a single
-process via ``tncc.init_local()``.  No torchrun or distributed setup
+process via ``tileccl.init_local()``.  No torchrun or distributed setup
 required.
 
 Requirements: 2x NVIDIA GPUs with NVLink.
@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import torch
 
-import tncc
+import tileccl
 
 
 def main() -> None:
     # Initialize a symmetric heap across 2 GPUs in this process.
-    ctxs = tncc.init_local(world_size=2, heap_size=512 * 1024 * 1024)
+    ctxs = tileccl.init_local(world_size=2, heap_size=512 * 1024 * 1024)
 
     M, K, N = 4096, 4096, 8192
 
@@ -31,7 +31,7 @@ def main() -> None:
         C = ctx.zeros(M, N, dtype=torch.float16)
 
         # Fused GEMM + all-scatter with automatic pattern selection.
-        tncc.ops.gemm_allscatter(A, B, C, ctx=ctx)
+        tileccl.ops.gemm_allscatter(A, B, C, ctx=ctx)
 
     torch.cuda.synchronize()
 

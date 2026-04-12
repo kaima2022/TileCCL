@@ -13,7 +13,7 @@
   <!-- ====== Layer 1: User API ====== -->
   <rect x="50" y="24" width="720" height="68" rx="8" fill="#fafafa" stroke="#d4d4d4" stroke-width="1"/>
   <text x="70" y="46" font-size="9.5" font-weight="700" fill="#999" letter-spacing="1.2">USER API</text>
-  <text x="750" y="46" text-anchor="end" font-size="9" fill="#bbb" font-style="italic">tncc.ops</text>
+  <text x="750" y="46" text-anchor="end" font-size="9" fill="#bbb" font-style="italic">tileccl.ops</text>
   <text x="410" y="70" text-anchor="middle" font-size="12" font-weight="600" fill="#444">gemm_allscatter · gemm_allgather · gemm_reducescatter · allreduce · allgather · reduce_scatter</text>
   <text x="410" y="85" text-anchor="middle" font-size="10" fill="#999">Plan-based execution: build once, execute many</text>
 

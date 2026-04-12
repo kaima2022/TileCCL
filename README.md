@@ -69,14 +69,14 @@ Minimal single-process usage:
 
 ```python
 import torch
-import tncc
+import tileccl
 
-ctx = tncc.init(heap_size=512 * 1024 * 1024)
+ctx = tileccl.init(heap_size=512 * 1024 * 1024)
 A = ctx.randn(4096, 4096, dtype=torch.float16)
 B = ctx.randn(4096, 8192, dtype=torch.float16)
 C = ctx.zeros(4096, 8192, dtype=torch.float16)
 
-tncc.ops.gemm_allscatter(A, B, C, ctx=ctx)
+tileccl.ops.gemm_allscatter(A, B, C, ctx=ctx)
 ```
 
 ## Contributing

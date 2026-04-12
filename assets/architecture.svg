@@ -74,8 +74,8 @@
   <text x="210" y="330" text-anchor="middle" fill="#888" font-size="10">Communication cannot begin</text>
   <text x="210" y="344" text-anchor="middle" fill="#888" font-size="10">until all compute tiles finish</text>
 
-  <!-- ========== RIGHT: TNCC Approach ========== -->
-  <text class="section-title" x="620" y="58" text-anchor="middle">TNCC: Tile-Native Overlap</text>
+  <!-- ========== RIGHT: TileCCL Approach ========== -->
+  <text class="section-title" x="620" y="58" text-anchor="middle">TileCCL: Tile-Native Overlap</text>
   <text class="desc" x="620" y="74" text-anchor="middle">Compute and communicate tile-by-tile within one kernel</text>
 
   <!-- Time arrow -->
@@ -132,11 +132,11 @@
   <rect class="comm-fill" x="624" y="309" width="112" height="20" rx="2" opacity="0.75"/>
   <text x="680" y="323" text-anchor="middle" fill="#fff" font-size="9" font-weight="500">scatter tile 3</text>
 
-  <!-- Cross-GPU arrows (TNCC side) — tile-by-tile -->
+  <!-- Cross-GPU arrows (TileCCL side) — tile-by-tile -->
   <line class="arrow" x1="596" y1="151" x2="622" y2="151" stroke="#E8963A" stroke-width="1"/>
   <line class="arrow" x1="622" y1="207" x2="596" y2="207" stroke="#E8963A" stroke-width="1"/>
 
-  <!-- TNCC annotation -->
+  <!-- TileCCL annotation -->
   <rect x="480" y="352" width="260" height="40" rx="2" fill="#f0f7f3" stroke="#5BA87B" stroke-width="0.8"/>
   <text x="610" y="368" text-anchor="middle" fill="#3a7a55" font-size="10" font-weight="600">Communication begins as soon as</text>
   <text x="610" y="382" text-anchor="middle" fill="#3a7a55" font-size="10" font-weight="600">each tile is produced</text>

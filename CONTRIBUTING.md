@@ -1,12 +1,12 @@
-# Contributing to TNCC
+# Contributing to TileCCL
 
-Thank you for your interest in TNCC. Contributions of all kinds are welcome: bug reports, feature proposals, documentation improvements, and code.
+Thank you for your interest in TileCCL. Contributions of all kinds are welcome: bug reports, feature proposals, documentation improvements, and code.
 
 ## Development Setup
 
 ```bash
-git clone https://github.com/MaKai-Research/tncc.git
-cd tncc
+git clone https://github.com/MaKai-Research/tileccl.git
+cd tileccl
 pip install -e ".[dev]"
 ```
 
