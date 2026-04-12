@@ -65,7 +65,7 @@ torchrun --nproc_per_node=<num_gpus> examples/multiprocess.py
 
 More entry points are available under `examples/`.
 
-Minimal API usage:
+Minimal single-process usage:
 
 ```python
 import torch
