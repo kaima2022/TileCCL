@@ -34,12 +34,9 @@
 
 ## Overview
 
-TileCCL is a tile-native collective communication library. It inserts a TileGroup abstraction between individual GEMM tiles and full collective tensors, so that communication granularity is determined by physical constraints rather than API boundaries.
+TileCCL is a tile-native collective communication library for distributed GPU workloads. It targets the synchronization bubbles created by traditional tensor-level or chunk-level collectives, where downstream compute often waits for a large communication unit even when only a small part of the result is needed next.
 
-- Does not modify the GEMM kernel. Adds one `atomic_add` in the epilogue.
-- TileGroup = physics-driven grouping. P0 (P2P saturation) + P1 (wave alignment) + P2 (pipeline balance) determine group boundaries.
-- Device-side P2P. Compute workgroups and communication workgroups run concurrently in a single persistent kernel. Ready TileGroups are pushed to peer GPUs immediately via CUDA IPC, without NCCL or NVSHMEM.
-- Proven on two collectives. GEMM-output AllGather (1.40–1.53×) and GEMM→ReduceScatter (1.43–1.68×) on 2×H100 with same-backend controlled experiments.
+Instead of treating a collective as a monolithic operation around a full tensor, TileCCL makes communication readiness follow the producer and consumer tile schedule. GEMM output can be exposed, grouped, transferred, and consumed as soon as the relevant work is ready, allowing communication to overlap with computation at a finer granularity.
 
 ## Architecture
 
@@ -48,6 +45,11 @@ TileCCL is a tile-native collective communication library. It inserts a TileGrou
 </p>
 
 GEMM produces tiles. The TileGroup Builder (driven by a CostModel) groups them into physically-sized units. Compute and communication workgroups then run concurrently in a single persistent kernel — compute produces and signals, communication polls barriers and pushes ready groups to peers via CUDA IPC.
+
+- Does not modify the GEMM kernel. Adds one `atomic_add` in the epilogue.
+- TileGroup = physics-driven grouping. P0 (P2P saturation) + P1 (wave alignment) + P2 (pipeline balance) determine group boundaries.
+- Device-side P2P. Compute workgroups and communication workgroups run concurrently in a single persistent kernel. Ready TileGroups are pushed to peer GPUs immediately via CUDA IPC, without NCCL or NVSHMEM.
+- Proven on two collectives. GEMM-output AllGather (1.40–1.53×) and GEMM→ReduceScatter (1.43–1.68×) on 2×H100 with same-backend controlled experiments.
 
 ## Data Flow
 
