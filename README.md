@@ -34,20 +34,12 @@
 
 ## Overview
 
-TileCCL is a **tile-native collective communication library**. It inserts a
-**TileGroup** abstraction between individual GEMM tiles and full collective
-tensors, so that communication granularity is determined by physical constraints
-rather than API boundaries.
+TileCCL is a tile-native collective communication library. It inserts a TileGroup abstraction between individual GEMM tiles and full collective tensors, so that communication granularity is determined by physical constraints rather than API boundaries.
 
-- **Does not modify the GEMM kernel.** Adds one `atomic_add` in the epilogue.
-- **TileGroup = physics-driven grouping.** P0 (P2P saturation) + P1 (wave
-  alignment) + P2 (pipeline balance) determine group boundaries.
-- **Device-side P2P.** Compute workgroups and communication workgroups run
-  concurrently in a single persistent kernel. Ready TileGroups are pushed to
-  peer GPUs immediately via CUDA IPC, without NCCL or NVSHMEM.
-- **Proven on two collectives.** GEMM-output AllGather (1.40–1.53×) and
-  GEMM→ReduceScatter (1.43–1.68×) on 2×H100 with same-backend controlled
-  experiments.
+- Does not modify the GEMM kernel. Adds one `atomic_add` in the epilogue.
+- TileGroup = physics-driven grouping. P0 (P2P saturation) + P1 (wave alignment) + P2 (pipeline balance) determine group boundaries.
+- Device-side P2P. Compute workgroups and communication workgroups run concurrently in a single persistent kernel. Ready TileGroups are pushed to peer GPUs immediately via CUDA IPC, without NCCL or NVSHMEM.
+- Proven on two collectives. GEMM-output AllGather (1.40–1.53×) and GEMM→ReduceScatter (1.43–1.68×) on 2×H100 with same-backend controlled experiments.
 
 ## Architecture
 
@@ -55,10 +47,7 @@ rather than API boundaries.
   <img src="assets/TileCCL-architecture-new.png" width="760" alt="Architecture"/>
 </p>
 
-GEMM produces tiles. The **TileGroup Builder** (driven by a CostModel) groups
-them into physically-sized units. Compute and communication workgroups then run
-concurrently in a single persistent kernel — compute produces and signals,
-communication polls barriers and pushes ready groups to peers via CUDA IPC.
+GEMM produces tiles. The TileGroup Builder (driven by a CostModel) groups them into physically-sized units. Compute and communication workgroups then run concurrently in a single persistent kernel — compute produces and signals, communication polls barriers and pushes ready groups to peers via CUDA IPC.
 
 ## Data Flow
 
@@ -66,9 +55,7 @@ communication polls barriers and pushes ready groups to peers via CUDA IPC.
   <img src="assets/TileCCL-dataflow-comparison.png" width="760" alt="Data Flow"/>
 </p>
 
-Three granularities compared: **bulk tensor** (one large transfer), **per-tile**
-(many tiny transfers), and **TileGroup** (tiles assembled into groups, then one
-transfer per group). TileGroup balances signal overhead against P2P efficiency.
+Three granularities compared: bulk tensor (one large transfer), per-tile (many tiny transfers), and TileGroup (tiles assembled into groups, then one transfer per group). TileGroup balances signal overhead against P2P efficiency.
 
 ## Signal-Communication Granularity
 
@@ -76,17 +63,11 @@ transfer per group). TileGroup balances signal overhead against P2P efficiency.
   <img src="assets/TileCCL-spectrum.png" width="760" alt="Granularity Spectrum"/>
 </p>
 
-Existing systems occupy different points in the signal-vs-communication
-granularity space. TileCCL sits on the diagonal — signal and communication
-aligned at the same TileGroup granularity, determined by physical constraints
-rather than hardcoded or compiler-fixed.
+Existing systems occupy different points in the signal-vs-communication granularity space. TileCCL sits on the diagonal — signal and communication aligned at the same TileGroup granularity, determined by physical constraints rather than hardcoded or compiler-fixed.
 
 ## Preliminary Results
 
-These are early proof results on 2x NVIDIA H100 PCIe GPUs with NVLink peer
-access. The fused proofs use the same Triton persistent GEMM backend across all
-variants; differences are limited to TileGroup signaling and device-side P2P
-communication.
+These are early proof results on 2x NVIDIA H100 PCIe GPUs with NVLink peer access. The fused proofs use the same Triton persistent GEMM backend across all variants; differences are limited to TileGroup signaling and device-side P2P communication.
 
 ### Gate 1: GEMM-output AllGather
 
@@ -122,8 +103,7 @@ TileCCL/
 └── images/logo/             # Institution logos
 ```
 
-The proof experiments (`fused_ag_iris.py`, `fused_rs_iris.py`) live in a
-separate experimental repository and are not part of this framework seed.
+The proof experiments (`fused_ag_iris.py`, `fused_rs_iris.py`) live in a separate experimental repository and are not part of this framework seed.
 
 ## Installation
 
