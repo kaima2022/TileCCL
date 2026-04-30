@@ -49,25 +49,37 @@ rather than API boundaries.
   GEMM→ReduceScatter (1.43–1.68×) on 2×H100 with same-backend controlled
   experiments.
 
-## Key Diagrams
-
-### Architecture (top-to-bottom flow)
+## Architecture
 
 <p align="center">
   <img src="assets/TileCCL-architecture-new.png" width="760" alt="Architecture"/>
 </p>
 
-### Data flow: Bulk vs Per-Tile vs TileCCL
+GEMM produces tiles. The **TileGroup Builder** (driven by a CostModel) groups
+them into physically-sized units. Compute and communication workgroups then run
+concurrently in a single persistent kernel — compute produces and signals,
+communication polls barriers and pushes ready groups to peers via CUDA IPC.
+
+## Data Flow
 
 <p align="center">
   <img src="assets/TileCCL-dataflow-comparison.png" width="760" alt="Data Flow"/>
 </p>
 
-### Signal-communication granularity landscape
+Three granularities compared: **bulk tensor** (one large transfer), **per-tile**
+(many tiny transfers), and **TileGroup** (tiles assembled into groups, then one
+transfer per group). TileGroup balances signal overhead against P2P efficiency.
+
+## Signal-Communication Granularity
 
 <p align="center">
   <img src="assets/TileCCL-spectrum.png" width="760" alt="Granularity Spectrum"/>
 </p>
+
+Existing systems occupy different points in the signal-vs-communication
+granularity space. TileCCL sits on the diagonal — signal and communication
+aligned at the same TileGroup granularity, determined by physical constraints
+rather than hardcoded or compiler-fixed.
 
 ## Preliminary Results
 
