@@ -40,22 +40,22 @@
 
   <!-- Three primitive group cards -->
 
-  <!-- Card 1: Data Movement (orange) -->
+  <!-- Card 1: Memory Semantics (orange) -->
   <rect x="62" y="228" width="214" height="162" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
   <rect x="62" y="228" width="214" height="5" rx="6" fill="#E8963A"/>
   <rect x="62" y="228" width="214" height="5" fill="#E8963A"/><!-- cover bottom radius of top strip -->
   <rect x="62" y="228" width="214" height="5" rx="6" fill="#E8963A"/>
 
-  <text x="169" y="256" text-anchor="middle" font-size="13" font-weight="700" fill="#D07A28">Data Movement</text>
-  <text x="169" y="272" text-anchor="middle" font-size="9.5" fill="#999">Zero-copy tile transfers</text>
+  <text x="169" y="256" text-anchor="middle" font-size="13" font-weight="700" fill="#D07A28">Memory Semantics</text>
+  <text x="169" y="272" text-anchor="middle" font-size="9.5" fill="#999">Remote tile access</text>
 
   <line x1="82" y1="282" x2="256" y2="282" stroke="#f0f0f0" stroke-width="1"/>
 
   <text x="169" y="302" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_remote_load</text>
   <text x="169" y="319" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_remote_store</text>
-  <text x="169" y="343" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_put · tile_get</text>
+  <text x="169" y="336" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_put · tile_get</text>
 
-  <text x="169" y="380" text-anchor="middle" font-size="8.5" fill="#bbb">registers ↔ remote · memory ↔ remote</text>
+  <text x="169" y="376" text-anchor="middle" font-size="8.5" fill="#bbb">registers ↔ remote · memory ↔ remote</text>
 
   <!-- Card 2: Synchronization (purple) -->
   <rect x="294" y="228" width="214" height="162" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>

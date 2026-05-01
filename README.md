@@ -2,6 +2,11 @@
   <img src="assets/logo.png" width="480" alt="TileCCL"/>
 </p>
 
+# TileCCL: Tile-native Collective Communication Library
+
+TileCCL is a tile-native collective communication library for expressing cross-GPU data movement, synchronization, and collective execution directly in Triton. It supports tile-level collectives, GEMM+collective operators, and overlap strategies for multi-GPU kernels where communication needs to remain explicit instead of being hidden behind a separate runtime boundary.
+
+## Organizations
 
 <div align="center">
   <table>
@@ -21,32 +26,6 @@
     </tr>
   </table>
 </div>
-
-# TileCCL: Tile-native Collective Communication Library
-
-TileCCL is a tile-native collective communication library for expressing cross-GPU data movement, synchronization, and collective execution directly in Triton. It supports tile-level collectives, GEMM+collective operators, and overlap strategies for multi-GPU kernels where communication needs to remain explicit instead of being hidden behind a separate runtime boundary.
-
-## TileCCL Architecture
-
-<p align="center">
-  <img src="assets/TileCCL-architecture.png" width="760" alt="TileCCL Architecture"/>
-</p>
-
-
-**User API** — TileCCL exposes high-level collective and GEMM+collective entry points such as `gemm_allscatter`, `gemm_allgather`, `gemm_reducescatter`, `allreduce`, `allgather`, and `reduce_scatter`. This keeps the programming surface at the operator level while leaving execution policy explicit.
-
-**Execution Engine** — Between the API and the device-side kernels, TileCCL resolves layout contracts, applies plan-based execution, and dispatches an overlap strategy. This layer separates public operation semantics from pattern-specific execution choices.
-
-**Tile-Native Primitives** — The core execution layer is built from Triton JIT primitives, so communication and synchronization remain visible inside the same programming model as compute.
-
-- **Data Movement** — `tile_remote_load`, `tile_remote_store`, `tile_put`, and `tile_get` provide fine-grained and bulk tile transfer across peer-accessible memory.
-- **Synchronization** — `tile_signal`, `tile_wait`, and remote atomic operations provide cross-tile coordination with explicit memory-ordering semantics.
-- **Tile Collectives** — `tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`, `tile_broadcast`, and `tile_scatter` implement collective algorithms directly at tile granularity.
-
-**Symmetric Memory** — Heap allocation, peer mapping, and `translate_ptr` provide the address translation layer that lets tile-level kernels access peer memory through a shared symmetric-memory model.
-
-**Hardware Substrate** — TileCCL runs on GPU backends and interconnect-capable peer-memory paths underneath the symmetric-memory layer, providing the transport foundation for tile-native communication.
-
 
 ## Repository Layout
 
@@ -74,6 +53,27 @@ TileCCL/
 └── images/logo/             # Institution logos
 ```
 
+## TileCCL Architecture
+
+<p align="center">
+  <img src="assets/TileCCL-architecture.png" width="760" alt="TileCCL Architecture"/>
+</p>
+
+
+**User API** — TileCCL exposes high-level collective and GEMM+collective entry points such as `gemm_allscatter`, `gemm_allgather`, `gemm_reducescatter`, `allreduce`, `allgather`, and `reduce_scatter`. This keeps the programming surface at the operator level while leaving execution policy explicit.
+
+**Execution Engine** — Between the API and the device-side kernels, TileCCL resolves layout contracts, applies plan-based execution, and dispatches an overlap strategy. This layer separates public operation semantics from pattern-specific execution choices.
+
+**Tile-Native Primitives** — The core execution layer is built from Triton JIT primitives, so communication and synchronization remain visible inside the same programming model as compute.
+
+- **Memory Semantics** — `tile_remote_load`, `tile_remote_store`, `tile_put`, and `tile_get` provide explicit remote access semantics for peer-accessible tile memory.
+- **Synchronization** — `tile_signal`, `tile_wait`, and remote atomic operations provide cross-tile coordination with explicit memory-ordering semantics.
+- **Tile Collectives** — `tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`, `tile_broadcast`, and `tile_scatter` implement collective algorithms directly at tile granularity.
+
+**Symmetric Memory** — Heap allocation, peer mapping, and `translate_ptr` provide the address translation layer that lets tile-level kernels access peer memory through a shared symmetric-memory model.
+
+**Hardware Substrate** — TileCCL runs on GPU backends and interconnect-capable peer-memory paths underneath the symmetric-memory layer, providing the transport foundation for tile-native communication.
+
 
 
 ## Key Feature: TileGroup-Based Overlap
@@ -98,23 +98,23 @@ TileCCL compares three communication granularities: bulk tensor transfer, per-ti
 
 ## Preliminary Results
 
-These early proof results were collected on 2x NVIDIA H100 GPUs with NVLink peer access. The fused proofs use the same Triton persistent GEMM backend across all variants; differences are limited to TileGroup signaling and device-side P2P communication.
+These v5 proof results were collected on 2x NVIDIA H100 GPUs with NVLink peer access after full Phase0 calibration. The fused proofs use the same Triton persistent GEMM backend across all variants; differences are limited to communication granularity, TileGroup signaling, and device-side P2P communication.
 
 ### Gate 1: GEMM-Output AllGather
 
-| Shape MxNxK | S0 Bulk | S1 per tile | S2 TileCCL | S1 vs S0 | S0/S2 |
-|:---|---:|---:|---:|:---|---:|
-| 16384x4096x1024 | 1.224 ms | 1.160 ms | 0.797 ms | 1.06x faster | 1.54x faster |
-| 8192x4096x2048 | 0.902 ms | 0.753 ms | 0.675 ms | 1.20x faster | 1.34x faster |
-| 8192x4096x1024 | 0.706 ms | 0.630 ms | 0.460 ms | 1.12x faster | 1.54x faster |
+| Shape MxNxK | S0 Bulk | S1 per tile | S2 TileCCL | vs S1 | vs S0 |
+|:---|---:|---:|---:|---:|---:|
+| 16384x4096x1024 | 1.242 ms | 1.167 ms | 0.801 ms | **1.46x** | **1.55x** |
+| 8192x4096x2048 | 0.901 ms | 0.757 ms | 0.639 ms | **1.18x** | **1.41x** |
+| 8192x4096x1024 | 0.862 ms | 0.676 ms | 0.482 ms | **1.40x** | **1.79x** |
 
 ### Gate 2: GEMM to ReduceScatter
 
-| Shape MxNxK_total | S0 Bulk | S1 per tile | S2 TileCCL | S1 vs S0 | S0/S2 |
-|:---|---:|---:|---:|:---|---:|
-| 16384x4096x2048 | 1.646 ms | 1.083 ms | 0.963 ms | 1.52x faster | 1.71x faster |
-| 8192x4096x4096 | 1.122 ms | 0.751 ms | 0.799 ms | 1.49x faster | 1.40x faster |
-| 8192x4096x2048 | 0.934 ms | 0.619 ms | 0.610 ms | 1.51x faster | 1.53x faster |
+| Shape MxNxK_total | S0 Bulk | S1 per tile | S2 TileCCL | vs S1 | vs S0 |
+|:---|---:|---:|---:|---:|---:|
+| 16384x4096x2048 | 1.640 ms | 1.091 ms | 0.965 ms | **1.13x** | **1.70x** |
+| 8192x4096x4096 | 1.130 ms | 0.757 ms | 0.769 ms | 0.99x | **1.47x** |
+| 8192x4096x2048 | 0.986 ms | 0.613 ms | 0.609 ms | **1.01x** | **1.62x** |
 
 ## Install
 
