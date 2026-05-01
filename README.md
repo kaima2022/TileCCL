@@ -4,10 +4,6 @@
 
 # TileCCL: Tile-native Collective Communication Library
 
-TileCCL is a tile-native collective communication library for expressing cross-GPU data movement, synchronization, and collective execution directly in Triton. It supports tile-level collectives, GEMM+collective operators, and overlap strategies for multi-GPU kernels where communication needs to remain explicit instead of being hidden behind a separate runtime boundary.
-
-## Organizations
-
 <div align="center">
   <table>
     <tr>
@@ -27,6 +23,10 @@ TileCCL is a tile-native collective communication library for expressing cross-G
   </table>
 </div>
 
+## Overview
+
+TileCCL is a tile-native collective communication library for expressing cross-GPU data movement, synchronization, and collective execution directly in Triton. It supports tile-level collectives, GEMM+collective operators, and overlap strategies.
+
 
 ## TileCCL Architecture
 
@@ -35,21 +35,19 @@ TileCCL is a tile-native collective communication library for expressing cross-G
 </p>
 
 
-**User API** — TileCCL exposes high-level collective and GEMM+collective entry points such as `gemm_allscatter`, `gemm_allgather`, `gemm_reducescatter`, `allreduce`, `allgather`, and `reduce_scatter`. This keeps the programming surface at the operator level while leaving execution policy explicit.
+**Frontend input** — TileCCL accepts Triton operator definitions, collective invocations, and fused compute-communication invocations.
 
-**Execution Engine** — Between the API and the device-side kernels, TileCCL resolves layout contracts, applies plan-based execution, and dispatches an overlap strategy. This layer separates public operation semantics from pattern-specific execution choices.
+**Control plane** — Operation contracts, runtime control, and scheduling policy turn frontend intent into executable communication plans.
 
-**Tile-Native Primitives** — The core execution layer is built from Triton JIT primitives, so communication and synchronization remain visible inside the same programming model as compute.
+**Data plane** — Tile-level memory semantics, synchronization semantics, and collective execution remain explicit inside Triton-resident kernels.
 
-- **Memory Semantics** — `tile_remote_load`, `tile_remote_store`, `tile_put`, and `tile_get` provide explicit remote access semantics for peer-accessible tile memory.
+- **Memory semantics** — `tile_remote_load`, `tile_remote_store`, `tile_put`, and `tile_get` provide explicit remote access semantics for peer-accessible tile memory.
 - **Synchronization** — `tile_signal`, `tile_wait`, and remote atomic operations provide cross-tile coordination with explicit memory-ordering semantics.
-- **Tile Collectives** — `tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`, `tile_broadcast`, and `tile_scatter` implement collective algorithms directly at tile granularity.
+- **Tile collectives** — `tile_allreduce`, `tile_allgather`, `tile_reduce_scatter`, `tile_broadcast`, and `tile_scatter` implement collective algorithms directly at tile granularity.
 
-**Symmetric Memory** — Heap allocation, peer mapping, and `translate_ptr` provide the address translation layer that lets tile-level kernels access peer memory through a shared symmetric-memory model.
+**Runtime and substrate** — Memory registration, address translation, and transport binding connect tile-level execution to backend communication paths and hardware interconnects.
 
-**Hardware Substrate** — TileCCL runs on GPU backends and interconnect-capable peer-memory paths underneath the symmetric-memory layer, providing the transport foundation for tile-native communication.
-
-## TileGroup-Based Overlap
+## Key Feature 1: TileGroup-Based Overlap
 
 TileGroup is the granularity TileCCL uses to overlap GEMM output with communication. Instead of waiting for a whole tensor, ready tiles are grouped into transfer-efficient units and sent as soon as their producer work completes.
 
