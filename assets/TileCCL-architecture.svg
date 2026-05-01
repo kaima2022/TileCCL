@@ -1,115 +1,91 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 530" font-family="'Helvetica Neue', 'Arial', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" font-family="'Helvetica Neue', 'Arial', sans-serif">
   <defs>
-    <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
-      <polygon points="0 0, 7 2.5, 0 5" fill="#bbb"/>
+    <linearGradient id="topGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#EEF2F7"/>
+    </linearGradient>
+    <linearGradient id="controlGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#FFFDF8"/>
+      <stop offset="1" stop-color="#F8F3E8"/>
+    </linearGradient>
+    <linearGradient id="dataGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#F7FBFF"/>
+      <stop offset="1" stop-color="#EEF6FF"/>
+    </linearGradient>
+    <linearGradient id="substrateGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#F3FBF6"/>
+      <stop offset="1" stop-color="#EAF6EF"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M1,1 L7,4 L1,7" fill="none" stroke="#52677D" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
     </marker>
-    <marker id="arr-dark" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
-      <polygon points="0 0, 7 2.5, 0 5" fill="#888"/>
-    </marker>
+    <style>
+      .small-cap { font-size: 13px; font-weight: 900; letter-spacing: 1.7px; fill: #64748B; }
+      .title { font-size: 22px; font-weight: 800; fill: #1F2937; }
+      .subtitle { font-size: 13px; fill: #64748B; }
+      .panel-title { font-size: 18px; font-weight: 800; fill: #1F2937; }
+      .panel-note { font-size: 12px; fill: #64748B; }
+      .card-title { font-size: 15px; font-weight: 800; fill: #263238; }
+      .card-note { font-size: 12.4px; fill: #687385; }
+      .micro { font-size: 10.5px; fill: #7B8794; }
+    </style>
   </defs>
 
-  <rect width="820" height="530" fill="#fff"/>
+  <rect width="1000" height="660" fill="#FFFFFF"/>
 
-  <!-- ====== Layer 1: User API ====== -->
-  <rect x="50" y="24" width="720" height="68" rx="8" fill="#fafafa" stroke="#d4d4d4" stroke-width="1"/>
-  <text x="70" y="46" font-size="9.5" font-weight="700" fill="#999" letter-spacing="1.2">USER API</text>
-  <text x="750" y="46" text-anchor="end" font-size="9" fill="#bbb" font-style="italic">tileccl.ops</text>
-  <text x="410" y="70" text-anchor="middle" font-size="12" font-weight="600" fill="#444">gemm_allscatter · gemm_allgather · gemm_reducescatter · allreduce · allgather · reduce_scatter</text>
-  <text x="410" y="85" text-anchor="middle" font-size="10" fill="#999">Plan-based execution: build once, execute many</text>
+  <!-- Programming interface -->
+  <rect x="80" y="38" width="840" height="92" rx="18" fill="url(#topGrad)" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="500" y="72" text-anchor="middle" class="small-cap">FRONTEND INPUT</text>
+  <text x="500" y="104" text-anchor="middle" class="subtitle">Triton operator definitions / collective invocations / fused compute-communication invocations</text>
 
-  <!-- Arrow -->
-  <line x1="410" y1="92" x2="410" y2="112" stroke="#bbb" stroke-width="1" marker-end="url(#arr)"/>
+  <path d="M496 136 L504 136 L504 156 L512 156 L500 168 L488 156 L496 156 Z" fill="#D8E0E8"/>
 
-  <!-- ====== Layer 2: Execution Engine ====== -->
-  <rect x="50" y="114" width="720" height="50" rx="8" fill="#fafafa" stroke="#d4d4d4" stroke-width="1"/>
-  <text x="70" y="135" font-size="9.5" font-weight="700" fill="#999" letter-spacing="1.2">EXECUTION ENGINE</text>
-  <text x="410" y="153" text-anchor="middle" font-size="11" fill="#555">Auto pattern selection · Contract validation · Overlap strategy dispatch</text>
+  <!-- Middle split: control plane and data plane -->
+  <rect x="62" y="174" width="396" height="282" rx="18" fill="url(#controlGrad)" stroke="#D8C59B" stroke-width="1.2"/>
+  <text x="260" y="211" text-anchor="middle" class="small-cap" fill="#7A5E25">CONTROL PLANE</text>
 
-  <!-- Arrow -->
-  <line x1="410" y1="164" x2="410" y2="186" stroke="#bbb" stroke-width="1" marker-end="url(#arr)"/>
+  <rect x="92" y="238" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#E4D6B8"/>
+  <text x="120" y="266" class="card-title">Communication model</text>
+  <text x="120" y="284" class="card-note">operation contracts / tile metadata / rank topology</text>
 
-  <!-- ====== Layer 3: TILE-NATIVE PRIMITIVES (core) ====== -->
-  <rect x="40" y="188" width="740" height="218" rx="10" fill="#fcfcfd" stroke="#444" stroke-width="2"/>
+  <rect x="92" y="312" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#E4D6B8"/>
+  <text x="120" y="340" class="card-title">Runtime control</text>
+  <text x="120" y="358" class="card-note">request submission / launch / progress</text>
 
-  <!-- Header bar -->
-  <text x="64" y="212" font-size="11" font-weight="800" fill="#222" letter-spacing="1.5">TILE-NATIVE PRIMITIVES</text>
+  <rect x="92" y="386" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#E4D6B8"/>
+  <text x="120" y="414" class="card-title">Scheduling policy</text>
+  <text x="120" y="432" class="card-note">granularity / topology / overlap</text>
 
-  <!-- Compiler visibility annotation -->
-  <rect x="474" y="197" width="290" height="22" rx="11" fill="#f0f0f0" stroke="#ccc" stroke-width="0.8"/>
-  <text x="619" y="212" text-anchor="middle" font-size="9.5" font-weight="600" fill="#888">all @triton.jit — full compiler visibility</text>
+  <rect x="542" y="174" width="396" height="282" rx="18" fill="url(#dataGrad)" stroke="#B7CBE3" stroke-width="1.2"/>
+  <text x="740" y="211" text-anchor="middle" class="small-cap">DATA PLANE</text>
 
-  <!-- Three primitive group cards -->
+  <rect x="572" y="238" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#D6DDE6"/>
+  <text x="600" y="266" class="card-title">Memory semantics</text>
+  <text x="600" y="284" font-size="11.4" fill="#687385">tile_remote_load/store / tile_put/get</text>
 
-  <!-- Card 1: Memory Semantics (orange) -->
-  <rect x="62" y="228" width="214" height="162" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
-  <rect x="62" y="228" width="214" height="5" rx="6" fill="#E8963A"/>
-  <rect x="62" y="228" width="214" height="5" fill="#E8963A"/><!-- cover bottom radius of top strip -->
-  <rect x="62" y="228" width="214" height="5" rx="6" fill="#E8963A"/>
+  <rect x="572" y="312" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#D6DDE6"/>
+  <text x="600" y="340" class="card-title">Synchronization semantics</text>
+  <text x="600" y="358" font-size="11.4" fill="#687385">tile_signal / tile_wait / atomics</text>
 
-  <text x="169" y="256" text-anchor="middle" font-size="13" font-weight="700" fill="#D07A28">Memory Semantics</text>
-  <text x="169" y="272" text-anchor="middle" font-size="9.5" fill="#999">Remote tile access</text>
+  <rect x="572" y="386" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#D6DDE6"/>
+  <text x="600" y="414" class="card-title">Collective execution</text>
+  <text x="600" y="432" font-size="11.4" fill="#687385">tile_allreduce / tile_allgather / tile_reduce_scatter</text>
 
-  <line x1="82" y1="282" x2="256" y2="282" stroke="#f0f0f0" stroke-width="1"/>
+  <!-- Cross-plane relationship -->
+  <path d="M458 312 L528 312 L528 305 L546 316 L528 327 L528 320 L458 320 Z" fill="#D8E0E8"/>
+  <line x1="542" y1="380" x2="458" y2="380" stroke="#8CA0B3" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="5,5" marker-end="url(#arrow)"/>
 
-  <text x="169" y="302" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_remote_load</text>
-  <text x="169" y="319" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_remote_store</text>
-  <text x="169" y="336" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_put · tile_get</text>
+  <path d="M496 460 L504 460 L504 481 L512 481 L500 493 L488 481 L496 481 Z" fill="#D8E0E8"/>
 
-  <text x="169" y="376" text-anchor="middle" font-size="8.5" fill="#bbb">registers ↔ remote · memory ↔ remote</text>
+  <!-- Substrate -->
+  <rect x="80" y="496" width="840" height="70" rx="16" fill="url(#substrateGrad)" stroke="#A7CDB8" stroke-width="1.2"/>
+  <text x="500" y="524" text-anchor="middle" font-size="13px" font-weight="900" letter-spacing="1.7px" fill="#4D9B6C">COMMUNICATION RUNTIME AND MEMORY SUBSTRATE</text>
+  <text x="500" y="548" text-anchor="middle" font-size="14px" font-weight="650" fill="#334155">memory registration / address translation / transport binding</text>
 
-  <!-- Card 2: Synchronization (purple) -->
-  <rect x="294" y="228" width="214" height="162" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
-  <rect x="294" y="228" width="214" height="5" rx="6" fill="#8B5CF6"/>
-  <rect x="294" y="228" width="214" height="5" fill="#8B5CF6"/>
-  <rect x="294" y="228" width="214" height="5" rx="6" fill="#8B5CF6"/>
+  <path d="M496 570 L504 570 L504 585 L512 585 L500 597 L488 585 L496 585 Z" fill="#D8E0E8"/>
 
-  <text x="401" y="256" text-anchor="middle" font-size="13" font-weight="700" fill="#7347D6">Synchronization</text>
-  <text x="401" y="272" text-anchor="middle" font-size="9.5" fill="#999">Cross-tile coordination</text>
-
-  <line x1="314" y1="282" x2="488" y2="282" stroke="#f0f0f0" stroke-width="1"/>
-
-  <text x="401" y="302" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_signal · tile_wait</text>
-  <text x="401" y="319" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_atomic_add · cas · xchg</text>
-  <text x="401" y="336" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_atomic_min · max</text>
-  <text x="401" y="353" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_atomic_and · or · xor</text>
-
-  <text x="401" y="380" text-anchor="middle" font-size="8.5" fill="#bbb">release-acquire · memory ordering</text>
-
-  <!-- Card 3: Collectives (blue) -->
-  <rect x="526" y="228" width="236" height="162" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
-  <rect x="526" y="228" width="236" height="5" rx="6" fill="#4A7FC7"/>
-  <rect x="526" y="228" width="236" height="5" fill="#4A7FC7"/>
-  <rect x="526" y="228" width="236" height="5" rx="6" fill="#4A7FC7"/>
-
-  <text x="644" y="256" text-anchor="middle" font-size="13" font-weight="700" fill="#3968A8">Tile Collectives</text>
-  <text x="644" y="272" text-anchor="middle" font-size="9.5" fill="#999">Device-side collective algorithms</text>
-
-  <line x1="546" y1="282" x2="742" y2="282" stroke="#f0f0f0" stroke-width="1"/>
-
-  <text x="644" y="302" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_allreduce</text>
-  <text x="644" y="319" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_allgather</text>
-  <text x="644" y="336" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_reduce_scatter</text>
-  <text x="644" y="353" text-anchor="middle" font-size="10.5" fill="#555" font-weight="500">tile_broadcast · tile_scatter</text>
-
-  <text x="644" y="380" text-anchor="middle" font-size="8.5" fill="#bbb">ring · direct-write · no NCCL</text>
-
-  <!-- Composition arrows between cards -->
-  <line x1="276" y1="310" x2="294" y2="310" stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>
-  <line x1="508" y1="310" x2="526" y2="310" stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>
-
-  <!-- Arrow from primitives to memory -->
-  <line x1="410" y1="406" x2="410" y2="426" stroke="#888" stroke-width="1" marker-end="url(#arr-dark)"/>
-
-  <!-- ====== Layer 4: Symmetric Memory ====== -->
-  <rect x="50" y="428" width="720" height="50" rx="8" fill="#f0f7f3" stroke="#b8d9c5" stroke-width="1"/>
-  <text x="70" y="449" font-size="9.5" font-weight="700" fill="#5BA87B" letter-spacing="1.2">SYMMETRIC MEMORY</text>
-  <text x="410" y="468" text-anchor="middle" font-size="11" fill="#555">Heap allocation · translate_ptr · Peer mapping · Zero-copy remote access</text>
-
-  <!-- Arrow -->
-  <line x1="410" y1="478" x2="410" y2="494" stroke="#bbb" stroke-width="1" marker-end="url(#arr)"/>
-
-  <!-- ====== Layer 5: Hardware ====== -->
-  <rect x="50" y="496" width="720" height="30" rx="6" fill="#eee" stroke="#ccc" stroke-width="1"/>
-  <text x="410" y="516" text-anchor="middle" font-size="10.5" font-weight="600" fill="#888">CUDA / HIP    ·    NVLink / xGMI    ·    Peer Access</text>
-
+  <!-- Hardware -->
+  <rect x="120" y="602" width="760" height="42" rx="12" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="500" y="618" text-anchor="middle" font-size="12px" font-weight="900" letter-spacing="1.5px" fill="#64748B">HARDWARE INTERCONNECT</text>
+  <text x="500" y="635" text-anchor="middle" font-size="12px" font-weight="700" fill="#64748B">NVLink / xGMI / PCIe peer access</text>
 </svg>

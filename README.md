@@ -27,31 +27,6 @@ TileCCL is a tile-native collective communication library for expressing cross-G
   </table>
 </div>
 
-## Repository Layout
-
-```text
-TileCCL/
-├── tileccl/                 # Public library package
-│   ├── memory/              # Symmetric heap, peer mapping, pointer translation
-│   ├── primitives/          # Triton tile movement, synchronization, collectives
-│   ├── patterns/            # Compute-communication overlap strategies
-│   ├── kernels/             # GEMM and fused kernel entry points
-│   └── ops.py               # Public operator-level APIs
-├── tileccl_v2/              # TileGroup proof/runtime seed
-│   ├── heap.py              # CUDA IPC symmetric heap
-│   ├── ipc.py               # Pointer translation, signal/wait, P2P primitives
-│   ├── tile_group.py        # TileGroup planning
-│   ├── wg.py                # Compute/communication workgroup allocation
-│   ├── collective_spec.py   # AllGather/ReduceScatter semantics
-│   ├── signal.py            # TileGroup signal tensor layout
-│   ├── transport.py         # P2P transport planning
-│   ├── cost_model.py        # Tile-native communication cost model
-│   └── runtime/timeline.py  # Timeline artifact recorder
-├── examples/                # Single-process, multiprocess, benchmark examples
-├── tests/                   # Smoke tests
-├── assets/                  # Architecture and dataflow diagrams
-└── images/logo/             # Institution logos
-```
 
 ## TileCCL Architecture
 
@@ -74,19 +49,13 @@ TileCCL/
 
 **Hardware Substrate** — TileCCL runs on GPU backends and interconnect-capable peer-memory paths underneath the symmetric-memory layer, providing the transport foundation for tile-native communication.
 
+## TileGroup-Based Overlap
 
+TileGroup is the granularity TileCCL uses to overlap GEMM output with communication. Instead of waiting for a whole tensor, ready tiles are grouped into transfer-efficient units and sent as soon as their producer work completes.
 
-## Key Feature: TileGroup-Based Overlap
-
-TileCCL targets synchronization bubbles created by traditional tensor-level or chunk-level collectives, where downstream compute often waits for a large communication unit even when only a small part of the result is needed next.
-
-Instead of treating a collective as a monolithic operation around a full tensor, TileCCL makes communication readiness follow the producer and consumer tile schedule. GEMM output can be exposed, grouped, transferred, and consumed as soon as the relevant work is ready, allowing communication to overlap with computation at a finer granularity.
-
-GEMM produces tiles. The TileGroup builder, driven by a cost model, groups them into physically sized units. Compute and communication workgroups can then run concurrently in a single persistent kernel: compute produces and signals, while communication polls barriers and pushes ready groups to peers via CUDA IPC.
-
-- **Minimal GEMM intrusion** — TileGroup readiness can be exposed at the epilogue boundary with lightweight signaling.
-- **Physics-driven grouping** — P2P saturation, wave alignment, and pipeline balance determine TileGroup boundaries.
-- **Device-side P2P transport** — Ready TileGroups are pushed to peer GPUs via CUDA IPC without routing through NCCL or NVSHMEM collectives.
+- **Balanced granularity** — TileGroups sit between tile-by-tile transfer and bulk tensor transfer.
+- **Cost-model planning** — P2P saturation, wave alignment, and pipeline balance guide group boundaries.
+- **Device-side progress** — Compute workgroups signal ready groups while communication workgroups move them through peer memory.
 
 ### Data Flow
 
@@ -94,7 +63,7 @@ GEMM produces tiles. The TileGroup builder, driven by a cost model, groups them 
   <img src="assets/TileCCL-dataflow-comparison.png" width="760" alt="TileCCL Data Flow"/>
 </p>
 
-TileCCL compares three communication granularities: bulk tensor transfer, per-tile transfer, and TileGroup transfer. TileGroup sits between the extremes by assembling tiles into transfer-efficient groups while keeping readiness aligned with the compute schedule.
+TileCCL compares three communication granularities: bulk tensor transfer, tile-by-tile transfer, and TileGroup transfer. TileGroup sits between the extremes by assembling tiles into transfer-efficient groups while keeping readiness aligned with the compute schedule.
 
 ## Preliminary Results
 
@@ -102,7 +71,7 @@ These v5 proof results were collected on 2x NVIDIA H100 GPUs with NVLink peer ac
 
 ### Gate 1: GEMM-Output AllGather
 
-| Shape MxNxK | S0 Bulk | S1 per tile | S2 TileCCL | vs S1 | vs S0 |
+| Shape MxNxK | S0 Bulk | S1 tile-by-tile | S2 TileCCL | vs S1 | vs S0 |
 |:---|---:|---:|---:|---:|---:|
 | 16384x4096x1024 | 1.242 ms | 1.167 ms | 0.801 ms | **1.46x** | **1.55x** |
 | 8192x4096x2048 | 0.901 ms | 0.757 ms | 0.639 ms | **1.18x** | **1.41x** |
@@ -110,7 +79,7 @@ These v5 proof results were collected on 2x NVIDIA H100 GPUs with NVLink peer ac
 
 ### Gate 2: GEMM to ReduceScatter
 
-| Shape MxNxK_total | S0 Bulk | S1 per tile | S2 TileCCL | vs S1 | vs S0 |
+| Shape MxNxK_total | S0 Bulk | S1 tile-by-tile | S2 TileCCL | vs S1 | vs S0 |
 |:---|---:|---:|---:|---:|---:|
 | 16384x4096x2048 | 1.640 ms | 1.091 ms | 0.965 ms | **1.13x** | **1.70x** |
 | 8192x4096x4096 | 1.130 ms | 0.757 ms | 0.769 ms | 0.99x | **1.47x** |
