@@ -46,7 +46,7 @@
 
   <rect x="92" y="238" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#E4D6B8"/>
   <text x="120" y="266" class="card-title">Communication model</text>
-  <text x="120" y="284" class="card-note">operation contracts / tile metadata / rank topology</text>
+  <text x="120" y="284" class="card-note">contracts / tile metadata / topology</text>
 
   <rect x="92" y="312" width="336" height="58" rx="11" fill="#FFFFFF" stroke="#E4D6B8"/>
   <text x="120" y="340" class="card-title">Runtime control</text>
