@@ -49,7 +49,7 @@ GEMM produces tiles. The TileGroup Builder (driven by a CostModel) groups them i
 - Does not modify the GEMM kernel. Adds one `atomic_add` in the epilogue.
 - TileGroup = physics-driven grouping. P0 (P2P saturation) + P1 (wave alignment) + P2 (pipeline balance) determine group boundaries.
 - Device-side P2P. Compute workgroups and communication workgroups run concurrently in a single persistent kernel. Ready TileGroups are pushed to peer GPUs immediately via CUDA IPC, without NCCL or NVSHMEM.
-- Proven on two collectives. GEMM-output AllGather (1.40–1.53×) and GEMM→ReduceScatter (1.42–1.69×) on 2×H100 with same-backend controlled experiments.
+- Proven on two collectives. GEMM-output AllGather (1.34–1.54×) and GEMM→ReduceScatter (1.40–1.71×) on 2×H100 with same-backend controlled experiments.
 
 ## Data Flow
 
@@ -73,19 +73,19 @@ These are early proof results on 2x NVIDIA H100 PCIe GPUs with NVLink peer acces
 
 ### Gate 1: GEMM-output AllGather
 
-| Shape MxNxK | S0 Bulk | S1 per tile | S2 TileCCL | S1/S0 | S0/S2 |
-|:---|---:|---:|---:|---:|---:|
-| 16384x4096x1024 | 1.216 ms | 2.018 ms | 0.797 ms | 1.66x slower | 1.53x faster |
-| 8192x4096x2048 | 0.902 ms | 1.174 ms | 0.646 ms | 1.30x slower | 1.40x faster |
-| 8192x4096x1024 | 0.703 ms | 1.059 ms | 0.462 ms | 1.51x slower | 1.52x faster |
+| Shape MxNxK | S0 Bulk | S1 per tile | S2 TileCCL | S1 vs S0 | S0/S2 |
+|:---|---:|---:|---:|:---|---:|
+| 16384x4096x1024 | 1.224 ms | 1.160 ms | 0.797 ms | 1.06x faster | 1.54x faster |
+| 8192x4096x2048 | 0.902 ms | 0.753 ms | 0.675 ms | 1.20x faster | 1.34x faster |
+| 8192x4096x1024 | 0.706 ms | 0.630 ms | 0.460 ms | 1.12x faster | 1.54x faster |
 
 ### Gate 2: GEMM to ReduceScatter
 
 | Shape MxNxK_total | S0 Bulk | S1 per tile | S2 TileCCL | S1 vs S0 | S0/S2 |
 |:---|---:|---:|---:|:---|---:|
-| 16384x4096x2048 | 1.630 ms | 1.711 ms | 0.966 ms | 1.05x slower | 1.69x faster |
-| 8192x4096x4096 | 1.128 ms | 1.019 ms | 0.797 ms | 1.11x faster | 1.42x faster |
-| 8192x4096x2048 | 0.930 ms | 0.924 ms | 0.599 ms | 1.01x faster | 1.55x faster |
+| 16384x4096x2048 | 1.646 ms | 1.083 ms | 0.963 ms | 1.52x faster | 1.71x faster |
+| 8192x4096x4096 | 1.122 ms | 0.751 ms | 0.799 ms | 1.49x faster | 1.40x faster |
+| 8192x4096x2048 | 0.934 ms | 0.619 ms | 0.610 ms | 1.51x faster | 1.53x faster |
 
 ## Repository Layout
 
